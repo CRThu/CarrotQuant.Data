@@ -1,0 +1,11 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# Project specific
+storage_root/
+*.tmp
+config/*.yaml
+!config/sources.yaml.example
