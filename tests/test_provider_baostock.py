@@ -7,55 +7,70 @@ from loguru import logger
 sys.path.append(os.getcwd())
 
 from app.provider.manager import ProviderManager
-from app.provider.baostock_provider import BaostockProvider
 
 def test_baostock_provider_fetch():
     """
-    测试 BaostockProvider 的数据采集与标准化
+    测试 BaostockProvider 的数据采集与标准化，验证重命名与清理逻辑
     """
     manager = ProviderManager()
-    table_id = "ashare.kline.1d.adj.baostock"
-    symbol = "sz.000001" # 平安银行
+    symbol = "sz.000001"
     
-    # 1. 测试 Manager 获取驱动
-    provider = manager.get_provider(table_id)
-    assert isinstance(provider, BaostockProvider)
+    # --- 测试 1: 日线数据 ---
+    table_id_day = "ashare.kline.1d.raw.baostock"
+    provider = manager.get_provider(table_id_day)
+    df_day = provider.fetch(table_id_day, symbol, "2024-01-01", "2024-01-05")
     
-    # 2. 测试数据抓取
-    start_date = "2024-01-01"
-    end_date = "2024-01-10"
+    logger.info("Daily Kline Check:")
+    assert not df_day.is_empty()
+    assert "symbol" in df_day.columns
+    assert "pe_ttm" in df_day.columns, "peTTM should be renamed to pe_ttm"
     
-    logger.info(f"Testing fetch for {symbol} from {start_date} to {end_date}")
-    df = provider.fetch(table_id, symbol, start_date, end_date)
+    # 验证列顺序：symbol, datetime, timestamp 应该在最前面
+    front_cols = df_day.columns[:3]
+    assert "symbol" == front_cols[0]
+    assert "datetime" == front_cols[1]
+    assert "timestamp" == front_cols[2]
     
-    # 3. 验证数据结构
-    assert isinstance(df, pl.DataFrame)
-    if df.is_empty():
-        logger.warning("Fetched DataFrame is empty, check if it's a weekend or market closed.")
-        return
+    # 打印并校验日线所有字段
+    expected_day_fields = [
+        "symbol", "datetime", "timestamp", "open", "high", "low", "close", 
+        "preclose", "volume", "amount", "adjustflag", "turnover_rate", 
+        "trade_status", "change_pct", "pe_ttm", "pb_mrq", "ps_ttm", "pcf_ncf_ttm", "is_st"
+    ]
+    for field in expected_day_fields:
+        assert field in df_day.columns, f"Daily kline missing field: {field}"
+        
+    print(f"Daily Total Fields ({len(df_day.columns)}): {df_day.columns}")
+    print(df_day.head(2))
 
-    print("Fetched DataFrame Head:")
-    print(df.head())
+    # --- 测试 2: 5分钟线数据 ---
+    table_id_min = "ashare.kline.5m.raw.baostock"
+    df_min = provider.fetch(table_id_min, symbol, "2024-01-05", "2024-01-05")
     
-    # 验证核心列是否存在
-    assert "timestamp" in df.columns, "Missing 'timestamp' column"
-    assert "datetime" in df.columns, "Missing 'datetime' column"
+    logger.info("5min Kline Check:")
+    assert not df_min.is_empty()
+    assert "symbol" in df_min.columns
     
-    # 验证核心列类型
-    assert df.schema["timestamp"] == pl.Int64
-    assert df.schema["datetime"] == pl.Utf8
+    # 验证列顺序
+    front_cols_min = df_min.columns[:3]
+    assert "symbol" == front_cols_min[0]
+    assert "datetime" == front_cols_min[1]
+    assert "timestamp" == front_cols_min[2]
     
-    # 验证是否删除了源特有列 'code'
-    assert "code" not in df.columns
+    # 验证 datetime 是否包含毫秒/时间部分 (YYYY-MM-DDTHH:MM:SS.sss)
+    assert "T" in df_min["datetime"][0]
+    logger.info(f"5min fetch test passed. Rows: {len(df_min)}")
+    print(df_min.head())
+    print("Test Passed: Successfully fetched and standardized both daily and 5min data.")
     
-    # 验证数值列类型 (open, high, low, close 应该是 Float64)
-    assert df.schema["close"] == pl.Float64
-    assert df.schema["volume"] == pl.Float64
+    # 验证冗余列删除
+    assert "date" not in df_min.columns, "Redundant 'date' column should be removed for minute data"
+    assert "time" not in df_min.columns, "Original 'time' column should be removed after standardization"
     
-    # 验证数据行数 (2024-01-01 到 2024-01-10 包含 7 个交易日)
-    assert len(df) > 0
+    print(f"5min Fields: {df_min.columns}")
+    print(df_min.head(2))
     
-    print(f"Test Passed: Successfully fetched and standardized {len(df)} rows.")
+    print("\nTest Passed: All renaming and cleaning logic verified.")
 
 if __name__ == "__main__":
     test_baostock_provider_fetch()

@@ -2,7 +2,7 @@ import baostock as bs
 import polars as pl
 from loguru import logger
 from app.provider.base import BaseProvider
-from app.storage.utils import TimeStandardizer
+from app.storage.time_standardizer import TimeStandardizer
 
 class BaostockProvider(BaseProvider):
     """
@@ -62,6 +62,9 @@ class BaostockProvider(BaseProvider):
         day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,peTTM,pbMRQ,psTTM,pcfNcfTTM,isST"
         min_fields = "date,time,code,open,high,low,close,volume,amount,adjustflag"
         
+        is_day = freq in ['d']
+        fields = day_fields if is_day else min_fields
+        
         logger.debug(f"Fetching {symbol} kline from Baostock: {start_date} to {end_date} (freq={freq}, adj={adj})")
         
         rs = bs.query_history_k_data_plus(
@@ -86,25 +89,35 @@ class BaostockProvider(BaseProvider):
         
         # 字段清洗与重命名
         rename_map = {
+            "code": "symbol",
             "pctChg": "change_pct",
-            "amount": "turnover",
             "turn": "turnover_rate",
             "tradestatus": "trade_status",
-            "isST": "is_st"
+            "isST": "is_st",
+            "peTTM": "pe_ttm",
+            "pbMRQ": "pb_mrq",
+            "psTTM": "ps_ttm",
+            "pcfNcfTTM": "pcf_ncf_ttm"
         }
         # 只重命名存在的列
         actual_rename = {k: v for k, v in rename_map.items() if k in df.columns}
         df = df.rename(actual_rename)
         
-        # 删除源特有列 'code'
-        if 'code' in df.columns:
-            df = df.drop("code")
-
         # 转换为数值类型（Baostock 返回的全是字符串）
-        numeric_cols = ["open", "high", "low", "close", "preclose", "volume", "turnover", "change_pct", "turnover_rate"]
+        numeric_cols = [
+            "open", "high", "low", "close", "preclose", "volume", "amount", 
+            "change_pct", "turnover_rate", "pe_ttm", "pb_mrq", "ps_ttm", "pcf_ncf_ttm"
+        ]
         for col in numeric_cols:
             if col in df.columns:
                 df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
 
         # 时间标准化
-        return TimeStandardizer.standardize(df, "date")
+        if is_day:
+            return TimeStandardizer.standardize(df, "date", time_fmt="%Y-%m-%d")
+        else:
+            # Baostock 分钟线 time 格式: YYYYMMDDHHMMSSsss (无小数点)
+            # 此时 date 列是多余的，一并删除
+            if "date" in df.columns:
+                df = df.drop("date")
+            return TimeStandardizer.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f")
