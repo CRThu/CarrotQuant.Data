@@ -1,13 +1,30 @@
 # CarrotQuant.Data 项目架构规范 (AI 专用)
 
-## 1. 架构定义 (四层架构)
+## 1. 系统逻辑架构 (Control & Data Flow)
 
-项目采用清晰的四层架构，各层之间职责解耦：
+项目采用“元数据驱动”的流水线架构，确保下载逻辑精准、存储结构标准。
 
-1.  **Gateways (网关层)**: 负责与外部数据源（如 AkShare, Baostock, Eastmoney）进行通信，将原始数据转换为系统内部模型。
-2.  **Storage (存储层)**: 负责数据的持久化与读取。支持多种存储格式（CSV, Parquet），具备分区（Hive-style）及去重逻辑。
-3.  **Models (模型层)**: 定义全局通用的数据结构、枚举及 Pydantic 模式。
-4.  **Services (服务层)**: 业务逻辑层，组合 Gateways 和 Storage 完成复杂的数据采集、清洗及入库流程。
+### 1.1 Gateway (接入层/外壳)
+*   **职责**: 系统入口。
+*   **控制流**: 接收 `main.py` (CLI) 或 `FastAPI` (REST) 的原始参数，封装为任务指令发送至 Service 层。
+
+### 1.2 Service (业务服务层/大脑)
+*   **Manager (总体调度)**: 协调内部各组件。
+*   **TaskPlanner (任务编排)**: 核心组件。
+    1.  从目标请求获取所需的时间/品种范围。
+    2.  调用 `MetadataManager` 查询本地已有的存储状态。
+    3.  **空洞检测**: 自动剔除已下载部分，将剩余任务拆分为最小粒度任务队列（按年/月/个股）。
+*   **MetadataManager (状态监控)**: 维护 `metadata.json`，为 Planner 提供决策依据。
+
+### 1.3 Provider (驱动提供层/手脚)
+*   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作，具体源（Baostock, AkShare, QMT 等）实现。
+*   **Provider Manager**: 根据 Planner 派发的任务，调用对应驱动获取原始数据。
+*   **Cleaner**: 对下载后的原始数据进行“实时清洗”，补齐 `timestamp` 毫秒戳及 ISO8601 `datetime` 字段。
+
+### 1.4 Storage (持久化存储层/资产库)
+*   **StorageManager**: 负责数据落地。
+*   **格式派生**: `CSVStorage`, `ParquetStorage` 实现不同的文件 IO。
+*   **逻辑闭环**: 写入成功后，必须**回调元数据更新接口**，同步更新该数据集的 `metadata.json`（更新 `last_timestamp`、数据区间等）。
 
 ## 2. Storage 层规范
 
@@ -47,7 +64,7 @@
 4.  **IO 性能**: 必须使用 `polars` (pl)，确保 `timestamp` 列类型一致 (Int64)。
 
 ## 3. 命名与目录规范
-- 模块路径统一采用 `backend/app/...` 或 `src/carrotquant_data/...`（当前演进中）。
+- 模块路径统一采用 `app/...`。
 - 抽象基类定义在 `storage/base.py`。
 - 具体实现类命名为 `{Format}Storage`（如 `CSVStorage`）。
 
