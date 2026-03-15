@@ -17,9 +17,11 @@
 *   **MetadataManager (状态监控)**: 维护 `metadata.json`，为 Planner 提供决策依据。
 
 ### 1.3 Provider (驱动提供层/手脚)
-*   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作，具体源（Baostock, AkShare, QMT 等）实现。
-*   **Provider Manager**: 根据 Planner 派发的任务，调用对应驱动获取原始数据。
-*   **Cleaner**: 对下载后的原始数据进行“实时清洗”，补齐 `timestamp` 毫秒戳及 ISO8601 `datetime` 字段。
+*   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作（`fetch`）。
+    - **原子化下载**: 驱动接口强制单次仅处理**单支 Symbol**，确保任务编排层（Planner）可自由拆分与重试。
+    - **路由分发**: 驱动内部解析 `table_id` 的业务段落（如 `kline`），自动分发至对应的私有抓取方法。
+*   **Provider Manager**: 策略工厂模式。解析 `table_id` 的末尾字段（源标识），动态实例化并缓存对应的驱动。
+*   **Cleaner**: 在驱动内部通过 `TimeStandardizer` 对原始数据进行“实时清洗”，强制补齐 `timestamp` (Int64) 及 ISO8601 `datetime` (String) 字段，并删除源特有字段（如 `code`）。
 
 ### 1.4 Storage (持久化存储层/资产库)
 *   **StorageManager**: 负责数据落地。

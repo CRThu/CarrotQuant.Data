@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "akshare>=1.18.39",
+    "baostock>=0.8.9",
     "fastapi>=0.135.1",
     "loguru>=0.7.3",
     "polars>=1.39.0",
