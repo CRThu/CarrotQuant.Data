@@ -18,6 +18,8 @@ dependencies = [
     "typer>=0.24.1",
     "uvicorn>=0.41.0",
 ]
+[tool.uv]
+package = false
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]

@@ -6,6 +6,9 @@ class StorageManager(abc.ABC):
     存储管理器抽象基类，定义统一的存储层接口。
     """
 
+    def __init__(self, category: str = "TS"):
+        self.category = category
+
     @abc.abstractmethod
     def read(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """

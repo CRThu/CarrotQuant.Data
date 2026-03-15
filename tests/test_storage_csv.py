@@ -1,69 +1,73 @@
 import os
 import sys
 from pathlib import Path
+import polars as pl
+import shutil
 
 # 将当前根目录加入系统路径
 sys.path.append(os.getcwd())
 
-import polars as pl
-import shutil
 from app.storage.csv_storage import CSVStorage
 
-def test_csv_storage_append():
+def test_csv_storage_timestamp_merge():
     test_root = "test_storage_root"
-    # 清理旧测试数据
     if os.path.exists(test_root):
         shutil.rmtree(test_root)
     
+    # 场景 1: 标准 1d K线存储 (直接使用默认构造)
     storage = CSVStorage(storage_root=f"{test_root}/csv")
-    table_id = "ashare.1d.adj.baostock"
+    table_id = "ashare.kline.1d.baostock"
     symbol = "sh.600000"
     
-    # 1. 模拟第一次写入: 2024-01-01 到 2024-01-05
+    # 模拟已标准化的数据 (datetime + timestamp)
     df1 = pl.DataFrame({
-        "date": ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05"],
-        "symbol": [symbol] * 5,
-        "close": [10.0, 10.1, 10.2, 10.3, 10.4]
+        "datetime": ["2024-01-01T00:00:00.000", "2024-01-02T00:00:00.000"],
+        "timestamp": [1704067200000, 1704153600000],
+        "symbol": [symbol] * 2,
+        "close": [10.0, 10.1]
     })
     
-    print("--- 执行第一次 Append ---")
+    print("--- 第一次写入 ---")
     storage.append(table_id, df1)
     
-    # 验证目录结构
-    expected_path = Path(test_root) / "csv" / table_id / "year=2024" / f"{symbol}.csv"
-    assert expected_path.exists(), f"文件未生成: {expected_path}"
-    
-    # 2. 模拟第二次写入: 2024-01-04 到 2024-01-08 (包含重叠)
+    # 场景 2: 包含重复 timestamp 的增量数据
     df2 = pl.DataFrame({
-        "date": ["2024-01-04", "2024-01-05", "2024-01-06", "2024-01-07", "2024-01-08"],
-        "symbol": [symbol] * 5,
-        "close": [10.3, 10.4, 10.5, 10.6, 10.7]
+        "datetime": ["2024-01-02T00:00:00.000", "2024-01-03T00:00:00.000"],
+        "timestamp": [1704153600000, 1704240000000],
+        "symbol": [symbol] * 2,
+        "close": [99.9, 10.2] # 修改 01-02 的值测试 keep="last"
     })
     
-    print("--- 执行第二次 Append (重叠 01-04, 01-05) ---")
+    print("--- 第二次增量 (基于 timestamp 去重) ---")
     storage.append(table_id, df2)
     
-    # 3. 验证去重结果
-    result_df = storage.read(table_id, symbol, 2024)
-    print(f"合并去重后的数据量: {len(result_df)}")
+    # 验证
+    read_df = storage.read(table_id, symbol, 2024)
+    print(f"合并后数据量: {len(read_df)}")
     
-    # 预期从 01-01 到 01-08 共 8 条数据
-    assert len(result_df) == 8, f"数据去重失败，总数应该是 8，实际是 {len(result_df)}"
-    assert result_df["date"].is_unique().all(), "Date 列不唯一"
+    assert len(read_df) == 3, "数据去重失败"
+    assert read_df.filter(pl.col("timestamp") == 1704153600000)["close"][0] == 99.9, "未保留最新的增量数据"
     
-    # 4. 验证跨年分片
-    df3 = pl.DataFrame({
-        "date": ["2025-01-01"],
-        "symbol": [symbol],
-        "close": [11.0]
+    # 场景 3: 跨年数据写入测试
+    df_cross_year = pl.DataFrame({
+        "datetime": ["2024-12-31T23:59:59.000", "2025-01-01T00:00:00.000"],
+        "timestamp": [1735689599000, 1735689600000],
+        "symbol": [symbol] * 2,
+        "close": [10.5, 10.6]
     })
-    print("--- 执行跨年 Append (2025) ---")
-    storage.append(table_id, df3)
     
+    print("--- 写入跨年数据 (2024 + 2025) ---")
+    storage.append(table_id, df_cross_year)
+    
+    # 验证 2025 年的目录和文件是否存在
     path_2025 = Path(test_root) / "csv" / table_id / "year=2025" / f"{symbol}.csv"
-    assert path_2025.exists(), "2025 年目录未生成"
+    assert path_2025.exists(), "跨年分区失败：2025 年目录未生成"
     
-    print("测试通过！")
+    # 验证 2024 年的数据是否增量合并成功
+    read_2024 = storage.read(table_id, symbol, 2024)
+    assert 1735689599000 in read_2024["timestamp"].to_list(), "2024 年跨年数据合并丢失"
+
+    print("测试通过！跨年 Hive 分区验证成功。")
 
 if __name__ == "__main__":
-    test_csv_storage_append()
+    test_csv_storage_timestamp_merge()
