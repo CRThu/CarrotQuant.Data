@@ -34,7 +34,7 @@ def test_baostock_provider_fetch():
     # 打印并校验日线所有字段
     expected_day_fields = [
         "symbol", "datetime", "timestamp", "open", "high", "low", "close", 
-        "preclose", "volume", "amount", "adjustflag", "turnover_rate", 
+        "preclose", "volume", "amount", "adjust_flag", "turnover_rate", 
         "trade_status", "change_pct", "pe_ttm", "pb_mrq", "ps_ttm", "pcf_ncf_ttm", "is_st"
     ]
     for field in expected_day_fields:

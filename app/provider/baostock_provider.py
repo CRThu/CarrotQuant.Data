@@ -103,6 +103,19 @@ class BaostockProvider(BaseProvider):
         actual_rename = {k: v for k, v in rename_map.items() if k in df.columns}
         df = df.rename(actual_rename)
         
+        # 处理 adjustflag 映射 (1:adj, 2:qfq, 3:raw)
+        if "adjustflag" in df.columns:
+            # 强制拦截前复权
+            if (df["adjustflag"] == "2").any():
+                raise ValueError("Detect Forward Adjustment (qfq) data, which is FORBIDDEN in this system.")
+            
+            df = df.with_columns(
+                pl.col("adjustflag").map_elements(
+                    lambda x: "adj" if x == "1" else ("raw" if x == "3" else "unknown"),
+                    return_dtype=pl.Utf8
+                ).alias("adjust_flag")
+            ).drop("adjustflag")
+
         # 转换为数值类型（Baostock 返回的全是字符串）
         numeric_cols = [
             "open", "high", "low", "close", "preclose", "volume", "amount", 
