@@ -6,6 +6,6 @@ __pycache__/
 
 # Project specific
 storage_root/
-*.tmp
-config/*.yaml
-!config/sources.yaml.example
+test_storage_root/
+
+config/config.yaml

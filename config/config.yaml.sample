@@ -1,0 +1,8 @@
+# 全局系统配置
+storage_root: "storage_root"
+default_format: "csv"
+
+# 日志配置
+logging:
+  level: "INFO"
+  file: "logs/app.log"
