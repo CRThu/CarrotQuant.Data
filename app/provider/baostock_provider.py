@@ -1,8 +1,10 @@
 import baostock as bs
 import polars as pl
+from typing import Any
 from loguru import logger
 from app.provider.base import BaseProvider
 from app.storage.time_standardizer import TimeStandardizer
+from app.utils.time_utils import ts_to_str
 
 class BaostockProvider(BaseProvider):
     """
@@ -29,11 +31,17 @@ class BaostockProvider(BaseProvider):
         except Exception as e:
             logger.warning(f"Baostock logout error: {e}")
 
-    def fetch(self, table_id: str, symbol: str, start_date: str, end_date: str, **kwargs) -> pl.DataFrame:
+    def fetch(self, table_id: str, symbol: str, start_date: Any, end_date: Any, **kwargs) -> pl.DataFrame:
         """
-        根据 table_id 路由至具体的下载逻辑
+        根据 table_id 路由至具体的下载逻辑。支持传入毫秒戳或日期字符串。
         """
-        # 路由逻辑：解析 table_id 中间的部分 (如 kline)
+        # 1. 参数标准化：转换毫秒戳为 YYYY-MM-DD
+        if isinstance(start_date, int):
+            start_date = ts_to_str(start_date)
+        if isinstance(end_date, int):
+            end_date = ts_to_str(end_date)
+
+        # 2. 路由逻辑：解析 table_id 中间的部分 (如 kline)
         parts = table_id.split('.')
         if 'kline' in parts:
             return self._fetch_kline(table_id, symbol, start_date, end_date, **kwargs)

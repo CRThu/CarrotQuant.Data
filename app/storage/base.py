@@ -25,24 +25,14 @@ class StorageManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def write(self, table_id: str, df: pl.DataFrame):
+    def write(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
-        全量/覆盖写入数据。
+        写入数据。根据 mode 参数执行覆盖或增量写入。
         
         Args:
             table_id: 表 ID
-            df: 包含 symbol 和 date 等字段的 DataFrame
-        """
-        pass
-
-    @abc.abstractmethod
-    def append(self, table_id: str, df: pl.DataFrame):
-        """
-        增量写入数据。合并新旧数据并按主键（通常是 date）去重。
-        
-        Args:
-            table_id: 表 ID
-            df: 包含 symbol 和 date 等字段的 DataFrame
+            df: 包含 symbol 和 timestamp 等字段的 DataFrame
+            mode: 写入模式，支持 "overwrite" (覆盖) 或 "append" (增量)
         """
         pass
 

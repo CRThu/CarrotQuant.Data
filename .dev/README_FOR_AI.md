@@ -9,12 +9,11 @@
 *   **控制流**: 接收 `main.py` (CLI) 或 `FastAPI` (REST) 的原始参数，封装为任务指令发送至 Service 层。
 
 ### 1.2 Service (业务服务层/大脑)
-*   **Manager (总体调度)**: 协调内部各组件。
-*   **TaskPlanner (任务编排)**: 核心组件。
-    1.  从目标请求获取所需的时间/品种范围。
-    2.  调用 `MetadataManager` 查询本地已有的存储状态。
-    3.  **空洞检测**: 自动剔除已下载部分，将剩余任务拆分为最小粒度任务队列（按年/月/个股）。
-*   **MetadataManager (状态监控)**: 维护 `metadata.json`，为 Planner 提供决策依据。
+*   **SyncManager (总体调度)**: 协调内部各组件，串联规划、采集、落地与物理巡检。
+*   **TaskPlanner (任务规划)**: 核心组件。
+    1.  对比“用户请求”与“本地库存”（Metadata），计算下载补丁。
+    2.  **增量逻辑**: 若本地 `last_sync_ts` 存在，则将该 symbol 的起始点设为 `last_sync_ts`。
+*   **MetadataManager (元数据管理)**: 负责 `metadata.json` 的原子化保存与加载，为 Planner 提供决策依据。
 
 ### 1.3 Provider (驱动提供层/手脚)
 *   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作（`fetch`）。
@@ -26,7 +25,8 @@
 ### 1.4 Storage (持久化存储层/资产库)
 *   **StorageManager**: 负责数据落地。
 *   **格式派生**: `CSVStorage`, `ParquetStorage` 实现不同的文件 IO。
-*   **逻辑闭环**: 写入成功后，必须**回调元数据更新接口**，同步更新该数据集的 `metadata.json`（更新 `last_timestamp`、数据区间等）。
+*   **接口统一**: 通过 `write(table_id, df, mode="append")` 进行 Upsert 落地。在 `append` 模式下，内部自动执行“读取旧分片 -> 合并 -> unique(timestamp) -> 写入”。
+*   **物理巡检**: 同步结束后由 `SyncManager` 触发物理扫描，更新 `metadata.json` 以反映磁盘真实状态。
 
 ## 2. Storage 层规范
 

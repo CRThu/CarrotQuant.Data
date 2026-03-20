@@ -25,9 +25,9 @@ class CSVStorage(StorageManager):
         # CSV 中的 timestamp 建议始终以 Int64 读取
         return pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
 
-    def write(self, table_id: str, df: pl.DataFrame):
+    def write(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
-        全量写入。直接基于 timestamp 提取 year。
+        写入 CSV 数据。
         """
         if df.is_empty():
             return
@@ -37,36 +37,26 @@ class CSVStorage(StorageManager):
             pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("year")
         )
 
-        # 按 symbol 和 year 分组并写入
+        # 按 symbol 和 year 分组并处理每一块
         for (symbol, year), group_df in df.partition_by(["symbol", "year"], as_dict=True).items():
             path = self._get_path(table_id, symbol, year)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            group_df.drop("year").write_csv(path)
-
-    def append(self, table_id: str, df: pl.DataFrame):
-        """
-        增量写入。
-        """
-        if df.is_empty():
-            return
-
-        # 提取年份用于路径定位
-        df = df.with_columns(
-            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("year")
-        )
-
-        # 按 symbol 和 year 分组
-        for (symbol, year), patch_df in df.partition_by(["symbol", "year"], as_dict=True).items():
-            path = self._get_path(table_id, symbol, year)
             
-            if path.exists():
+            # 去除生成的 year 辅助列，以便写入
+            patch_df = group_df.drop("year")
+            
+            if mode == "append" and path.exists():
+                # 读取旧分片
                 old_df = pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
-                # 使用 DataMerger 执行基于数字 timestamp 的高性能合并
-                combined_df = DataMerger.merge_by_timestamp(old_df, patch_df.drop("year"))
-                combined_df.write_csv(path)
+                
+                # 合并并执行 unique(timestamp) 去重逻辑
+                final_df = DataMerger.merge_by_timestamp(old_df, patch_df)
+                
+                # 写入最终数据
+                final_df.write_csv(path)
             else:
+                # overwrite 模式或路径不存在
                 path.parent.mkdir(parents=True, exist_ok=True)
-                patch_df.drop("year").write_csv(path)
+                patch_df.write_csv(path)
 
     def get_all_symbols(self, table_id: str) -> list[str]:
         """扫描所有 year 目录，提取唯一 Symbol (文件名)"""
