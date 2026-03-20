@@ -67,3 +67,59 @@ class CSVStorage(StorageManager):
             else:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 patch_df.drop("year").write_csv(path)
+
+    def get_all_symbols(self, table_id: str) -> list[str]:
+        """扫描所有 year 目录，提取唯一 Symbol (文件名)"""
+        table_dir = self.storage_root / table_id
+        if not table_dir.exists():
+            return []
+        
+        symbols = set()
+        # 遍历 year={year} 目录下的 csv 文件
+        for csv_file in table_dir.glob("year=*/*.csv"):
+            symbols.add(csv_file.stem)
+        return sorted(list(symbols))
+
+    def get_total_bars(self, table_id: str) -> int:
+        """利用 scan_csv 的通配符扫描极速汇总总行数"""
+        pattern = self.storage_root / table_id / "year=*" / "*.csv"
+        # 显式路径检查，避免 scan_csv 报错
+        if not any(self.storage_root.glob(f"{table_id}/year=*/*.csv")):
+            return 0
+            
+        # 强制指定 timestamp 的 schema_overrides 以确保推断类型正确
+        return pl.scan_csv(
+            str(pattern), 
+            schema_overrides={"timestamp": pl.Int64}
+        ).select(pl.len()).collect().item()
+
+    def get_global_time_range(self, table_id: str) -> tuple[int, int]:
+        """计算数据集全局最小/最大时间戳"""
+        pattern = self.storage_root / table_id / "year=*" / "*.csv"
+        if not any(self.storage_root.glob(f"{table_id}/year=*/*.csv")):
+            return (0, 0)
+            
+        res = pl.scan_csv(
+            str(pattern), 
+            schema_overrides={"timestamp": pl.Int64}
+        ).select([
+            pl.col("timestamp").min().alias("min_ts"),
+            pl.col("timestamp").max().alias("max_ts")
+        ]).collect()
+        
+        # 安全读取结果并提供默认值
+        min_ts = res["min_ts"][0] if not res.is_empty() and res["min_ts"][0] is not None else 0
+        max_ts = res["max_ts"][0] if not res.is_empty() and res["max_ts"][0] is not None else 0
+        return (min_ts, max_ts)
+
+    def get_unique_timestamps(self, table_id: str) -> list[int]:
+        """获取全局去重后的时间点"""
+        pattern = self.storage_root / table_id / "year=*" / "*.csv"
+        if not any(self.storage_root.glob(f"{table_id}/year=*/*.csv")):
+            return []
+            
+        df = pl.scan_csv(
+            str(pattern), 
+            schema_overrides={"timestamp": pl.Int64}
+        ).select("timestamp").unique().sort("timestamp").collect()
+        return df["timestamp"].to_list() if not df.is_empty() else []

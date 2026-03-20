@@ -45,3 +45,31 @@ class StorageManager(abc.ABC):
             df: 包含 symbol 和 date 等字段的 DataFrame
         """
         pass
+
+    @abc.abstractmethod
+    def get_all_symbols(self, table_id: str) -> list[str]:
+        """
+        返回该数据集下所有的证券代码。
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_total_bars(self, table_id: str) -> int:
+        """
+        返回该数据集的物理总行数。
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_global_time_range(self, table_id: str) -> tuple[int, int]:
+        """
+        返回该数据集全局最小/最大毫秒戳。
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_unique_timestamps(self, table_id: str) -> list[int]:
+        """
+        返回该数据集去重后的所有时间点（可选，性能敏感）。
+        """
+        pass

@@ -69,5 +69,50 @@ def test_csv_storage_timestamp_merge():
 
     print("测试通过！跨年 Hive 分区验证成功。")
 
+def test_csv_storage_metadata_stats():
+    test_root = "test_metadata_root"
+    if os.path.exists(test_root):
+        shutil.rmtree(test_root)
+        
+    storage = CSVStorage(storage_root=f"{test_root}/csv")
+    table_id = "test.metadata.stats"
+    
+    # 写入 symbol A (2024, 2025)
+    df_a = pl.DataFrame({
+        "timestamp": [1704067200000, 1735689600000], 
+        "datetime": ["2024-01-01T00:00:00.000", "2025-01-01T00:00:00.000"],
+        "symbol": ["sh.600000"] * 2,
+        "close": [10.0, 11.0]
+    })
+    # 写入 symbol B (2024)
+    df_b = pl.DataFrame({
+        "timestamp": [1704153600000],
+        "datetime": ["2024-01-02T00:00:00.000"],
+        "symbol": ["sz.000001"],
+        "close": [20.0]
+    })
+    
+    storage.append(table_id, df_a)
+    storage.append(table_id, df_b)
+    
+    print("--- 验证 Storage 元数据统计接口 ---")
+    symbols = storage.get_all_symbols(table_id)
+    assert len(symbols) == 2
+    assert "sh.600000" in symbols
+    assert "sz.000001" in symbols
+    
+    total_bars = storage.get_total_bars(table_id)
+    assert total_bars == 3
+    
+    t_min, t_max = storage.get_global_time_range(table_id)
+    assert t_min == 1704067200000
+    assert t_max == 1735689600000
+    
+    unique_ts = storage.get_unique_timestamps(table_id)
+    assert len(unique_ts) == 3
+    
+    print("测试通过！Storage 统计方法验证成功。")
+
 if __name__ == "__main__":
     test_csv_storage_timestamp_merge()
+    test_csv_storage_metadata_stats()

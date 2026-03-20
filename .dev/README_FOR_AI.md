@@ -65,6 +65,32 @@
 3.  **职责明确**: 存储层不负责清洗任何 `date` 或 `time` 字段，若缺失 `timestamp` 列应拒绝入库。
 4.  **IO 性能**: 必须使用 `polars` (pl)，确保 `timestamp` 列类型一致 (Int64)。
 
+### 2.4 Metadata 元数据规范
+元数据由 `SyncManager` 在同步完成后触发“Storage 元数据更新”自动生成，是该数据集本地物理状态的**真实映射**。
+- **路径**: `storage_root/{format}/{table_id}/metadata.json`
+- **属性释义**:
+    - `total_bars`: 该目录下所有 CSV/Parquet 文件的行数物理总和。
+    - `time_steps`: 全局去重后的 `timestamp` 时间点个数。
+    - `symbol_count`: 物理存在的证券代码个数。
+
+#### 元数据示例 (metadata.json)
+```json
+{
+  "table_id": "ashare.kline.1d.adj.baostock",
+  "category": "TimeSeries",
+  "format": "csv",
+  "global_stats": {
+    "start_timestamp": 1704067200000,
+    "end_timestamp": 1716163200000,
+    "start_datetime": "2024-01-01T00:00:00.000",
+    "end_datetime": "2024-05-20T00:00:00.000",
+    "time_steps": 100, 
+    "symbol_count": 5000,
+    "total_bars": 485600 
+  }
+}
+```
+
 ## 3. 命名与目录规范
 - 模块路径统一采用 `app/...`。
 - 抽象基类定义在 `storage/base.py`。
