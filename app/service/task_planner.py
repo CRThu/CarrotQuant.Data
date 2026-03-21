@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from ..storage.metadata_manager import MetadataManager
+from .metadata_manager import MetadataManager
 from ..utils.time_utils import parse_date_to_ts
 
 class TaskPlanner:

@@ -8,6 +8,6 @@ __pycache__/
 
 # Project specific
 storage_root/
-test_storage_root/
+test_*_root/
 
 config/config.yaml

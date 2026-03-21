@@ -3,7 +3,7 @@ import polars as pl
 from typing import Any
 from loguru import logger
 from app.provider.base import BaseProvider
-from app.storage.time_standardizer import TimeStandardizer
+from app.provider.data_cleaner import DataCleaner
 from app.utils.time_utils import ts_to_str
 
 class BaostockProvider(BaseProvider):
@@ -133,12 +133,12 @@ class BaostockProvider(BaseProvider):
             if col in df.columns:
                 df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
 
-        # 时间标准化
+        # 数据清洗与标准化
         if is_day:
-            return TimeStandardizer.standardize(df, "date", time_fmt="%Y-%m-%d")
+            return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d")
         else:
             # Baostock 分钟线 time 格式: YYYYMMDDHHMMSSsss (无小数点)
             # 此时 date 列是多余的，一并删除
             if "date" in df.columns:
                 df = df.drop("date")
-            return TimeStandardizer.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f")
+            return DataCleaner.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f")

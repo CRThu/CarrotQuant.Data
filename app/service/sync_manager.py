@@ -1,8 +1,8 @@
 import polars as pl
 from typing import List, Any
 from .task_planner import TaskPlanner
-from ..provider.manager import ProviderManager
-from ..storage.metadata_manager import MetadataManager
+from ..provider.provider_manager import ProviderManager
+from .metadata_manager import MetadataManager
 from ..utils.time_utils import ts_to_iso
 
 class SyncManager:

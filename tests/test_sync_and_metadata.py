@@ -9,8 +9,10 @@ from pathlib import Path
 sys.path.append(os.getcwd())
 
 from app.storage.csv_storage import CSVStorage
-from app.storage.metadata_manager import MetadataManager
+from app.service.metadata_manager import MetadataManager
 from app.service.sync_manager import SyncManager
+from app.service.task_planner import TaskPlanner
+from app.provider.provider_manager import ProviderManager
 
 def test_metadata_and_sync_flow():
     test_root = Path("test_sync_root")
@@ -20,7 +22,8 @@ def test_metadata_and_sync_flow():
     # 1. 初始化组件
     storage = CSVStorage(storage_root=test_root / "csv")
     metadata_mgr = MetadataManager(storage_root=test_root)
-    sync_mgr = SyncManager(storage=storage, metadata_mgr=metadata_mgr)
+    planner = TaskPlanner(metadata_mgr=metadata_mgr)
+    sync_mgr = SyncManager(storage=storage, metadata_mgr=metadata_mgr, planner=planner)
     
     table_id = "test.kline.1d.mock"
     symbol_a = "sh.600000"
@@ -41,8 +44,8 @@ def test_metadata_and_sync_flow():
         "close": [20.0]
     })
     
-    storage.append(table_id, df1)
-    storage.append(table_id, df2)
+    storage.write(table_id, df1)
+    storage.write(table_id, df2)
     
     print("--- 开始 Storage 元数据统计方法测试 ---")
     
@@ -68,7 +71,10 @@ def test_metadata_and_sync_flow():
     print("--- 开始 SyncManager 闭环测试 ---")
     
     # 3. 执行同步闭环 (统计磁盘状态并生成元数据)
-    sync_mgr.sync_table(table_id, format="csv")
+    # 由于目前 sync 方法固定执行驱动采集，我们通过 mock 掉 provider 避免真实网络请求
+    from unittest.mock import patch
+    with patch.object(sync_mgr.provider_mgr, 'get_provider'):
+        sync_mgr.sync(table_id, "csv", [symbol_a, symbol_b], "2024-01-01", "2025-01-01")
     
     # 验证元数据文件
     meta_path = test_root / "csv" / table_id / "metadata.json"

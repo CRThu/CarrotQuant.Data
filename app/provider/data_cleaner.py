@@ -1,8 +1,8 @@
 import polars as pl
 
-class TimeStandardizer:
+class DataCleaner:
     """
-    时间标准化工具类，确保输出数据符合“双时间轴协议”
+    数据清洗工具类，负责标准化时间、列名等数据清洗逻辑
     """
 
     @staticmethod

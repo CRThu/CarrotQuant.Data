@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 sys.path.append(os.getcwd())
 
 from app.storage.csv_storage import CSVStorage
-from app.storage.metadata_manager import MetadataManager
+from app.service.metadata_manager import MetadataManager
 from app.service.task_planner import TaskPlanner
 from app.service.sync_manager import SyncManager
 from app.provider.base import BaseProvider

@@ -28,7 +28,7 @@ def test_csv_storage_timestamp_merge():
     })
     
     print("--- 第一次写入 ---")
-    storage.append(table_id, df1)
+    storage.write(table_id, df1)
     
     # 场景 2: 包含重复 timestamp 的增量数据
     df2 = pl.DataFrame({
@@ -39,7 +39,7 @@ def test_csv_storage_timestamp_merge():
     })
     
     print("--- 第二次增量 (基于 timestamp 去重) ---")
-    storage.append(table_id, df2)
+    storage.write(table_id, df2)
     
     # 验证
     read_df = storage.read(table_id, symbol, 2024)
@@ -57,7 +57,7 @@ def test_csv_storage_timestamp_merge():
     })
     
     print("--- 写入跨年数据 (2024 + 2025) ---")
-    storage.append(table_id, df_cross_year)
+    storage.write(table_id, df_cross_year)
     
     # 验证 2025 年的目录和文件是否存在
     path_2025 = Path(test_root) / "csv" / table_id / "year=2025" / f"{symbol}.csv"
@@ -92,8 +92,8 @@ def test_csv_storage_metadata_stats():
         "close": [20.0]
     })
     
-    storage.append(table_id, df_a)
-    storage.append(table_id, df_b)
+    storage.write(table_id, df_a)
+    storage.write(table_id, df_b)
     
     print("--- 验证 Storage 元数据统计接口 ---")
     symbols = storage.get_all_symbols(table_id)

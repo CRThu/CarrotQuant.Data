@@ -20,7 +20,7 @@
     - **原子化下载**: 驱动接口强制单次仅处理**单支 Symbol**，确保任务编排层（Planner）可自由拆分与重试。
     - **路由分发**: 驱动内部解析 `table_id` 的业务段落（如 `kline`），自动分发至对应的私有抓取方法。
 *   **Provider Manager**: 策略工厂模式。解析 `table_id` 的末尾字段（源标识），动态实例化并缓存对应的驱动。
-*   **Cleaner**: 在驱动内部通过 `TimeStandardizer` 对原始数据进行“实时清洗”，强制补齐 `timestamp` (Int64) 及 ISO8601 `datetime` (String) 字段，并删除源特有字段（如 `code`）。
+*   **DataCleaner (数据清洗)**: 在驱动内部通过 `DataCleaner` 对原始数据进行“实时清洗”，强制补齐 `timestamp` (Int64) 及 ISO8601 `datetime` (String) 字段，并删除源特有字段（如 `code`）。
 
 ### 1.4 Storage (持久化存储层/资产库)
 *   **StorageManager**: 负责数据落地。
@@ -93,7 +93,10 @@
 
 ## 3. 命名与目录规范
 - 模块路径统一采用 `app/...`。
-- 抽象基类定义在 `storage/base.py`。
+- **Service 层**: 包含 `SyncManager`, `TaskPlanner`, `MetadataManager`。
+- **Provider 层**: 包含 `ProviderManager`, `DataCleaner` 及各驱动实现。
+- **Storage 层**: 包含 `CSVStorage`, `ParquetStorage` 等持久化实现。
+- 抽象基类分别定义在各层的 `base.py` 中。
 - 具体实现类命名为 `{Format}Storage`（如 `CSVStorage`）。
 
 ## 4. 强制约束
