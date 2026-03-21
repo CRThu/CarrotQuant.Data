@@ -20,6 +20,9 @@ from app.config.settings import settings
 
 class FakeProvider(BaseProvider):
     """模拟数据源驱动"""
+    def get_all_symbols(self, table_id: str) -> List[str]:
+        return ["sh.600000", "sz.000001"]
+
     def fetch(self, table_id: str, symbol: str, start_date: Any, end_date: Any, **kwargs) -> pl.DataFrame:
         # 简单根据 symbol 和日期生成 mock 数据
         # 假设 start_date 和 end_date 已经是毫秒戳 (由 SyncManager 传入)
@@ -59,7 +62,7 @@ def test_full_sync_flow():
         with patch.object(sync_mgr.provider_mgr, 'get_provider', return_value=fake_provider):
             print("\n--- [Step 1] 第一次同步 (全量) ---")
             # 请求区间：2024-01-01 -> 2024-01-02
-            sync_mgr.sync(table_id, "csv", symbols, "2024-01-01", "2024-01-02")
+            sync_mgr.sync(table_id, "csv", "2024-01-01", "2024-01-02")
             
             # 验证元数据
             meta = metadata_mgr.load(table_id, "csv")
@@ -87,7 +90,7 @@ def test_full_sync_flow():
             
             fake_provider.fetch = MagicMock(side_effect=mock_fetch)
             
-            sync_mgr.sync(table_id, "csv", symbols, "2024-01-01", "2024-01-05")
+            sync_mgr.sync(table_id, "csv", "2024-01-01", "2024-01-05")
             
             # 验证总行数 (计算推导逻辑如下):
             # 1. 第一次同步: 2 个 symbol, 每个 [01-01, 01-02] 2 条 -> 共 4 条

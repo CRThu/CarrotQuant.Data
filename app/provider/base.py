@@ -21,4 +21,15 @@ class BaseProvider(abc.ABC):
         Returns:
             pl.DataFrame: 标准化后的数据，核心包含 timestamp, datetime 列
         """
+    @abc.abstractmethod
+    def get_all_symbols(self, table_id: str) -> list[str]:
+        """
+        全量证券列表发现接口，返回该表所属市场下所有有效的代码。
+        
+        Args:
+            table_id: 表标识符 (例如 ashare.kline.1d.adj.baostock)
+            
+        Returns:
+            list[str]: 该市场下所有有效的 symbol 列表。
+        """
         pass

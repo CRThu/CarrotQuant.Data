@@ -31,6 +31,29 @@ class BaostockProvider(BaseProvider):
         except Exception as e:
             logger.warning(f"Baostock logout error: {e}")
 
+    def get_all_symbols(self, table_id: str) -> list[str]:
+        """
+        全量证券列表发现逻辑（基础信息库）。使用 query_stock_basic 获取全市场（含退市）的所有证券代码。
+        """
+        rs = bs.query_stock_basic()
+        
+        if rs.error_code != '0':
+            raise ValueError(f"Baostock discovery (basic) failed: {rs.error_msg}")
+            
+        data_list = []
+        while (rs.error_code == '0') & rs.next():
+            data_list.append(rs.get_row_data())
+            
+        if not data_list:
+            raise ValueError(f"Baostock discovery (basic) returned empty list for table: {table_id}")
+            
+        # 根据返回列 ['code', 'code_name', 'ipoDate', 'outDate', 'type', 'status']
+        # 提取第一列 code，不进行任何过滤，尽可能全面
+        symbols = [row[0] for row in data_list]
+        
+        logger.info(f"Discovered {len(symbols)} symbols from Baostock (Basic Info Library)")
+        return symbols
+
     def fetch(self, table_id: str, symbol: str, start_date: Any, end_date: Any, **kwargs) -> pl.DataFrame:
         """
         根据 table_id 路由至具体的下载逻辑。支持传入毫秒戳或日期字符串。

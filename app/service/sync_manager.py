@@ -1,5 +1,4 @@
-import polars as pl
-from typing import List, Any
+from loguru import logger
 from .task_planner import TaskPlanner
 from ..provider.provider_manager import ProviderManager
 from .metadata_manager import MetadataManager
@@ -19,43 +18,58 @@ class SyncManager:
         self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()
 
-    def sync(self, table_id: str, format: str, symbols: List[str], start_date: str, end_date: str):
+    def sync(self, table_id: str, format: str, start_date: str, end_date: str):
         """
         执行全自动化同步闭环。
         """
         # 动态获取对应的物理存储引擎
         storage = StorageFactory.get_storage(format, self.storage_root)
         
-        print(f"[*] Starting orchestrated sync for {table_id}...")
+        logger.info(f"[*] Starting orchestrated sync for {table_id}...")
         
-        # 1. 规划补丁 (Logic Implementation 2.2)
-        tasks = self.planner.plan(table_id, format, symbols, start_date, end_date)
-        total_tasks = len(tasks)
-        print(f"[*] Task planning finished. {total_tasks} symbols need to be patched.")
-        
-        # 2. 获取驱动 (Logic Implementation 2.3 Provider 插件化)
+        # 1. 获取驱动 (Logic Implementation 2.3 Provider 插件化)
         provider = self.provider_mgr.get_provider(table_id)
         
-        # 3. 执行采集与落地循环
+        # 2. 自动发现全量代码 (New Discovery Logic)
+        symbols = provider.get_all_symbols(table_id)
+        
+        # 3. 规划补丁 (Logic Implementation 2.2)
+        tasks = self.planner.plan(table_id, format, symbols, start_date, end_date)
+        total_tasks = len(tasks)
+        logger.info(f"[*] Task planning finished. {total_tasks}/{len(symbols)} symbols need to be patched.")
+        
+        # 4. 执行采集与落地循环
         last_success_df = None
+        success_count = 0
+        fail_count = 0
+        
         for i, task in enumerate(tasks):
             symbol = task['symbol']
             start_ts = task['start']
             end_ts = task['end']
             
-            # Step 1: Provider 采集标准化数据 (含 timestamp/datetime)
-            df = provider.fetch(table_id, symbol, start_ts, end_ts)
+            # 进度记录
+            logger.info(f"[PROGRESS] {table_id} | {i+1}/{total_tasks} | {symbol}")
             
-            # Step 2: Storage 统一 Upsert 落地 (Logic Implementation 2.3)
-            if not df.is_empty():
-                storage.write(table_id, df, mode="append")
-                last_success_df = df
-                print(f"[Sync] {symbol} ({ts_to_iso(start_ts)} -> {ts_to_iso(end_ts)}) 写入成功, 累计 {i+1}/{total_tasks}")
-            else:
-                print(f"[Sync] {symbol} (No new data), 累计 {i+1}/{total_tasks}")
+            try:
+                # Step 1: Provider 采集标准化数据 (含 timestamp/datetime)
+                df = provider.fetch(table_id, symbol, start_ts, end_ts)
                 
-        # 4. 物理巡检 (The Truth)
-        print(f"[*] Running physical data inspection for {table_id}...")
+                # Step 2: Storage 统一 Upsert 落地 (Logic Implementation 2.3)
+                if not df.is_empty():
+                    storage.write(table_id, df, mode="append")
+                    last_success_df = df
+                    logger.debug(f"[Sync] {symbol} ({ts_to_iso(start_ts)} -> {ts_to_iso(end_ts)}) 写入成功")
+                else:
+                    logger.debug(f"[Sync] {symbol} (No new data)")
+                
+                success_count += 1
+            except Exception as e:
+                logger.error(f"[Sync] {symbol} 失败: {e}")
+                fail_count += 1
+                
+        # 5. 物理巡检 (The Truth)
+        logger.info(f"[*] Running physical data inspection for {table_id}...")
         all_symbols = storage.get_all_symbols(table_id)
         total_bars = storage.get_total_bars(table_id)
         start_ts, end_ts = storage.get_global_time_range(table_id)
@@ -93,6 +107,7 @@ class SyncManager:
             }
         }
 
-        # 5. 原子化保存元数据 (Stamp)
+        # 6. 原子化保存元数据 (Stamp)
         self.metadata_mgr.save(table_id, format, metadata)
-        print(f"[+] Sync finished. Global total bars: {total_bars}")
+        logger.info(f"[+] Sync finished. Global total bars: {total_bars}")
+        logger.info(f"[SUMMARY] Total: {total_tasks} | Success: {success_count} | Fail: {fail_count}")
