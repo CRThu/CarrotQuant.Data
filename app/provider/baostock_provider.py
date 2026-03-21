@@ -149,7 +149,8 @@ class BaostockProvider(BaseProvider):
         # Baostock K 线字段定义
         if is_index:
             # 指数 K 线字段 (日线) - 剔除返回 0 的无用字段
-            day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg"
+            #day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg"
+            day_fields = "date,code,open,high,low,close,preclose,volume,amount,turn,pctChg"
             fields = day_fields
         else:
             # 个股 K 线字段 (日线, 五分钟)
