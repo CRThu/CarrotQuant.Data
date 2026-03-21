@@ -4,22 +4,28 @@ from .task_planner import TaskPlanner
 from ..provider.provider_manager import ProviderManager
 from .metadata_manager import MetadataManager
 from ..utils.time_utils import ts_to_iso
+from ..storage.storage_factory import StorageFactory
+from ..config.settings import settings
 
 class SyncManager:
     """
     同步总管：串联规划、采集、落地、巡检、盖章整个流程。
     """
 
-    def __init__(self, storage: Any, metadata_mgr: MetadataManager, planner: TaskPlanner):
-        self.storage = storage
-        self.metadata_mgr = metadata_mgr
-        self.planner = planner
+    def __init__(self):
+        # 内部自治实例化：基于配置中心
+        self.storage_root = settings.STORAGE_ROOT
+        self.metadata_mgr = MetadataManager(self.storage_root)
+        self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()
 
     def sync(self, table_id: str, format: str, symbols: List[str], start_date: str, end_date: str):
         """
         执行全自动化同步闭环。
         """
+        # 动态获取对应的物理存储引擎
+        storage = StorageFactory.get_storage(format, self.storage_root)
+        
         print(f"[*] Starting orchestrated sync for {table_id}...")
         
         # 1. 规划补丁 (Logic Implementation 2.2)
@@ -42,7 +48,7 @@ class SyncManager:
             
             # Step 2: Storage 统一 Upsert 落地 (Logic Implementation 2.3)
             if not df.is_empty():
-                self.storage.write(table_id, df, mode="append")
+                storage.write(table_id, df, mode="append")
                 last_success_df = df
                 print(f"[Sync] {symbol} ({ts_to_iso(start_ts)} -> {ts_to_iso(end_ts)}) 写入成功, 累计 {i+1}/{total_tasks}")
             else:
@@ -50,10 +56,10 @@ class SyncManager:
                 
         # 4. 物理巡检 (The Truth)
         print(f"[*] Running physical data inspection for {table_id}...")
-        all_symbols = self.storage.get_all_symbols(table_id)
-        total_bars = self.storage.get_total_bars(table_id)
-        start_ts, end_ts = self.storage.get_global_time_range(table_id)
-        unique_tss = self.storage.get_unique_timestamps(table_id)
+        all_symbols = storage.get_all_symbols(table_id)
+        total_bars = storage.get_total_bars(table_id)
+        start_ts, end_ts = storage.get_global_time_range(table_id)
+        unique_tss = storage.get_unique_timestamps(table_id)
         
         # 5. 元数据盖章 (Metadata Stamp)
         # 获取 Schema: 优先从下载的数据中获取，若没下载则从已有元数据继承或物理扫描
@@ -67,13 +73,13 @@ class SyncManager:
             start_iso = ts_to_iso(start_ts)
             if start_iso:
                 year = int(start_iso[:4])
-                test_df = self.storage.read(table_id, all_symbols[0], year)
+                test_df = storage.read(table_id, all_symbols[0], year)
                 if not test_df.is_empty():
                     schema_dict = {k: str(v) for k, v in test_df.schema.items()}
             
         metadata = {
             "table_id": table_id,
-            "category": self.storage.category,
+            "category": storage.category,
             "format": format,
             "schema": schema_dict,
             "global_stats": {

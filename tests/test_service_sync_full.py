@@ -11,11 +11,12 @@ from unittest.mock import MagicMock, patch
 # 将当前根目录加入系统路径
 sys.path.append(os.getcwd())
 
-from app.storage.csv_storage import CSVStorage
+from app.storage.storage_factory import StorageFactory
 from app.service.metadata_manager import MetadataManager
 from app.service.task_planner import TaskPlanner
 from app.service.sync_manager import SyncManager
 from app.provider.base import BaseProvider
+from app.config.settings import settings
 
 class FakeProvider(BaseProvider):
     """模拟数据源驱动"""
@@ -40,10 +41,13 @@ def test_full_sync_flow():
         shutil.rmtree(test_root)
     
     # 1. 准备组件
-    storage = CSVStorage(storage_root=test_root / "csv")
-    metadata_mgr = MetadataManager(storage_root=test_root)
-    planner = TaskPlanner(metadata_mgr=metadata_mgr)
-    sync_mgr = SyncManager(storage=storage, metadata_mgr=metadata_mgr, planner=planner)
+    with patch("app.config.settings.settings.STORAGE_ROOT", str(test_root)):
+        sync_mgr = SyncManager()
+        # 为了后续验证，直接从 sync_mgr 拿内部实例
+        metadata_mgr = sync_mgr.metadata_mgr
+        planner = sync_mgr.planner
+        # 由于 StorageFactory 内部会拼接 format，这里手动创建一个用于外部验证的 storage 实例
+        storage = StorageFactory.get_storage("csv", str(test_root))
     
     table_id = "ashare.kline.1d.adj.baostock"
     symbols = ["sh.600000", "sz.000001"]
