@@ -20,6 +20,9 @@ from app.config.settings import settings
 
 class FakeProvider(BaseProvider):
     """模拟数据源驱动"""
+    def get_supported_tables(self) -> List[str]:
+        return ["ashare.kline.1d.adj.baostock"]
+
     def get_all_symbols(self, table_id: str) -> List[str]:
         return ["sh.600000", "sz.000001"]
 

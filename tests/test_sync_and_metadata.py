@@ -8,7 +8,7 @@ from pathlib import Path
 # 将当前根目录加入系统路径
 sys.path.append(os.getcwd())
 
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from app.storage.storage_factory import StorageFactory
 from app.service.metadata_manager import MetadataManager
 from app.service.sync_manager import SyncManager
@@ -74,9 +74,14 @@ def test_metadata_and_sync_flow():
     print("--- 开始 SyncManager 闭环测试 ---")
     
     # 3. 执行同步闭环 (统计磁盘状态并生成元数据)
-    # 由于目前 sync 方法固定执行驱动采集，我们通过 mock 掉 provider 避免真实网络请求
-    with patch.object(sync_mgr.provider_mgr, 'get_provider'):
-        sync_mgr.sync(table_id, "csv", [symbol_a, symbol_b], "2024-01-01", "2025-01-01")
+    with patch.object(sync_mgr.provider_mgr, 'get_provider') as mock_get:
+        mock_provider = MagicMock()
+        mock_provider.get_all_symbols.return_value = [symbol_a, symbol_b]
+        mock_provider.get_supported_tables.return_value = [table_id]
+        mock_provider.fetch.return_value = pl.DataFrame() # 模拟无新数据下载，仅触发巡检
+        mock_get.return_value = mock_provider
+        
+        sync_mgr.sync(table_id, "csv", "2024-01-01", "2025-01-01")
     
     # 验证元数据文件
     meta_path = test_root / "csv" / table_id / "metadata.json"

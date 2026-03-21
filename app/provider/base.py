@@ -33,3 +33,13 @@ class BaseProvider(abc.ABC):
             list[str]: 该市场下所有有效的 symbol 列表。
         """
         pass
+
+    @abc.abstractmethod
+    def get_supported_tables(self) -> list[str]:
+        """
+        返回驱动支持的所有 table_id 列表。
+        
+        Returns:
+            list[str]: 支持的 table_id 列表。
+        """
+        pass

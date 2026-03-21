@@ -16,9 +16,10 @@
 *   **MetadataManager (元数据管理)**: 负责 `metadata.json` 的原子化保存与加载，为 Planner 提供决策依据。
 
 ### 1.3 Provider (驱动提供层/手脚)
-*   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作（`fetch`）。
+*   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作（`fetch`）与能力发现。
+    - **能力发现 (get_supported_tables)**: 驱动强制实现该接口以返回其支持的所有 `table_id` 列表。
     - **原子化下载**: 驱动接口强制单次仅处理**单支 Symbol**，确保任务编排层（Planner）可自由拆分与重试。
-    - **路由分发**: 驱动内部解析 `table_id` 的业务段落（如 `kline`），自动分发至对应的私有抓取方法。
+    - **路由分发**: 驱动内部通过 `get_supported_tables` 预校验并分发至私有抓取方法。
 *   **Provider Manager**: 策略工厂模式。解析 `table_id` 的末尾字段（源标识），动态实例化并缓存对应的驱动。
 *   **DataCleaner (数据清洗)**: 在驱动内部通过 `DataCleaner` 对原始数据进行“实时清洗”，强制补齐 `timestamp` (Int64) 及 ISO8601 `datetime` (String) 字段，并删除源特有字段（如 `code`）。
 

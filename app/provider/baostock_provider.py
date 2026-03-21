@@ -31,6 +31,18 @@ class BaostockProvider(BaseProvider):
         except Exception as e:
             logger.warning(f"Baostock logout error: {e}")
 
+    def get_supported_tables(self) -> list[str]:
+        """
+        返回 Baostock 支持的所有 table_id 列表。
+        """
+        return [
+            "ashare.kline.1d.adj.baostock",
+            "ashare.kline.1d.raw.baostock",
+            "ashare.kline.5m.adj.baostock",
+            "ashare.kline.5m.raw.baostock",
+            "aindex.kline.1d.raw.baostock"
+        ]
+
     def get_all_symbols(self, table_id: str) -> list[str]:
         """
         全量证券列表发现逻辑（基础信息库）。使用 query_stock_basic 获取全市场（含退市）的所有证券代码。
@@ -40,6 +52,10 @@ class BaostockProvider(BaseProvider):
         - 若 prefix == "aindex"：过滤 type == "2"（指数）。
         - 其他：抛出 ValueError。
         """
+        # 1. 预校验支持库
+        if table_id not in self.get_supported_tables():
+            raise ValueError(f"Table '{table_id}' is not supported by BaostockProvider.")
+            
         # 解析 table_id 获取第一个分段 prefix
         prefix = table_id.split('.')[0]
         
@@ -72,6 +88,15 @@ class BaostockProvider(BaseProvider):
         """
         根据 table_id 路由至具体的下载逻辑。支持传入毫秒戳或日期字符串。
         """
+        # 0. 预校验支持库
+        supported = self.get_supported_tables()
+        if table_id not in supported:
+            # 特殊处理：如果是一个包含 baostock 后缀但不明确支持的表，记录警告
+            if table_id.endswith('.baostock'):
+                logger.warning(f"Table '{table_id}' is explicitly handled by Baostock but not in supported_tables list.")
+            else:
+                raise ValueError(f"Table '{table_id}' is not supported by BaostockProvider.")
+
         # 1. 参数标准化：转换毫秒戳为 YYYY-MM-DD
         if isinstance(start_date, int):
             start_date = ts_to_str(start_date)
@@ -101,6 +126,7 @@ class BaostockProvider(BaseProvider):
         # 映射频率
         freq_map = {'1d': 'd', '5m': '5'}
         freq = freq_map.get(freq_raw, 'd')
+        is_day = (freq == 'd')
         
         # 映射复权
         adj_map = {'raw': '3', 'adj': '1'}
