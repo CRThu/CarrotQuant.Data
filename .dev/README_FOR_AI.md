@@ -33,10 +33,12 @@
 ### 命名规范 (Table ID)
 所有存储表的 ID 遵循“由大到小”的层级命名逻辑，点号分段。
 推荐格式：`{market}.{category}.{freq}.{adj}.{source}`
-- `market`: 市场标识（如 `ashare`, `hkstock`）
+- `market`: 市场或项目标识
+    - `ashare`: 专门指向 A 股个股
+    - `aindex`: 专门指向 A 股指数
 - `category`: 数据类别（如 `lhb`, `kline`）
 - `freq`: 频率（如 `1d`, `5m`, `1m`）
-- `adj`: 复权方式（如 `adj`, `qfq`, `hfq`, `none`）
+- `adj`: 复权方式（如 `adj`, `qfq`, `hfq`, `raw`）
 - `source`: 数据来源（如 `baostock`, `akshare`, `eastmoney`）
 
 示例：`ashare.kline.1d.adj.baostock`, `ashare.lhb.eastmoney`

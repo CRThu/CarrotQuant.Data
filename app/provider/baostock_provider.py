@@ -34,7 +34,15 @@ class BaostockProvider(BaseProvider):
     def get_all_symbols(self, table_id: str) -> list[str]:
         """
         全量证券列表发现逻辑（基础信息库）。使用 query_stock_basic 获取全市场（含退市）的所有证券代码。
+        
+        解析 table_id 获取第一个分段 prefix:
+        - 若 prefix == "ashare"：过滤 type == "1"（个股），确保包含退市股。
+        - 若 prefix == "aindex"：过滤 type == "2"（指数）。
+        - 其他：抛出 ValueError。
         """
+        # 解析 table_id 获取第一个分段 prefix
+        prefix = table_id.split('.')[0]
+        
         rs = bs.query_stock_basic()
         
         if rs.error_code != '0':
@@ -48,10 +56,16 @@ class BaostockProvider(BaseProvider):
             raise ValueError(f"Baostock discovery (basic) returned empty list for table: {table_id}")
             
         # 根据返回列 ['code', 'code_name', 'ipoDate', 'outDate', 'type', 'status']
-        # 提取第一列 code，不进行任何过滤，尽可能全面
-        symbols = [row[0] for row in data_list]
+        # 提取 code (row[0])，根据 prefix 过滤 type (row[4])
+        if prefix == "ashare":
+            symbols = [row[0] for row in data_list if row[4] == "1"]
+            logger.info(f"Discovered {len(symbols)} symbols for Universe 'ashare' (Stocks) from Baostock")
+        elif prefix == "aindex":
+            symbols = [row[0] for row in data_list if row[4] == "2"]
+            logger.info(f"Discovered {len(symbols)} symbols for Universe 'aindex' (Indices) from Baostock")
+        else:
+            raise ValueError(f"Unsupported Universe prefix: {prefix}. Only 'ashare' and 'aindex' are supported.")
         
-        logger.info(f"Discovered {len(symbols)} symbols from Baostock (Basic Info Library)")
         return symbols
 
     def fetch(self, table_id: str, symbol: str, start_date: Any, end_date: Any, **kwargs) -> pl.DataFrame:
@@ -78,6 +92,9 @@ class BaostockProvider(BaseProvider):
         # 解析频率和复权
         # table_id 格式示例: ashare.kline.1d.adj.baostock
         parts = table_id.split('.')
+        prefix = parts[0]
+        is_index = (prefix == "aindex")
+        
         freq_raw = parts[2] if len(parts) > 2 else '1d'
         adj_raw = parts[3] if len(parts) > 3 else 'raw'
         
@@ -88,15 +105,33 @@ class BaostockProvider(BaseProvider):
         # 映射复权
         adj_map = {'raw': '3', 'adj': '1'}
         adj = adj_map.get(adj_raw, '3')
+        
+        # 指数数据通常没有复权，强制使用不复权 (raw)
+        if is_index:
+            # 1. 校验复权：指数仅支持 raw，显式拦截其他请求
+            if adj_raw != 'raw':
+                logger.warning(f"Baostock indices only support 'raw' (unadjusted) data, but '{adj_raw}' was requested for {symbol}. Returning empty.")
+                return pl.DataFrame()
+            
+            # 2. 校验频率：指数仅支持日线，分钟数据极其不完整且不受官方正式支持，统一拦截
+            if freq != 'd':
+                logger.warning(f"Baostock doesn't support reliable minute kline for indices: {symbol}. Returning empty.")
+                return pl.DataFrame()
+            
+            adj = "3"
 
         # Baostock K 线字段定义
-        day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,peTTM,pbMRQ,psTTM,pcfNcfTTM,isST"
-        min_fields = "date,time,code,open,high,low,close,volume,amount,adjustflag"
+        if is_index:
+            # 指数 K 线字段 (日线) - 剔除返回 0 的无用字段
+            day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg"
+            fields = day_fields
+        else:
+            # 个股 K 线字段 (日线, 五分钟)
+            day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,peTTM,pbMRQ,psTTM,pcfNcfTTM,isST"
+            min_fields = "date,time,code,open,high,low,close,volume,amount,adjustflag"
+            fields = day_fields if is_day else min_fields
         
-        is_day = freq in ['d']
-        fields = day_fields if is_day else min_fields
-        
-        logger.debug(f"Fetching {symbol} kline from Baostock: {start_date} to {end_date} (freq={freq}, adj={adj})")
+        logger.debug(f"Fetching {symbol} ({prefix}) kline from Baostock: {start_date} to {end_date} (freq={freq}, adj={adj})")
         
         rs = bs.query_history_k_data_plus(
             symbol, fields,
@@ -141,9 +176,8 @@ class BaostockProvider(BaseProvider):
                 raise ValueError("Detect Forward Adjustment (qfq) data, which is FORBIDDEN in this system.")
             
             df = df.with_columns(
-                pl.col("adjustflag").map_elements(
-                    lambda x: "adj" if x == "1" else ("raw" if x == "3" else "unknown"),
-                    return_dtype=pl.Utf8
+                pl.col("adjustflag").replace(
+                    {"1": "adj", "3": "raw"}, default="unknown"
                 ).alias("adjust_flag")
             ).drop("adjustflag")
 
@@ -165,3 +199,4 @@ class BaostockProvider(BaseProvider):
             if "date" in df.columns:
                 df = df.drop("date")
             return DataCleaner.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f")
+
