@@ -17,6 +17,7 @@ from app.service.task_planner import TaskPlanner
 from app.service.sync_manager import SyncManager
 from app.provider.base import BaseProvider
 from app.config.settings import settings
+from app.utils.time_utils import parse_date_to_ts
 
 class FakeProvider(BaseProvider):
     """模拟数据源驱动"""
@@ -87,8 +88,9 @@ def test_full_sync_flow():
             original_fetch = fake_provider.fetch
             def mock_fetch(tid, sym, start, end, **kwargs):
                 print(f"[*] Fetching {sym}: {start} to {end}")
-                # 验证起始点对齐逻辑
-                assert start == old_end_ts
+                # 验证起始点对齐逻辑：新逻辑下 min(req_start, loc_end) = min(01-01, 01-02) = 01-01
+                expected_start = parse_date_to_ts("2024-01-01")
+                assert start == expected_start, f"预期 {expected_start}, 实际 {start}"
                 return original_fetch(tid, sym, start, end, **kwargs)
             
             fake_provider.fetch = MagicMock(side_effect=mock_fetch)

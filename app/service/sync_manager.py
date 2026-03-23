@@ -18,14 +18,14 @@ class SyncManager:
         self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()
 
-    def sync(self, table_id: str, format: str, start_date: str, end_date: str):
+    def sync(self, table_id: str, format: str, start_date: str, end_date: str, force_refresh: bool = False):
         """
         执行全自动化同步闭环。
         """
         # 动态获取对应的物理存储引擎
         storage = StorageFactory.get_storage(format, self.storage_root)
         
-        logger.info(f"[*] Starting orchestrated sync for {table_id}...")
+        logger.info(f"[*] Starting orchestrated sync for {table_id} (force_refresh={force_refresh})...")
         
         # 1. 获取驱动 (Logic Implementation 2.3 Provider 插件化)
         provider = self.provider_mgr.get_provider(table_id)
@@ -34,7 +34,7 @@ class SyncManager:
         symbols = provider.get_all_symbols(table_id)
         
         # 3. 规划补丁 (Logic Implementation 2.2)
-        tasks = self.planner.plan(table_id, format, symbols, start_date, end_date)
+        tasks = self.planner.plan(table_id, format, symbols, start_date, end_date, force_refresh=force_refresh)
         total_tasks = len(tasks)
         logger.info(f"[*] Task planning finished. {total_tasks}/{len(symbols)} symbols need to be patched.")
         

@@ -45,18 +45,18 @@ class CSVStorage(StorageManager):
             patch_df = group_df.drop("year")
             
             if mode == "append" and path.exists():
-                # 读取旧分片
+                # 读取并合并 (内部已含去重和排序)
                 old_df = pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
                 
                 # 合并并执行 unique(timestamp) 去重逻辑
                 final_df = DataMerger.merge_by_timestamp(old_df, patch_df)
-                
-                # 写入最终数据
-                final_df.write_csv(path)
             else:
-                # overwrite 模式或路径不存在
-                path.parent.mkdir(parents=True, exist_ok=True)
-                patch_df.write_csv(path)
+                # 首次写入或 Overwrite 需确保排序和类型一致性
+                final_df = DataMerger.merge_by_timestamp(pl.DataFrame(), patch_df)
+            
+            # 统一路径创建与落盘
+            path.parent.mkdir(parents=True, exist_ok=True)
+            final_df.write_csv(path)
 
     def get_all_symbols(self, table_id: str) -> list[str]:
         """扫描所有 year 目录，提取唯一 Symbol (文件名)"""

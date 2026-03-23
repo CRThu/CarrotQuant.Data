@@ -11,9 +11,9 @@ class TaskPlanner:
     def __init__(self, metadata_mgr: MetadataManager):
         self.metadata_mgr = metadata_mgr
 
-    def plan(self, table_id: str, format: str, symbols: List[str], start_date: Any, end_date: Any) -> List[Dict[str, Any]]:
+    def plan(self, table_id: str, format: str, symbols: List[str], start_date: Any, end_date: Any, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """
-        根据元数据计算计划任务列表。
+        根据元数据计算计划任务列表。实现向前补全、向后拓展或强制全量更新。
         
         Args:
             table_id: 数据表 ID
@@ -21,42 +21,53 @@ class TaskPlanner:
             symbols: 目标证券代码列表
             start_date: 请求起始时间 (str 或 ts)
             end_date: 请求结束时间 (str 或 ts)
+            force_refresh: 是否强制全量刷新 (忽略本地水位线)
             
         Returns:
-            List[Dict]: 补丁任务列表，每项含 symbol, start, end
+            List[Dict]: 补丁任务列表，每项含 symbol, start, end。每个 symbol 最多 1 个任务。
         """
         metadata = self.metadata_mgr.load(table_id, format)
         global_stats = metadata.get("global_stats", {})
-        # 获取全局最后同步的时间戳
-        global_last_ts = global_stats.get("end_timestamp", 0)
+        
+        # 水位线：loc_start 到 loc_end
+        loc_start = global_stats.get("start_timestamp", 0)
+        loc_end = global_stats.get("end_timestamp", 0)
         
         # 解析请求区间
-        req_start_ts = parse_date_to_ts(start_date)
-        req_end_ts = parse_date_to_ts(end_date)
+        req_start = parse_date_to_ts(start_date)
+        req_end = parse_date_to_ts(end_date)
         
         planned_tasks = []
         
-        # 针对每个 symbol 计算增量区间
         for symbol in symbols:
-            # 优先从 symbols 级别的元数据中获取 (若未来支持分 symbol 统计)
-            symbol_last_ts = global_last_ts 
+            # 1. 强制刷新或本地无数据：直接覆盖全量
+            if force_refresh or loc_start == 0 or loc_end == 0:
+                task_start, task_end = req_start, req_end
             
-            # 计算实际起始点
-            # 起始点逻辑：从本地终点开始，重复数据由存储层 unique(timestamp) 自动去重。
-            effective_start = req_start_ts
-            if symbol_last_ts > 0 and req_start_ts < symbol_last_ts:
-                effective_start = symbol_last_ts
+            # 2. 前向补全 (req_start < loc_start)
+            elif req_start < loc_start:
+                # 任务终点取 req_end 和 loc_start 的最大值，确保至少覆盖之前缺失部分并衔接旧数据
+                task_start = req_start
+                task_end = max(req_end, loc_start)
             
-            # 如果起始点已经超过了请求结束点，说明无需下载
-            if effective_start >= req_end_ts:
-                # 检查是否真的已经覆盖
-                if symbol_last_ts >= req_end_ts:
-                    continue
+            # 3. 后向拓展 (req_end > loc_end)
+            elif req_end > loc_end:
+                # 任务起点取 req_start 和 loc_end 的最小值，确保从旧数据终点开始延伸
+                task_start = min(req_start, loc_end)
+                task_end = req_end
+                
+            # 4. 请求范围已被本地覆盖且非强制刷新：跳过
+            else:
+                continue
+                
+            # 安全检查：如果计算出的任务区间无效（起点 >= 终点），跳过
+            if task_start >= task_end:
+                continue
                 
             planned_tasks.append({
                 "symbol": symbol,
-                "start": effective_start,
-                "end": req_end_ts
+                "start": task_start,
+                "end": task_end
             })
             
         return planned_tasks
