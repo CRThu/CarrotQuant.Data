@@ -45,6 +45,7 @@ class SyncManager:
         last_success_df = None
         success_count = 0
         fail_count = 0
+        data_written = False
         
         # 将任务切分为批次
         for batch_idx in range(0, total_tasks, batch_size):
@@ -86,6 +87,7 @@ class SyncManager:
             if batch_dfs:
                 big_df = pl.concat(batch_dfs)
                 storage.write(table_id, big_df, mode="append")
+                data_written = True
                 logger.info(f"[BATCH] Aggregated {len(batch_dfs)} symbols, total {len(big_df)} rows written.")
                 
                 # 显式释放内存列表
@@ -100,9 +102,26 @@ class SyncManager:
         unique_tss = storage.get_unique_timestamps(table_id)
         
         # 5. 元数据盖章 (Metadata Stamp)
-        # 获取 Schema: 仅从最近一次成功下载的数据中提取，或保留已有 Schema
         old_metadata = self.metadata_mgr.load(table_id, format)
-        schema_dict = old_metadata.get("schema", {})
+        
+        # 如果物理巡检结果为 0，且无元数据或已存在元数据时，执行静默拦截逻辑
+        if total_bars == 0:
+            if not old_metadata:
+                # 场景 A（初次同步）：若本地无 metadata.json，直接记录 logger.warning 并 return
+                logger.warning(f"[!] No data found for {table_id} on disk. Skipping metadata creation.")
+                return
+            else:
+                # 场景 B（增量同步）：若本地已有元数据，直接 return，不更新现有 JSON 文件
+                logger.debug(f"[*] Total bars is 0, but metadata already exists for {table_id}. Keeping existing metadata.")
+                return
+
+        # 物理库存变更判定：仅在数据有新增、强制刷新或元数据不存在时才落盘
+        if not data_written and old_metadata and not force_refresh:
+            logger.debug(f"[*] No new data written and metadata exists for {table_id}. Skipping metadata update.")
+            return
+
+        # 仅当 total_bars > 0 且 (有新数据 或 首次生成) 时才更新 Schema 并保存元数据
+        schema_dict = old_metadata.get("schema", {}) if old_metadata else {}
         
         if last_success_df is not None:
             schema_dict = {k: str(v) for k, v in last_success_df.schema.items()}

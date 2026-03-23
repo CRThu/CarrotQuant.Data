@@ -136,13 +136,16 @@ class BaostockProvider(BaseProvider):
         if is_index:
             # 1. 校验复权：指数仅支持 raw，显式拦截其他请求
             if adj_raw != 'raw':
-                logger.warning(f"Baostock indices only support 'raw' (unadjusted) data, but '{adj_raw}' was requested for {symbol}. Returning empty.")
-                return pl.DataFrame()
+                logger.warning(f"Baostock indices only support 'raw' (unadjusted) data, but '{adj_raw}' was requested for {symbol}. Returning empty standardized DF.")
+                # 指数不支持分钟线，所以 fields 必定是 day_fields (包含 date)
+                df_empty = pl.DataFrame(None, schema={f: pl.Utf8 for f in fields.split(',')})
+                return DataCleaner.standardize(df_empty, "date", time_fmt="%Y-%m-%d")
             
             # 2. 校验频率：指数仅支持日线，分钟数据极其不完整且不受官方正式支持，统一拦截
             if freq != 'd':
-                logger.warning(f"Baostock doesn't support reliable minute kline for indices: {symbol}. Returning empty.")
-                return pl.DataFrame()
+                logger.warning(f"Baostock doesn't support reliable minute kline for indices: {symbol}. Returning empty standardized DF.")
+                df_empty = pl.DataFrame(None, schema={f: pl.Utf8 for f in fields.split(',')})
+                return DataCleaner.standardize(df_empty, "date", time_fmt="%Y-%m-%d")
             
             adj = "3"
 
@@ -168,17 +171,19 @@ class BaostockProvider(BaseProvider):
         
         if rs.error_code != '0':
             logger.error(f"Baostock fetch error: {rs.error_msg}")
-            return pl.DataFrame()
+            # 出错时也返回标准化的空表
+            df_empty = pl.DataFrame(None, schema={f: pl.Utf8 for f in fields.split(',')})
+            if is_day:
+                return DataCleaner.standardize(df_empty, "date", time_fmt="%Y-%m-%d")
+            else:
+                return DataCleaner.standardize(df_empty, "time", time_fmt="%Y%m%d%H%M%S%3f")
 
         # 转换为 Polars DataFrame
         data_list = []
         while (rs.error_code == '0') & rs.next():
             data_list.append(rs.get_row_data())
-        
-        if not data_list:
-            return pl.DataFrame()
             
-        df = pl.DataFrame(data_list, schema=fields.split(','), orient="row")
+        df = pl.DataFrame(data_list, schema={f: pl.Utf8 for f in fields.split(',')}, orient="row")
         
         # 字段清洗与重命名
         rename_map = {
