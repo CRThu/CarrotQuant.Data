@@ -203,7 +203,7 @@ class BaostockProvider(BaseProvider):
                 raise ValueError("Detect Forward Adjustment (qfq) data, which is FORBIDDEN in this system.")
             
             df = df.with_columns(
-                pl.col("adjustflag").replace(
+                pl.col("adjustflag").replace_strict(
                     {"1": "adj", "3": "raw"}, default="unknown"
                 ).alias("adjust_flag")
             ).drop("adjustflag")

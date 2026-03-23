@@ -1,5 +1,6 @@
 from .base import StorageManager
 from .csv_storage import CSVStorage
+from .parquet_storage import ParquetStorage
 
 class StorageFactory:
     """存储工厂类，负责根据格式返回对应的存储引擎实例 (Simplifying dependencies)"""
@@ -20,5 +21,8 @@ class StorageFactory:
             # 根据 spec，此处动态实例化 CSVStorage
             # 这里的 storage_root 传入后内部会拼接 format 路径
             return CSVStorage(storage_root=f"{storage_root}/csv")
+        elif storage_format == "parquet":
+            # 支持 Parquet 月度大表存储
+            return ParquetStorage(storage_root=f"{storage_root}/parquet")
         else:
             raise ValueError(f"Unsupported storage format: {storage_format}")

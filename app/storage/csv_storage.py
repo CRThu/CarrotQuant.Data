@@ -1,5 +1,6 @@
 from pathlib import Path
 import polars as pl
+import os
 from .base import StorageManager
 from .data_merger import DataMerger
 
@@ -34,29 +35,31 @@ class CSVStorage(StorageManager):
 
         # 基于核心的 timestamp (ms) 提取年份用于 Hive 分区
         df = df.with_columns(
-            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("year")
+            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
         )
 
-        # 按 symbol 和 year 分组并处理每一块
-        for (symbol, year), group_df in df.partition_by(["symbol", "year"], as_dict=True).items():
+        # 按 symbol 和 _year 分组并处理每一块
+        for (symbol, year), group_df in df.partition_by(["symbol", "_year"], as_dict=True).items():
             path = self._get_path(table_id, symbol, year)
             
-            # 去除生成的 year 辅助列，以便写入
-            patch_df = group_df.drop("year")
+            # 去除生成的 _year 辅助列，以便写入
+            patch_df = group_df.drop("_year")
             
             if mode == "append" and path.exists():
                 # 读取并合并 (内部已含去重和排序)
                 old_df = pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
                 
-                # 合并并执行 unique(timestamp) 去重逻辑
-                final_df = DataMerger.merge_by_timestamp(old_df, patch_df)
+                # 合并并执行 unique([symbol, timestamp]) 去重逻辑
+                final_df = DataMerger.merge_by_symbol_timestamp(old_df, patch_df)
             else:
                 # 首次写入或 Overwrite 需确保排序和类型一致性
-                final_df = DataMerger.merge_by_timestamp(pl.DataFrame(), patch_df)
+                final_df = DataMerger.merge_by_symbol_timestamp(pl.DataFrame(), patch_df)
             
-            # 统一路径创建与落盘
+            # 统一路径创建与原子落盘
             path.parent.mkdir(parents=True, exist_ok=True)
-            final_df.write_csv(path)
+            tmp_path = path.with_suffix(".tmp")
+            final_df.write_csv(tmp_path)
+            os.replace(tmp_path, path)
 
     def get_all_symbols(self, table_id: str) -> list[str]:
         """扫描所有 year 目录，提取唯一 Symbol (文件名)"""

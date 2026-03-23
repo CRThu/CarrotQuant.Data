@@ -10,6 +10,7 @@
 
 ### 1.2 Service (业务服务层/大脑)
 *   **SyncManager (总体调度)**: 协调内部各组件，串联规划、采集、落地与物理巡检。
+    - **同步重构**: 引入“批处理聚合模式 (Batch Sync)”。按 `batch_size` 将 symbols 切分，将一个批次内所有股票的 DataFrame 在内存中通过 `pl.concat` 聚合为一张“大表”后，单次下移至 Storage 层落盘。此举旨在彻底解决 Parquet 等格式下的“写放大”性能灾难。
 *   **TaskPlanner (任务规划)**: 核心组件。
     1.  对比“用户请求”与“本地库存”（Metadata），计算下载补丁。
     2.  **补丁逻辑**: 支持“向前补全”、“向后拓展”以及“全量覆盖”。系统计算缺失区间与本地数据的并集，并仅返回一个单段下载任务。支持 `force_refresh` 强制重载。
@@ -25,8 +26,10 @@
 
 ### 1.4 Storage (持久化存储层/资产库)
 *   **StorageManager**: 负责数据落地。
-*   **格式派生**: `CSVStorage`, `ParquetStorage` 实现不同的文件 IO。
-*   **接口统一**: 通过 `write(table_id, df, mode="append")` 进行 Upsert 落地。在 `append` 模式下，内部自动执行“读取旧分片 -> 合并 -> unique(timestamp) -> 写入”。
+*   **格式派生**: `CSVStorage` (单代码单文件), `ParquetStorage` (月度聚合大表)。
+*   **接口统一**: 通过 `write(table_id, df, mode="append")` 进行 Upsert 落地。
+*   **去重与排序**: 所有存储实现类在写入前必须执行基于 `[symbol, timestamp]` 复合主键的去重 (`keep="last"`) 与升序排序。排序是满足 C# 端 MMF (Memory Mapped Files) 二维矩阵对齐性能的前提。
+*   **原子写入**: 所有存储写操作必须遵循“先写 `.tmp` 临时文件，成功后通过 `os.replace` 替换原文件”的原子化原则，确保物理安全。
 *   **物理巡检**: 同步结束后由 `SyncManager` 触发物理扫描，更新 `metadata.json` 以反映磁盘真实状态。
 
 ## 2. Storage 层规范
@@ -47,24 +50,32 @@
 
 ### 存储路径模板
 数据按格式、表名、年份分片存储，遵循 Hive 分区样式：
-`storage_root/{format}/{table_id}/year={year}/{symbol}.{format}`
+
+1. **CSV (按代码分片)**:
+   `storage_root/csv/{table_id}/year={year}/{symbol}.csv`
+2. **Parquet (月度大表聚合)**:
+   `storage_root/parquet/{table_id}/year={year}/{year}-{month}.parquet`
 
 - `format`: 存储格式（`csv` 或 `parquet`）
 - `table_id`: 见上述命名规范
 - `year`: 数据年份（如 `year=2024`）
+- `month`: 数据月份（如 `01` 到 `12`）
 - `symbol`: 证券代码文件名（如 `sh.600000.csv`）
 
 ### 时间轴标准 (双时间轴协议)
 存储层**强制要求**入库数据符合以下标准，这是物理层合并与分区的唯一凭据：
 1.  **timestamp (核心列)**: 毫秒级时间戳 (Int64)。
-    - **用途一**: 物理合并的唯一主键（去重）。
-    - **用途二**: 分区定位的凭据（通过其计算 `year` 分区）。
-2.  **datetime (可读列)**: 标准 Datetime 类型（在 CSV 中表现为 ISO8601 字符串）。
-    - **用途**: 仅供人工查阅及其他跨语言工具读取，存储层逻辑不再依赖此列名。
+    - **用途一**: 物理合并的复合主键之一。
+    - **用途二**: 分区定位的凭据（通过其计算 `year` 和 `month` 分区）。
+2.  **symbol (核心列)**: 证券代码 (String)。
+    - **用途**: 物理合并的复合主键之一。
+3.  **datetime (可读列)**: 标准 Datetime 类型（在 CSV 中表现为 ISO8601 字符串）。
 
 ### 核心逻辑要求
-1.  **分区规则**: `year` 分区文件夹名称必须通过 `timestamp` 计算得出，严禁依赖字符串截取。
-2.  **增量去重**: `append` 操作必须强制校验并使用 `timestamp` 数字列进行 `unique(subset=["timestamp"], keep="last")`。
+1.  **物理主键**: 全系统去重与排序标准统一为 `["symbol", "timestamp"]`。
+2.  **分子区规则**: 分区路径必须通过 `timestamp` 计算得出。
+3.  **增量去重**: `append` 操作必须强制校验并使用 `unique(subset=["symbol", "timestamp"], keep="last")`。
+4.  **原子落盘**: 严禁直接 `write`，必须通过 `.tmp` 中转 + `os.replace`。
 3.  **职责明确**: 存储层不负责清洗任何 `date` 或 `time` 字段，若缺失 `timestamp` 列应拒绝入库。
 4.  **IO 性能**: 必须使用 `polars` (pl)，确保 `timestamp` 列类型一致 (Int64)。
 

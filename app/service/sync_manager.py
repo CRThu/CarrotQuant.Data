@@ -1,4 +1,5 @@
 from loguru import logger
+import polars as pl
 from .task_planner import TaskPlanner
 from ..provider.provider_manager import ProviderManager
 from .metadata_manager import MetadataManager
@@ -18,22 +19,24 @@ class SyncManager:
         self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()
 
-    def sync(self, table_id: str, format: str, start_date: str, end_date: str, force_refresh: bool = False):
+    def sync(self, table_id: str, format: str, start_date: str, end_date: str, force_refresh: bool = False, batch_size: int = 100):
         """
         执行全自动化同步闭环。
+        重构为“批处理聚合模式”，降低 Parquet 写放大。
         """
+        
         # 动态获取对应的物理存储引擎
         storage = StorageFactory.get_storage(format, self.storage_root)
         
-        logger.info(f"[*] Starting orchestrated sync for {table_id} (force_refresh={force_refresh})...")
+        logger.info(f"[*] Starting orchestrated sync for {table_id} (batch_size={batch_size}, force_refresh={force_refresh})...")
         
-        # 1. 获取驱动 (Logic Implementation 2.3 Provider 插件化)
+        # 1. 获取驱动
         provider = self.provider_mgr.get_provider(table_id)
         
-        # 2. 自动发现全量代码 (New Discovery Logic)
+        # 2. 自动发现全量代码
         symbols = provider.get_all_symbols(table_id)
         
-        # 3. 规划补丁 (Logic Implementation 2.2)
+        # 3. 规划补丁
         tasks = self.planner.plan(table_id, format, symbols, start_date, end_date, force_refresh=force_refresh)
         total_tasks = len(tasks)
         logger.info(f"[*] Task planning finished. {total_tasks}/{len(symbols)} symbols need to be patched.")
@@ -43,31 +46,52 @@ class SyncManager:
         success_count = 0
         fail_count = 0
         
-        for i, task in enumerate(tasks):
-            symbol = task['symbol']
-            start_ts = task['start']
-            end_ts = task['end']
+        # 将任务切分为批次
+        for batch_idx in range(0, total_tasks, batch_size):
+            batch_tasks = tasks[batch_idx : batch_idx + batch_size]
+            batch_dfs = []
             
-            # 进度记录
-            logger.info(f"[PROGRESS] {table_id} | {i+1}/{total_tasks} | {symbol}")
+            logger.info(f"[BATCH] Processing batch {batch_idx//batch_size + 1} ({len(batch_tasks)} symbols)")
             
-            try:
-                # Step 1: Provider 采集标准化数据 (含 timestamp/datetime)
-                df = provider.fetch(table_id, symbol, start_ts, end_ts)
+            for j, task in enumerate(batch_tasks):
+                symbol = task['symbol']
+                start_ts = task['start']
+                end_ts = task['end']
                 
-                # Step 2: Storage 统一 Upsert 落地 (Logic Implementation 2.3)
-                if not df.is_empty():
-                    storage.write(table_id, df, mode="append")
-                    last_success_df = df
-                    logger.debug(f"[Sync] {symbol} ({ts_to_iso(start_ts)} -> {ts_to_iso(end_ts)}) 写入成功")
-                else:
-                    logger.debug(f"[Sync] {symbol} (No new data)")
+                # 实时进度 Log
+                current_idx = batch_idx + j + 1
+                logger.info(f"[PROGRESS] {table_id} | {current_idx}/{total_tasks} | {symbol}")
                 
-                success_count += 1
-            except Exception as e:
-                logger.error(f"[Sync] {symbol} 失败: {e}")
-                fail_count += 1
+                try:
+                    # Step 1: Provider 采集标准化数据
+                    df = provider.fetch(table_id, symbol, start_ts, end_ts)
+                    
+                    # 采样 Schema：即使没数据，Provider 返回的空表通常也带有字段类型
+                    if last_success_df is None:
+                        last_success_df = df
+                    
+                    if not df.is_empty():
+                        batch_dfs.append(df)
+                        last_success_df = df # 优先保留有数据的样本
+                        logger.debug(f"[Sync] {symbol} 下载成功 ({len(df)} rows)")
+                    else:
+                        logger.debug(f"[Sync] {symbol} (No new data)")
+                    
+                    success_count += 1
+                except Exception as e:
+                    logger.error(f"[Sync] {symbol} 失败: {e}")
+                    fail_count += 1
+            
+            # Step 2: 批次内存聚合与单次下沉
+            if batch_dfs:
+                big_df = pl.concat(batch_dfs)
+                storage.write(table_id, big_df, mode="append")
+                logger.info(f"[BATCH] Aggregated {len(batch_dfs)} symbols, total {len(big_df)} rows written.")
                 
+                # 显式释放内存列表
+                batch_dfs.clear()
+                del big_df
+        
         # 5. 物理巡检 (The Truth)
         logger.info(f"[*] Running physical data inspection for {table_id}...")
         all_symbols = storage.get_all_symbols(table_id)
@@ -76,20 +100,12 @@ class SyncManager:
         unique_tss = storage.get_unique_timestamps(table_id)
         
         # 5. 元数据盖章 (Metadata Stamp)
-        # 获取 Schema: 优先从下载的数据中获取，若没下载则从已有元数据继承或物理扫描
+        # 获取 Schema: 仅从最近一次成功下载的数据中提取，或保留已有 Schema
         old_metadata = self.metadata_mgr.load(table_id, format)
         schema_dict = old_metadata.get("schema", {})
         
         if last_success_df is not None:
             schema_dict = {k: str(v) for k, v in last_success_df.schema.items()}
-        elif not schema_dict and all_symbols:
-            # 实在没有，尝试从磁盘读一个
-            start_iso = ts_to_iso(start_ts)
-            if start_iso:
-                year = int(start_iso[:4])
-                test_df = storage.read(table_id, all_symbols[0], year)
-                if not test_df.is_empty():
-                    schema_dict = {k: str(v) for k, v in test_df.schema.items()}
             
         metadata = {
             "table_id": table_id,
@@ -107,7 +123,7 @@ class SyncManager:
             }
         }
 
-        # 6. 原子化保存元数据 (Stamp)
+        # 6. 原子化保存元数据
         self.metadata_mgr.save(table_id, format, metadata)
         logger.info(f"[+] Sync finished. Global total bars: {total_bars}")
         logger.info(f"[SUMMARY] Total: {total_tasks} | Success: {success_count} | Fail: {fail_count}")

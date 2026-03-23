@@ -78,7 +78,10 @@ def test_metadata_and_sync_flow():
         mock_provider = MagicMock()
         mock_provider.get_all_symbols.return_value = [symbol_a, symbol_b]
         mock_provider.get_supported_tables.return_value = [table_id]
-        mock_provider.fetch.return_value = pl.DataFrame() # 模拟无新数据下载，仅触发巡检
+        # 模拟无新数据下载，但提供带 Schema 的空表以供巡检获取元数据格式
+        mock_provider.fetch.return_value = pl.DataFrame(
+            schema={"symbol": pl.String, "timestamp": pl.Int64, "datetime": pl.String, "close": pl.Float64}
+        )
         mock_get.return_value = mock_provider
         
         sync_mgr.sync(table_id, "csv", "2024-01-01", "2025-01-01")
