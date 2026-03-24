@@ -136,6 +136,18 @@
 - **字段要求**: 
     - `symbol` 为强制保留字段，各数据源原始字段（如 `code`）必须统一重命名为 `symbol`。
     - `timestamp` (Int64) 和 `datetime` (String) 为标准化输出的必选时间轴字段。
+- **时区处理**: 
+    - **双时区驱动机制**: 系统引入 `source_tz` 和 `display_tz` 两个时区参数。
+    - `source_tz`: 用于将原始挂钟时间对齐到 UTC 0。必须使用 IANA 时区名称（如 "Asia/Shanghai", "UTC", "America/New_York"）。
+    - `display_tz`: 用于生成 datetime 显示列（带偏移量的 ISO8601）。必须使用 IANA 时区名称。
+    - **默认值**: 针对 A 股环境，两者默认均为 "Asia/Shanghai"。
+    - **实现规范**: 
+        1. 必须使用 Python 3.9+ 的 `zoneinfo` 库处理时区，严禁手动计算时区偏移。
+        2. `datetime` 字符串必须以 `+HH:MM` 或 `-HH:MM` 结尾（如 `2024-01-01T08:00:00.000+08:00`）。
+        3. 严禁使用不带偏移量的本地时间。
+    - **验证要求**: 
+        - 跨时区验证：如果 `source_tz="UTC"` 且 `display_tz="Asia/Shanghai"`，北京时间 8 点的数据生成的 timestamp 应为 0（UTC 0点）。
+        - 夏令时验证：使用 `America/New_York` 测试 6 月份数据，验证 datetime 后缀应自动为 `-04:00`。
 - **运行环境**: 所有执行指令必须带有 `uv run` 前缀。
 - **语言**: 代码注释及开发文档必须使用中文。
 

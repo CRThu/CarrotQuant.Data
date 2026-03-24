@@ -132,6 +132,18 @@ class BaostockProvider(BaseProvider):
         adj_map = {'raw': '3', 'adj': '1'}
         adj = adj_map.get(adj_raw, '3')
         
+        # Baostock K 线字段定义
+        if is_index:
+            # 指数 K 线字段 (日线) - 剔除返回 0 的无用字段
+            #day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg"
+            day_fields = "date,code,open,high,low,close,preclose,volume,amount,turn,pctChg"
+            fields = day_fields
+        else:
+            # 个股 K 线字段 (日线, 五分钟)
+            day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,peTTM,pbMRQ,psTTM,pcfNcfTTM,isST"
+            min_fields = "date,time,code,open,high,low,close,volume,amount,adjustflag"
+            fields = day_fields if is_day else min_fields
+        
         # 指数数据通常没有复权，强制使用不复权 (raw)
         if is_index:
             # 1. 校验复权：指数仅支持 raw，显式拦截其他请求
@@ -148,18 +160,6 @@ class BaostockProvider(BaseProvider):
                 return DataCleaner.standardize(df_empty, "date", time_fmt="%Y-%m-%d")
             
             adj = "3"
-
-        # Baostock K 线字段定义
-        if is_index:
-            # 指数 K 线字段 (日线) - 剔除返回 0 的无用字段
-            #day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg"
-            day_fields = "date,code,open,high,low,close,preclose,volume,amount,turn,pctChg"
-            fields = day_fields
-        else:
-            # 个股 K 线字段 (日线, 五分钟)
-            day_fields = "date,code,open,high,low,close,preclose,volume,amount,adjustflag,turn,tradestatus,pctChg,peTTM,pbMRQ,psTTM,pcfNcfTTM,isST"
-            min_fields = "date,time,code,open,high,low,close,volume,amount,adjustflag"
-            fields = day_fields if is_day else min_fields
         
         logger.debug(f"Fetching {symbol} ({prefix}) kline from Baostock: {start_date} to {end_date} (freq={freq}, adj={adj})")
         
@@ -185,7 +185,7 @@ class BaostockProvider(BaseProvider):
             
         df = pl.DataFrame(data_list, schema={f: pl.Utf8 for f in fields.split(',')}, orient="row")
         
-        # 字段清洗与重命名
+        # 字段清洗与重命名（无论是空数据还是有数据都需要重命名）
         rename_map = {
             "code": "symbol",
             "pctChg": "change_pct",
@@ -200,6 +200,20 @@ class BaostockProvider(BaseProvider):
         # 只重命名存在的列
         actual_rename = {k: v for k, v in rename_map.items() if k in df.columns}
         df = df.rename(actual_rename)
+        
+        # 如果是空数据，直接返回标准化的空表
+        if df.is_empty():
+            if is_day:
+                return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
+                                             source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+            else:
+                # Baostock 分钟线 time 格式: YYYYMMDDHHMMSSsss (无小数点)
+                # 此时 date 列是多余的，一并删除
+                if "date" in df.columns:
+                    df = df.drop("date")
+                return DataCleaner.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f", 
+                                             source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+        
         
         # 处理 adjustflag 映射 (1:adj, 2:qfq, 3:raw)
         if "adjustflag" in df.columns:
@@ -223,12 +237,15 @@ class BaostockProvider(BaseProvider):
                 df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
 
         # 数据清洗与标准化
+        # Baostock 数据源为北京时间 (UTC+8)，显式传入时区参数
         if is_day:
-            return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d")
+            return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
+                                         source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
         else:
             # Baostock 分钟线 time 格式: YYYYMMDDHHMMSSsss (无小数点)
             # 此时 date 列是多余的，一并删除
             if "date" in df.columns:
                 df = df.drop("date")
-            return DataCleaner.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f")
+            return DataCleaner.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f", 
+                                         source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
 
