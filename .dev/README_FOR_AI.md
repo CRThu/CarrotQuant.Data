@@ -166,9 +166,39 @@
 *   **价值**: 彻底杜绝空表在磁盘上产生任何“文件夹残留”。
 
 ### 5.3 元数据静默机制 (Service Layer)
-*   **核心原则**: “物理真实性优先”。`metadata.json` 必须是磁盘有效数据的映射，禁止为“空文件夹”盖章。
+*   **核心原则**: "物理真实性优先"。`metadata.json` 必须是磁盘有效数据的映射，禁止为"空文件夹"盖章。
 *   **具体场景**:
     1.  **初次同步无数据**: 若磁盘物理巡检 `total_bars == 0` 且本地无元数据，则不创建任何文件。
     2.  **增量同步无新增**: 若本次同步未产生实际数据下载（`data_written == False`）且本地已有元数据，且非 `force_refresh` 模式，则跳过 `metadata.json` 的更新（保持 mtime 不变）。
     3.  **价值**: 保证元数据的时间轴描述与物理磁盘文件同步，避免 Planner 基于虚空的元数据做出错误规划。
+
+## 6. 单元测试文件结构
+
+```
+tests/
+├── unit/                          # 单元测试
+│   ├── test_utils_time.py        # 时区工具
+│   ├── test_storage_csv.py       # CSV 存储
+│   ├── test_storage_parquet.py   # Parquet 存储
+│   ├── test_storage_factory.py   # 存储工厂
+│   ├── test_storage_merger.py    # 数据合并
+│   ├── test_service_planner.py   # 任务规划
+│   ├── test_service_batch_sync.py # 批量同步
+│   └── test_sync_and_metadata.py # 元数据同步
+├── integration/                   # 集成测试
+│   ├── test_provider_baostock.py # Baostock 驱动
+│   ├── test_sync_full_flow.py    # 全链路同步
+│   ├── test_sync_defense.py      # 空数据防御
+│   └── test_sync_multi_storage.py # 多存储格式
+└── gateway/                       # 网关测试
+    ├── test_api_locking.py       # API 并发锁
+    └── test_api_query.py         # API 查询
+```
+
+**测试运行命令**:
+```bash
+uv run pytest tests/ -v
+uv run pytest tests/unit/test_utils_time.py -v
+uv run pytest tests/unit/test_utils_time.py::test_ts_to_iso_summer_time -v
+```
 
