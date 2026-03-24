@@ -40,7 +40,8 @@ class BaostockProvider(BaseProvider):
             "ashare.kline.1d.raw.baostock",
             "ashare.kline.5m.adj.baostock",
             "ashare.kline.5m.raw.baostock",
-            "aindex.kline.1d.raw.baostock"
+            "aindex.kline.1d.raw.baostock",
+            "ashare.adj_factor.baostock"
         ]
 
     def get_all_symbols(self, table_id: str) -> list[str]:
@@ -103,10 +104,12 @@ class BaostockProvider(BaseProvider):
         if isinstance(end_date, int):
             end_date = ts_to_str(end_date)
 
-        # 2. 路由逻辑：解析 table_id 中间的部分 (如 kline)
+        # 2. 路由逻辑：解析 table_id 中间的部分 (如 kline, adj_factor)
         parts = table_id.split('.')
         if 'kline' in parts:
             return self._fetch_kline(table_id, symbol, start_date, end_date, **kwargs)
+        elif 'adj_factor' in parts:
+            return self._fetch_adj_factor(table_id, symbol, start_date, end_date, **kwargs)
         else:
             raise NotImplementedError(f"Table category not supported by Baostock: {table_id}")
 
@@ -248,4 +251,66 @@ class BaostockProvider(BaseProvider):
                 df = df.drop("date")
             return DataCleaner.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f", 
                                          source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+
+    def _fetch_adj_factor(self, table_id: str, symbol: str, start_date: str, end_date: str, **kwargs) -> pl.DataFrame:
+        """
+        私有方法：下载复权因子数据 (Event)
+        
+        调用 bs.query_adjust_factor 接口获取指定股票的复权因子。
+        返回字段包括：
+        - symbol: 证券代码
+        - date: 分红送转日期（作为时间戳基准）
+        - fore_adjust_factor: 前复权因子
+        - back_adjust_factor: 后复权因子
+        - adjust_factor: 复权因子
+        """
+        # Baostock 返回字段: code, dividOperateDate, foreAdjustFactor, backAdjustFactor, adjustFactor
+        fields = "code,dividOperateDate,foreAdjustFactor,backAdjustFactor,adjustFactor"
+        
+        logger.debug(f"Fetching {symbol} adj_factor from Baostock: {start_date} to {end_date}")
+        
+        # 调用 Baostock 复权因子查询接口
+        rs = bs.query_adjust_factor(code=symbol, start_date=start_date, end_date=end_date)
+        
+        if rs.error_code != '0':
+            logger.error(f"Baostock adj_factor query error: {rs.error_msg}")
+            # 出错时返回标准化的空表
+            df_empty = pl.DataFrame(None, schema={f: pl.Utf8 for f in fields.split(',')})
+            return DataCleaner.standardize(df_empty, "dividOperateDate", time_fmt="%Y-%m-%d", 
+                                           source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+        
+        # 转换为 Polars DataFrame
+        data_list = []
+        while (rs.error_code == '0') & rs.next():
+            data_list.append(rs.get_row_data())
+        
+        df = pl.DataFrame(data_list, schema={f: pl.Utf8 for f in fields.split(',')}, orient="row")
+        
+        # 字段清洗与重命名（无论是空数据还是有数据都需要重命名）
+        rename_map = {
+            "code": "symbol",
+            "dividOperateDate": "date",
+            "foreAdjustFactor": "fore_adjust_factor",
+            "backAdjustFactor": "back_adjust_factor",
+            "adjustFactor": "adjust_factor"
+        }
+        # 只重命名存在的列
+        actual_rename = {k: v for k, v in rename_map.items() if k in df.columns}
+        df = df.rename(actual_rename)
+        
+        # 如果是空数据，直接返回标准化的空表
+        if df.is_empty():
+            return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
+                                           source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+        
+        # 转换为数值类型（复权因子必须是浮点数）
+        numeric_cols = ["fore_adjust_factor", "back_adjust_factor", "adjust_factor"]
+        for col in numeric_cols:
+            if col in df.columns:
+                df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
+        
+        # 数据清洗与标准化
+        # Event 数据的 timestamp 必须是 date 的 00:00:00 UTC+8 对应的毫秒戳
+        return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
+                                       source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
 

@@ -105,19 +105,56 @@
     - `symbol_count`: 物理存在的证券代码个数。
 
 #### 元数据示例 (metadata.json)
+
+**TimeSeries 类型 (category: "TS")**:
 ```json
 {
   "table_id": "ashare.kline.1d.adj.baostock",
-  "category": "TimeSeries",
+  "category": "TS",
   "format": "csv",
-  "global_stats": {
+  "schema": {
+    "symbol": "Utf8",
+    "datetime": "Utf8",
+    "timestamp": "Int64",
+    "open": "Float64",
+    "high": "Float64",
+    "low": "Float64",
+    "close": "Float64",
+    "volume": "Float64",
+    "amount": "Float64"
+  },
+  "statistics": {
     "start_timestamp": 1704067200000,
     "end_timestamp": 1716163200000,
-    "start_datetime": "2024-01-01T00:00:00.000",
-    "end_datetime": "2024-05-20T00:00:00.000",
-    "time_steps": 100, 
+    "start_datetime": "2024-01-01T00:00:00.000+08:00",
+    "end_datetime": "2024-05-20T00:00:00.000+08:00",
+    "total_bars": 485600,
     "symbol_count": 5000,
-    "total_bars": 485600 
+    "time_steps": 100
+  }
+}
+```
+
+**Event 类型 (category: "EV")**:
+```json
+{
+  "table_id": "ashare.adj_factor.baostock",
+  "category": "EV",
+  "format": "csv",
+  "schema": {
+    "symbol": "Utf8",
+    "datetime": "Utf8",
+    "timestamp": "Int64",
+    "fore_adjust_factor": "Float64",
+    "back_adjust_factor": "Float64",
+    "adjust_factor": "Float64"
+  },
+  "statistics": {
+    "start_timestamp": 1104537600000,
+    "end_timestamp": 1716163200000,
+    "start_datetime": "2005-01-01T00:00:00.000+08:00",
+    "end_datetime": "2024-05-20T00:00:00.000+08:00",
+    "total_bars": 15000
   }
 }
 ```

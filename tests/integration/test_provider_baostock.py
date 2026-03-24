@@ -67,5 +67,60 @@ def test_baostock_provider_fetch():
     
     print("\nTest Passed: All renaming and cleaning logic verified.")
 
+def test_baostock_provider_adj_factor():
+    """
+    测试 BaostockProvider 的复权因子数据采集与标准化，验证 Event 数据逻辑
+    """
+    manager = ProviderManager()
+    symbol = "sz.000001"
+    
+    table_id = "ashare.adj_factor.baostock"
+    provider = manager.get_provider(table_id)
+    
+    # 测试复权因子数据
+    df = provider.fetch(table_id, symbol, "2024-01-01", "2024-12-31")
+    
+    logger.info("Adj Factor Check:")
+    
+    # 验证返回数据非空
+    assert not df.is_empty(), "Adj factor data should not be empty"
+    
+    # 验证核心列存在
+    assert "symbol" in df.columns
+    assert "timestamp" in df.columns
+    assert "datetime" in df.columns
+    
+    # 验证复权因子列存在且类型为 Float64
+    assert "back_adjust_factor" in df.columns, "back_adjust_factor should exist"
+    assert df.schema["back_adjust_factor"] == pl.Float64, "back_adjust_factor should be Float64"
+    
+    # 验证 fore_adjust_factor 和 adjust_factor 也存在
+    assert "fore_adjust_factor" in df.columns
+    assert "adjust_factor" in df.columns
+    assert df.schema["fore_adjust_factor"] == pl.Float64
+    assert df.schema["adjust_factor"] == pl.Float64
+    
+    # 验证 datetime 列格式正确（应为 YYYY-MM-DDT00:00:00.000+08:00）
+    # Event 数据的 timestamp 是 dividOperateDate 的 00:00:00 UTC+8 对应的毫秒戳
+    # 经过 DataCleaner.standardize 处理后，datetime 应该显示原始日期的 00:00:00+08:00
+    if not df.is_empty():
+        first_dt = df["datetime"][0]
+        logger.info(f"First datetime = {first_dt}")
+        # 验证 datetime 格式正确：包含 T00:00:00 和 +08:00
+        assert "T00:00:00" in first_dt, "datetime should contain 00:00:00 time"
+        assert "+08:00" in first_dt, "datetime should have +08:00 timezone suffix"
+    
+    # 验证列顺序：symbol, datetime, timestamp 应该在最前面
+    front_cols = df.columns[:3]
+    assert "symbol" == front_cols[0]
+    assert "datetime" == front_cols[1]
+    assert "timestamp" == front_cols[2]
+    
+    print(f"Adj Factor Total Fields ({len(df.columns)}): {df.columns}")
+    print(df.head(3))
+    
+    print("\nTest Passed: Adj factor (Event) fetch and standardization verified.")
+
 if __name__ == "__main__":
     test_baostock_provider_fetch()
+    test_baostock_provider_adj_factor()

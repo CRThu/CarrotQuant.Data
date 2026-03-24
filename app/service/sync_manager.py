@@ -146,21 +146,45 @@ class SyncManager:
         
         if last_success_df is not None:
             schema_dict = {k: str(v) for k, v in last_success_df.schema.items()}
-            
-        metadata = {
-            "table_id": table_id,
-            "category": storage.category,
-            "format": format,
-            "schema": schema_dict,
-            "global_stats": {
+        
+        # 根据 category 分类构建统计结构
+        # category == "TS" (TimeSeries): 包含 time_steps 和 symbol_count
+        # category == "EV" (Event): 仅包含 total_bars
+        category = storage.category
+        if category == "TS":
+            statistics = {
                 "start_timestamp": start_ts,
                 "end_timestamp": end_ts,
                 "start_datetime": ts_to_iso(start_ts),
                 "end_datetime": ts_to_iso(end_ts),
-                "time_steps": len(unique_tss),
+                "total_bars": total_bars,
                 "symbol_count": len(all_symbols),
+                "time_steps": len(unique_tss)
+            }
+        elif category == "EV":
+            statistics = {
+                "start_timestamp": start_ts,
+                "end_timestamp": end_ts,
+                "start_datetime": ts_to_iso(start_ts),
+                "end_datetime": ts_to_iso(end_ts),
                 "total_bars": total_bars
             }
+        else:
+            # 兼容其他未预期的 category
+            statistics = {
+                "start_timestamp": start_ts,
+                "end_timestamp": end_ts,
+                "start_datetime": ts_to_iso(start_ts),
+                "end_datetime": ts_to_iso(end_ts),
+                "total_bars": total_bars
+            }
+        
+        metadata = {
+            "table_id": table_id,
+            "category": category,
+            "format": format,
+            "schema": schema_dict,
+            "statistics": statistics
         }
 
         # 6. 原子化保存元数据
