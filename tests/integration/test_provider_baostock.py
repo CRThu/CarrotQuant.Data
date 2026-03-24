@@ -1,11 +1,6 @@
-import os
-import sys
+import pytest
 import polars as pl
 from loguru import logger
-
-# 将当前根目录加入系统路径
-sys.path.append(os.getcwd())
-
 from app.provider.provider_manager import ProviderManager
 
 def test_baostock_provider_fetch():

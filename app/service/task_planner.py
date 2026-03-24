@@ -26,6 +26,10 @@ class TaskPlanner:
         Returns:
             List[Dict]: 补丁任务列表，每项含 symbol, start, end。每个 symbol 最多 1 个任务。
         """
+        # 空格式列表直接返回空任务
+        if not formats:
+            return []
+        
         # 1. 聚合多个格式的水位线。
         # 起始取 max, 结束取 min：这是为了找到所有格式共同拥有的“最窄”水位区间。
         # 只要有一路格式缺失，我们就需要通过任务补齐。
@@ -80,8 +84,8 @@ class TaskPlanner:
             
             # 3. 后向拓展 (req_end > loc_end)
             elif req_end > loc_end:
-                # 任务起点取 req_start 和 loc_end 的最小值，确保从旧数据终点开始延伸
-                task_start = min(req_start, loc_end)
+                # 任务起点取 loc_end，确保从最短水位的终点开始延伸（木桶原理）
+                task_start = loc_end
                 task_end = req_end
                 
             # 4. 请求范围已被本地覆盖且非强制刷新：跳过
