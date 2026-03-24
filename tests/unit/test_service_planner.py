@@ -9,7 +9,7 @@ def test_plan_no_local_data_no_start_date():
     测试本地无数据 + 无 start_date → 必须抛出 ValueError
     """
     metadata_mgr = MagicMock()
-    metadata_mgr.load.return_value = {"global_stats": {}}
+    metadata_mgr.load.return_value = {"statistics": {}}
     
     planner = TaskPlanner(metadata_mgr)
     
@@ -27,7 +27,7 @@ def test_plan_local_data_no_start_date():
     # 模拟本地已有数据，结束时间为 2024-01-02
     local_end_ts = parse_date_to_ts("2024-01-02")
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2024-01-01"),
             "end_timestamp": local_end_ts
         }
@@ -53,7 +53,7 @@ def test_plan_multi_format_watermark():
     
     # CSV 水位：2024-01-01 到 2024-01-20
     csv_metadata = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2024-01-01"),
             "end_timestamp": parse_date_to_ts("2024-01-20")
         }
@@ -61,7 +61,7 @@ def test_plan_multi_format_watermark():
     
     # Parquet 水位：2024-01-01 到 2024-01-18
     parquet_metadata = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2024-01-01"),
             "end_timestamp": parse_date_to_ts("2024-01-18")
         }
@@ -97,7 +97,7 @@ def test_plan_force_refresh():
     """
     metadata_mgr = MagicMock()
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2024-01-01"),
             "end_timestamp": parse_date_to_ts("2024-01-10")
         }
@@ -122,7 +122,7 @@ def test_plan_no_task_needed():
     """
     metadata_mgr = MagicMock()
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2024-01-01"),
             "end_timestamp": parse_date_to_ts("2024-01-20")
         }
@@ -144,7 +144,7 @@ def test_plan_multiple_symbols():
     测试多个symbol的规划
     """
     metadata_mgr = MagicMock()
-    metadata_mgr.load.return_value = {"global_stats": {}}
+    metadata_mgr.load.return_value = {"statistics": {}}
     
     planner = TaskPlanner(metadata_mgr)
     
@@ -167,7 +167,7 @@ def test_plan_invalid_time_range():
     metadata_mgr = MagicMock()
     # 本地数据覆盖到 2024-01-20
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2024-01-01"),
             "end_timestamp": parse_date_to_ts("2024-01-20")
         }
@@ -189,7 +189,7 @@ def test_plan_empty_formats():
     测试空格式列表的处理：返回空任务列表
     """
     metadata_mgr = MagicMock()
-    metadata_mgr.load.return_value = {"global_stats": {}}
+    metadata_mgr.load.return_value = {"statistics": {}}
     
     planner = TaskPlanner(metadata_mgr)
     
@@ -202,7 +202,7 @@ def test_plan_empty_symbols():
     测试空symbol列表的处理
     """
     metadata_mgr = MagicMock()
-    metadata_mgr.load.return_value = {"global_stats": {}}
+    metadata_mgr.load.return_value = {"statistics": {}}
     
     planner = TaskPlanner(metadata_mgr)
     
@@ -221,7 +221,7 @@ def test_plan_prepend_scenario():
     
     # 本地已有 2015-2020 年的数据
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2015-01-01"),
             "end_timestamp": parse_date_to_ts("2020-12-31")
         }
@@ -253,7 +253,7 @@ def test_plan_append_scenario():
     
     # 本地已有 2020-2023 年的数据
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2020-01-01"),
             "end_timestamp": parse_date_to_ts("2023-12-31")
         }
@@ -285,7 +285,7 @@ def test_plan_full_patch_scenario():
     
     # 本地只有 2018-2020 年的数据
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2018-01-01"),
             "end_timestamp": parse_date_to_ts("2020-12-31")
         }
@@ -318,7 +318,7 @@ def test_plan_edge_case_same_start_end():
     测试边界情况：start_date == end_date（单点查询）
     """
     metadata_mgr = MagicMock()
-    metadata_mgr.load.return_value = {"global_stats": {}}
+    metadata_mgr.load.return_value = {"statistics": {}}
     
     planner = TaskPlanner(metadata_mgr)
     
@@ -334,7 +334,7 @@ def test_plan_edge_case_start_after_end():
     测试边界情况：start_date > end_date（无效范围）
     """
     metadata_mgr = MagicMock()
-    metadata_mgr.load.return_value = {"global_stats": {}}
+    metadata_mgr.load.return_value = {"statistics": {}}
     
     planner = TaskPlanner(metadata_mgr)
     
@@ -353,7 +353,7 @@ def test_plan_partial_overlap_front():
     
     # 本地有 2020-01-01 到 2020-12-31 的数据
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2020-01-01"),
             "end_timestamp": parse_date_to_ts("2020-12-31")
         }
@@ -380,7 +380,7 @@ def test_plan_partial_overlap_back():
     
     # 本地有 2020-01-01 到 2020-12-31 的数据
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2020-01-01"),
             "end_timestamp": parse_date_to_ts("2020-12-31")
         }
@@ -406,7 +406,7 @@ def test_plan_multiple_symbols_prepend():
     
     # 本地已有 2020-2023 年的数据
     metadata_mgr.load.return_value = {
-        "global_stats": {
+        "statistics": {
             "start_timestamp": parse_date_to_ts("2020-01-01"),
             "end_timestamp": parse_date_to_ts("2023-12-31")
         }

@@ -43,7 +43,7 @@ def test_sync_full_flow(temp_storage_root):
             # 验证元数据
             metadata = sync_mgr.metadata_mgr.load(table_id, "csv")
             expected_end_ts = parse_date_to_ts("2024-01-02")
-            actual_end_ts = metadata["global_stats"]["end_timestamp"]
+            actual_end_ts = metadata["statistics"]["end_timestamp"]
             assert actual_end_ts == expected_end_ts, f"预期 {expected_end_ts}，实际 {actual_end_ts}"
             
             # --- Step 2: 第二次同步 (增量) ---
@@ -62,14 +62,14 @@ def test_sync_full_flow(temp_storage_root):
             # 验证总行数
             metadata = sync_mgr.metadata_mgr.load(table_id, "csv")
             # 2个symbol，每个symbol有3条记录（去重后）
-            assert metadata["global_stats"]["total_bars"] == 6, f"预期 6 条，实际 {metadata['global_stats']['total_bars']} 条"
-            assert metadata["global_stats"]["symbol_count"] == 2
+            assert metadata["statistics"]["total_bars"] == 6, f"预期 6 条，实际 {metadata['statistics']['total_bars']} 条"
+            assert metadata["statistics"]["symbol_count"] == 2
             
             # --- Step 3: 验证物理巡检与元数据 1:1 匹配 ---
             from app.storage.csv_storage import CSVStorage
             storage = CSVStorage(str(temp_storage_root / "csv"))
             total_disk_bars = storage.get_total_bars(table_id)
-            assert total_disk_bars == metadata["global_stats"]["total_bars"]
+            assert total_disk_bars == metadata["statistics"]["total_bars"]
 
 def test_sync_incremental_logic(temp_storage_root):
     """
@@ -105,7 +105,7 @@ def test_sync_incremental_logic(temp_storage_root):
             
             # 验证增量同步后数据量
             metadata = sync_mgr.metadata_mgr.load(table_id, "csv")
-            assert metadata["global_stats"]["total_bars"] == 6
+            assert metadata["statistics"]["total_bars"] == 6
 
 def test_sync_force_refresh(temp_storage_root):
     """
@@ -137,7 +137,7 @@ def test_sync_force_refresh(temp_storage_root):
             
             # 验证数据量不变（覆盖写入）
             metadata = sync_mgr.metadata_mgr.load(table_id, "csv")
-            assert metadata["global_stats"]["total_bars"] == 4
+            assert metadata["statistics"]["total_bars"] == 4
 
 def test_sync_empty_data_defense(temp_storage_root):
     """

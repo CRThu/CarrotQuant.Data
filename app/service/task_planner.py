@@ -38,9 +38,9 @@ class TaskPlanner:
         
         for fmt in formats:
             metadata = self.metadata_mgr.load(table_id, fmt)
-            global_stats = metadata.get("global_stats", {})
-            f_start = global_stats.get("start_timestamp", 0)
-            f_end = global_stats.get("end_timestamp", 0)
+            statistics = metadata.get("statistics", {})
+            f_start = statistics.get("start_timestamp", 0)
+            f_end = statistics.get("end_timestamp", 0)
             
             if f_start > 0:
                 loc_start = max(loc_start, f_start) if loc_start is not None else f_start

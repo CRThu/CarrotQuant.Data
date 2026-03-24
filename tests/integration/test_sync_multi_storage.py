@@ -45,8 +45,8 @@ def test_sync_multi_storage_consistency(temp_storage_root):
             csv_metadata = sync_mgr.metadata_mgr.load(table_id, "csv")
             parquet_metadata = sync_mgr.metadata_mgr.load(table_id, "parquet")
             
-            assert csv_metadata["global_stats"]["total_bars"] == parquet_metadata["global_stats"]["total_bars"]
-            assert csv_metadata["global_stats"]["symbol_count"] == parquet_metadata["global_stats"]["symbol_count"]
+            assert csv_metadata["statistics"]["total_bars"] == parquet_metadata["statistics"]["total_bars"]
+            assert csv_metadata["statistics"]["symbol_count"] == parquet_metadata["statistics"]["symbol_count"]
             
             # 验证两种格式的物理数据一致
             csv_storage = CSVStorage(str(temp_storage_root / "csv"))
@@ -316,17 +316,17 @@ def test_sync_multi_storage_concurrent_formats(temp_storage_root):
             parquet_metadata = sync_mgr.metadata_mgr.load(table_id, "parquet")
             
             # 验证总行数一致
-            assert csv_metadata["global_stats"]["total_bars"] == parquet_metadata["global_stats"]["total_bars"], \
+            assert csv_metadata["statistics"]["total_bars"] == parquet_metadata["statistics"]["total_bars"], \
                 "CSV 和 Parquet 的总行数应该一致"
             
             # 验证 symbol 数量一致
-            assert csv_metadata["global_stats"]["symbol_count"] == parquet_metadata["global_stats"]["symbol_count"], \
+            assert csv_metadata["statistics"]["symbol_count"] == parquet_metadata["statistics"]["symbol_count"], \
                 "CSV 和 Parquet 的 symbol 数量应该一致"
             
             # 验证时间范围一致
-            assert csv_metadata["global_stats"]["start_timestamp"] == parquet_metadata["global_stats"]["start_timestamp"], \
+            assert csv_metadata["statistics"]["start_timestamp"] == parquet_metadata["statistics"]["start_timestamp"], \
                 "CSV 和 Parquet 的 start_timestamp 应该一致"
-            assert csv_metadata["global_stats"]["end_timestamp"] == parquet_metadata["global_stats"]["end_timestamp"], \
+            assert csv_metadata["statistics"]["end_timestamp"] == parquet_metadata["statistics"]["end_timestamp"], \
                 "CSV 和 Parquet 的 end_timestamp 应该一致"
             
             # 验证物理数据一致性
