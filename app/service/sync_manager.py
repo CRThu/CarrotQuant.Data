@@ -6,10 +6,12 @@ from .metadata_manager import MetadataManager
 from ..utils.time_utils import ts_to_iso
 from ..storage.storage_factory import StorageFactory
 from ..config.settings import settings
+from typing import Any
 
 class SyncManager:
     """
     同步总管：串联规划、采集、落地、巡检、盖章整个流程。
+    支持单次抓取、多格式并行落地。
     """
 
     def __init__(self):
@@ -19,32 +21,42 @@ class SyncManager:
         self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()
 
-    def sync(self, table_id: str, format: str, start_date: str, end_date: str, force_refresh: bool = False, batch_size: int = 100):
+    def sync(self, table_ids: list[str] | str, formats: list[str] | str, start_date: str = None, end_date: str = None, force_refresh: bool = False, batch_size: int = 100):
         """
         执行全自动化同步闭环。
-        重构为“批处理聚合模式”，降低 Parquet 写放大。
+        支持多表、多格式列表传入。
         """
-        
-        # 动态获取对应的物理存储引擎
-        storage = StorageFactory.get_storage(format, self.storage_root)
-        
-        logger.info(f"[*] Starting orchestrated sync for {table_id} (batch_size={batch_size}, force_refresh={force_refresh})...")
-        
+        if isinstance(table_ids, str):
+            table_ids = [table_ids]
+        if isinstance(formats, str):
+            formats = [formats]
+
+        logger.info(f"[*] Starting orchestrated sync for {table_ids} into {formats} (batch_size={batch_size}, force_refresh={force_refresh})...")
+
+        for table_id in table_ids:
+            self._sync_single_table(table_id, formats, start_date, end_date, force_refresh, batch_size)
+
+    def _sync_single_table(self, table_id: str, formats: list[str], start_date: str, end_date: str, force_refresh: bool, batch_size: int):
+        """
+        单表同步逻辑：一次拉取，多处落地。
+        """
         # 1. 获取驱动
         provider = self.provider_mgr.get_provider(table_id)
         
-        # 2. 自动发现全量代码
+        # 2. 获取所有目标存储引擎
+        storages = {fmt: StorageFactory.get_storage(fmt, self.storage_root) for fmt in formats}
+        
+        # 3. 自动发现全量代码
         symbols = provider.get_all_symbols(table_id)
         
-        # 3. 规划补丁
-        tasks = self.planner.plan(table_id, format, symbols, start_date, end_date, force_refresh=force_refresh)
+        # 4. 规划补丁
+        tasks = self.planner.plan(table_id, formats, symbols, start_date, end_date, force_refresh=force_refresh)
         total_tasks = len(tasks)
-        logger.info(f"[*] Task planning finished. {total_tasks}/{len(symbols)} symbols need to be patched.")
+        logger.info(f"[*] Task planning finished for {table_id}. {total_tasks}/{len(symbols)} symbols need to be patched.")
         
-        # 4. 执行采集与落地循环
+        # 5. 执行采集与落地循环
         last_success_df = None
         success_count = 0
-        fail_count = 0
         data_written = False
         
         # 将任务切分为批次
@@ -67,35 +79,44 @@ class SyncManager:
                     # Step 1: Provider 采集标准化数据
                     df = provider.fetch(table_id, symbol, start_ts, end_ts)
                     
-                    # 采样 Schema：即使没数据，Provider 返回的空表通常也带有字段类型
-                    if last_success_df is None:
+                    if last_success_df is None or not df.is_empty():
                         last_success_df = df
                     
                     if not df.is_empty():
                         batch_dfs.append(df)
-                        last_success_df = df # 优先保留有数据的样本
                         logger.debug(f"[Sync] {symbol} 下载成功 ({len(df)} rows)")
                     else:
                         logger.debug(f"[Sync] {symbol} (No new data)")
                     
                     success_count += 1
                 except Exception as e:
-                    logger.error(f"[Sync] {symbol} 失败: {e}")
-                    fail_count += 1
+                    # 失败策略：立即抛出异常，停止任务
+                    logger.error(f"[Sync] {symbol} 失败，执行 Fail-Fast 策略: {e}")
+                    raise e
             
-            # Step 2: 批次内存聚合与单次下沉
+            # Step 2: 批次内存聚合与多路下沉
             if batch_dfs:
                 big_df = pl.concat(batch_dfs)
-                storage.write(table_id, big_df, mode="append")
-                data_written = True
-                logger.info(f"[BATCH] Aggregated {len(batch_dfs)} symbols, total {len(big_df)} rows written.")
+                for fmt, storage in storages.items():
+                    logger.debug(f"[BATCH] Writing to storage: {fmt}")
+                    storage.write(table_id, big_df, mode="append")
                 
-                # 显式释放内存列表
+                data_written = True
+                logger.info(f"[BATCH] Aggregated {len(batch_dfs)} symbols, total {len(big_df)} rows written to {formats}.")
                 batch_dfs.clear()
                 del big_df
         
-        # 5. 物理巡检 (The Truth)
-        logger.info(f"[*] Running physical data inspection for {table_id}...")
+        # 6. 巡检与元数据更新 (针对每个格式独立更新)
+        for fmt, storage in storages.items():
+            self._update_metadata(table_id, fmt, storage, last_success_df, data_written, force_refresh)
+
+        logger.info(f"[+] Sync finished for {table_id}. Success: {success_count}/{total_tasks}")
+
+    def _update_metadata(self, table_id: str, format: str, storage: Any, last_success_df: pl.DataFrame, data_written: bool, force_refresh: bool):
+        """
+        执行物理巡检并更新元数据
+        """
+        logger.info(f"[*] Updating metadata for {table_id} ({format})...")
         all_symbols = storage.get_all_symbols(table_id)
         total_bars = storage.get_total_bars(table_id)
         start_ts, end_ts = storage.get_global_time_range(table_id)
@@ -108,16 +129,16 @@ class SyncManager:
         if total_bars == 0:
             if not old_metadata:
                 # 场景 A（初次同步）：若本地无 metadata.json，直接记录 logger.warning 并 return
-                logger.warning(f"[!] No data found for {table_id} on disk. Skipping metadata creation.")
+                logger.warning(f"[!] No data found for {table_id} | {format} on disk. Skipping metadata creation.")
                 return
             else:
                 # 场景 B（增量同步）：若本地已有元数据，直接 return，不更新现有 JSON 文件
-                logger.debug(f"[*] Total bars is 0, but metadata already exists for {table_id}. Keeping existing metadata.")
+                logger.debug(f"[*] Total bars is 0, but metadata already exists for {table_id} | {format}. Keeping existing metadata.")
                 return
 
         # 物理库存变更判定：仅在数据有新增、强制刷新或元数据不存在时才落盘
         if not data_written and old_metadata and not force_refresh:
-            logger.debug(f"[*] No new data written and metadata exists for {table_id}. Skipping metadata update.")
+            logger.debug(f"[*] No new data written and metadata exists for {table_id} | {format}. Skipping metadata update.")
             return
 
         # 仅当 total_bars > 0 且 (有新数据 或 首次生成) 时才更新 Schema 并保存元数据
@@ -144,5 +165,4 @@ class SyncManager:
 
         # 6. 原子化保存元数据
         self.metadata_mgr.save(table_id, format, metadata)
-        logger.info(f"[+] Sync finished. Global total bars: {total_bars}")
-        logger.info(f"[SUMMARY] Total: {total_tasks} | Success: {success_count} | Fail: {fail_count}")
+        logger.info(f"[+] Metadata updated for {table_id} | {format}")

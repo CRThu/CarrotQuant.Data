@@ -22,7 +22,7 @@
     - **原子化下载**: 驱动接口强制单次仅处理**单支 Symbol**，确保任务编排层（Planner）可自由拆分与重试。
     - **路由分发**: 驱动内部通过 `get_supported_tables` 预校验并分发至私有抓取方法。
 *   **Provider Manager**: 策略工厂模式。解析 `table_id` 的末尾字段（源标识），动态实例化并缓存对应的驱动。
-*   **DataCleaner (数据清洗)**: 在驱动内部通过 `DataCleaner` 对原始数据进行“实时清洗”，强制补齐 `timestamp` (Int64) 及 ISO8601 `datetime` (String) 字段，并删除源特有字段（如 `code`）。
+*   **DataCleaner (数据清洗)**: 在驱动内部通过 `DataCleaner` 对原始数据进行“标准化清洗”，强制补齐 `timestamp` (Int64) 及 ISO8601 `datetime` (String) 字段。
 
 ### 1.4 Storage (持久化存储层/资产库)
 *   **StorageManager**: 负责数据落地。
@@ -30,9 +30,26 @@
 *   **接口统一**: 通过 `write(table_id, df, mode="append")` 进行 Upsert 落地。
 *   **去重与排序**: 所有存储实现类在写入前必须执行基于 `[symbol, timestamp]` 复合主键的去重 (`keep="last"`) 与升序排序。排序是满足 C# 端 MMF (Memory Mapped Files) 二维矩阵对齐性能的前提。
 *   **原子写入**: 所有存储写操作必须遵循“先写 `.tmp` 临时文件，成功后通过 `os.replace` 替换原文件”的原子化原则，确保物理安全。
-*   **物理巡检**: 同步结束后由 `SyncManager` 触发物理扫描，更新 `metadata.json` 以反映磁盘真实状态。
+*   **物理巡检**: 同步结束后由 `SyncManager` 针对每个格式触发独立的物理扫描，更新对应的 `metadata.json`。
 
-## 2. Storage 层规范
+## 2. Gateway 层 (并发防御与多模运行)
+
+### 2.1 CLI 模式 (Typer)
+*   **入口**: `app/gateway/cli.py`
+*   **功能**: 支持多表、多格式批量启动同步。参数支持 `--tables`, `--formats`, `--start`, `--force` 等。
+
+### 2.2 API 模式 (FastAPI)
+*   **入口**: `app/gateway/api.py`
+*   **并发防御 (Task Locking)**:
+    - **ACTIVE_SYNC_TASKS**: 内存中的 `set` 集合，记录当前正在同步的 `table_id`。
+    - **冲突拦截**: 当新请求到达时，若 `table_id` 已在集合中，立即返回 `409 Conflict`，防止对同一物理目录的并发写入冲突。
+    - **异步执行**: 使用 `BackgroundTasks` 异步下行，任务结束后在 `finally` 块中释放锁。
+*   **路由**:
+    - `POST /api/v1/sync`: 触发同步任务。
+    - `GET /api/v1/tasks`: 查询活跃任务。
+    - `GET /api/v1/data/{table_id}`: 数据查询标准化网关。
+
+## 3. Storage 层规范
 
 ### 命名规范 (Table ID)
 所有存储表的 ID 遵循“由大到小”的层级命名逻辑，点号分段。

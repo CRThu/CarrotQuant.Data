@@ -11,7 +11,7 @@ class TaskPlanner:
     def __init__(self, metadata_mgr: MetadataManager):
         self.metadata_mgr = metadata_mgr
 
-    def plan(self, table_id: str, format: str, symbols: List[str], start_date: Any, end_date: Any, force_refresh: bool = False) -> List[Dict[str, Any]]:
+    def plan(self, table_id: str, formats: List[str], symbols: List[str], start_date: Any = None, end_date: Any = None, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """
         根据元数据计算计划任务列表。实现向前补全、向后拓展或强制全量更新。
         
@@ -26,19 +26,47 @@ class TaskPlanner:
         Returns:
             List[Dict]: 补丁任务列表，每项含 symbol, start, end。每个 symbol 最多 1 个任务。
         """
-        metadata = self.metadata_mgr.load(table_id, format)
-        global_stats = metadata.get("global_stats", {})
+        # 1. 聚合多个格式的水位线。
+        # 起始取 max, 结束取 min：这是为了找到所有格式共同拥有的“最窄”水位区间。
+        # 只要有一路格式缺失，我们就需要通过任务补齐。
+        loc_start = None
+        loc_end = None
         
-        # 水位线：loc_start 到 loc_end
-        loc_start = global_stats.get("start_timestamp", 0)
-        loc_end = global_stats.get("end_timestamp", 0)
-        
-        # 解析请求区间
-        req_start = parse_date_to_ts(start_date)
-        req_end = parse_date_to_ts(end_date)
-        
+        for fmt in formats:
+            metadata = self.metadata_mgr.load(table_id, fmt)
+            global_stats = metadata.get("global_stats", {})
+            f_start = global_stats.get("start_timestamp", 0)
+            f_end = global_stats.get("end_timestamp", 0)
+            
+            if f_start > 0:
+                loc_start = max(loc_start, f_start) if loc_start is not None else f_start
+            if f_end > 0:
+                loc_end = min(loc_end, f_end) if loc_end is not None else f_end
+
+        # 2. 默认日期推导
+        if start_date is None:
+            if loc_end and loc_end > 0:
+                # 如果有本地水位，从本地结束时间开始（增量）
+                req_start = loc_end
+            else:
+                raise ValueError(f"No local metadata for {table_id}. You MUST provide 'start_date' for the first sync.")
+        else:
+            req_start = parse_date_to_ts(start_date)
+
+        # 3. 结束日期处理 (默认为 None，由 Provider 处理或此处设为极其遥远的未来/现在)
+        # 如果 end_date 为空，通常意味着同步到最新，暂设为一个极大值或由具体处理逻辑转换
+        if end_date is None:
+            import time
+            req_end = int(time.time() * 1000)
+        else:
+            req_end = parse_date_to_ts(end_date)
+            
         planned_tasks = []
         
+        # 初始水位修正
+        loc_start = loc_start or 0
+        loc_end = loc_end or 0
+
         for symbol in symbols:
             # 1. 强制刷新或本地无数据：直接覆盖全量
             if force_refresh or loc_start == 0 or loc_end == 0:
