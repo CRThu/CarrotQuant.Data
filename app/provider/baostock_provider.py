@@ -10,6 +10,16 @@ class BaostockProvider(BaseProvider):
     """
     Baostock 数据源驱动实现
     """
+    
+    # 类常量：table_id 到数据类别的映射
+    _SUPPORTED_TABLE_MAP: dict[str, str] = {
+        "ashare.kline.1d.adj.baostock": "TS",
+        "ashare.kline.1d.raw.baostock": "TS",
+        "ashare.kline.5m.adj.baostock": "TS",
+        "ashare.kline.5m.raw.baostock": "TS",
+        "aindex.kline.1d.raw.baostock": "TS",
+        "ashare.adj_factor.baostock": "EV"
+    }
 
     def __init__(self):
         """
@@ -35,14 +45,21 @@ class BaostockProvider(BaseProvider):
         """
         返回 Baostock 支持的所有 table_id 列表。
         """
-        return [
-            "ashare.kline.1d.adj.baostock",
-            "ashare.kline.1d.raw.baostock",
-            "ashare.kline.5m.adj.baostock",
-            "ashare.kline.5m.raw.baostock",
-            "aindex.kline.1d.raw.baostock",
-            "ashare.adj_factor.baostock"
-        ]
+        return list(self._SUPPORTED_TABLE_MAP.keys())
+    
+    def get_table_category(self, table_id: str) -> str:
+        """
+        返回指定 table_id 的数据类别 (TS 或 EV)。
+        
+        Args:
+            table_id: 表标识符 (例如 ashare.kline.1d.adj.baostock)
+            
+        Returns:
+            str: 数据类别，"TS" 表示时间序列数据，"EV" 表示事件数据。
+        """
+        if table_id not in self._SUPPORTED_TABLE_MAP:
+            raise ValueError(f"Table '{table_id}' is not supported by BaostockProvider.")
+        return self._SUPPORTED_TABLE_MAP[table_id]
 
     def get_all_symbols(self, table_id: str) -> list[str]:
         """
@@ -257,15 +274,16 @@ class BaostockProvider(BaseProvider):
         私有方法：下载复权因子数据 (Event)
         
         调用 bs.query_adjust_factor 接口获取指定股票的复权因子。
-        返回字段包括：
-        - symbol: 证券代码
-        - date: 分红送转日期（作为时间戳基准）
-        - fore_adjust_factor: 前复权因子
-        - back_adjust_factor: 后复权因子
-        - adjust_factor: 复权因子
+        按照清洗规范：
+        1. 时间轴锚定：选用 dividOperateDate 作为时间主轴
+        2. 字段物理剔除：删除 foreAdjustFactor 和 adjustFactor
+        3. 字段保留与重命名：保留 backAdjustFactor 重命名为 back_adj_factor
+        4. 类型强制转换：转换为 Float64
+        5. 标准化清洗：通过 DataCleaner.standardize 补齐双时间轴字段
         """
         # Baostock 返回字段: code, dividOperateDate, foreAdjustFactor, backAdjustFactor, adjustFactor
-        fields = "code,dividOperateDate,foreAdjustFactor,backAdjustFactor,adjustFactor"
+        # 先获取所有字段，然后选择需要的字段
+        all_fields = "code,dividOperateDate,foreAdjustFactor,backAdjustFactor,adjustFactor"
         
         logger.debug(f"Fetching {symbol} adj_factor from Baostock: {start_date} to {end_date}")
         
@@ -274,8 +292,8 @@ class BaostockProvider(BaseProvider):
         
         if rs.error_code != '0':
             logger.error(f"Baostock adj_factor query error: {rs.error_msg}")
-            # 出错时返回标准化的空表
-            df_empty = pl.DataFrame(None, schema={f: pl.Utf8 for f in fields.split(',')})
+            # 出错时返回标准化的空表（只包含需要的字段）
+            df_empty = pl.DataFrame({"code": [], "dividOperateDate": [], "backAdjustFactor": []})
             return DataCleaner.standardize(df_empty, "dividOperateDate", time_fmt="%Y-%m-%d", 
                                            source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
         
@@ -284,19 +302,20 @@ class BaostockProvider(BaseProvider):
         while (rs.error_code == '0') & rs.next():
             data_list.append(rs.get_row_data())
         
-        df = pl.DataFrame(data_list, schema={f: pl.Utf8 for f in fields.split(',')}, orient="row")
+        # 使用所有字段创建 DataFrame
+        df = pl.DataFrame(data_list, schema={f: pl.Utf8 for f in all_fields.split(',')}, orient="row")
         
-        # 字段清洗与重命名（无论是空数据还是有数据都需要重命名）
+        # 按照要求，只保留需要的字段并重命名
+        # 1. 选择需要的列
+        df = df.select(["code", "dividOperateDate", "backAdjustFactor"])
+        
+        # 2. 重命名字段
         rename_map = {
             "code": "symbol",
             "dividOperateDate": "date",
-            "foreAdjustFactor": "fore_adjust_factor",
-            "backAdjustFactor": "back_adjust_factor",
-            "adjustFactor": "adjust_factor"
+            "backAdjustFactor": "back_adj_factor"
         }
-        # 只重命名存在的列
-        actual_rename = {k: v for k, v in rename_map.items() if k in df.columns}
-        df = df.rename(actual_rename)
+        df = df.rename(rename_map)
         
         # 如果是空数据，直接返回标准化的空表
         if df.is_empty():
@@ -304,10 +323,12 @@ class BaostockProvider(BaseProvider):
                                            source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
         
         # 转换为数值类型（复权因子必须是浮点数）
-        numeric_cols = ["fore_adjust_factor", "back_adjust_factor", "adjust_factor"]
-        for col in numeric_cols:
-            if col in df.columns:
-                df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
+        # 处理可能的空值
+        if "back_adj_factor" in df.columns:
+            df = df.with_columns(
+                pl.col("back_adj_factor")
+                .cast(pl.Float64, strict=False)
+            )
         
         # 数据清洗与标准化
         # Event 数据的 timestamp 必须是 date 的 00:00:00 UTC+8 对应的毫秒戳

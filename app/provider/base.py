@@ -43,3 +43,16 @@ class BaseProvider(abc.ABC):
             list[str]: 支持的 table_id 列表。
         """
         pass
+
+    @abc.abstractmethod
+    def get_table_category(self, table_id: str) -> str:
+        """
+        返回指定 table_id 的数据类别 (TS 或 EV)。
+        
+        Args:
+            table_id: 表标识符 (例如 ashare.kline.1d.adj.baostock)
+            
+        Returns:
+            str: 数据类别，"TS" 表示时间序列数据，"EV" 表示事件数据。
+        """
+        pass

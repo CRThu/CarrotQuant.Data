@@ -70,6 +70,13 @@ def test_baostock_provider_fetch():
 def test_baostock_provider_adj_factor():
     """
     测试 BaostockProvider 的复权因子数据采集与标准化，验证 Event 数据逻辑
+    
+    按照清洗规范：
+    1. 时间轴锚定：选用 dividOperateDate 作为时间主轴
+    2. 字段物理剔除：删除 foreAdjustFactor 和 adjustFactor
+    3. 字段保留与重命名：保留 backAdjustFactor 重命名为 back_adj_factor
+    4. 类型强制转换：转换为 Float64
+    5. 标准化清洗：通过 DataCleaner.standardize 补齐双时间轴字段
     """
     manager = ProviderManager()
     symbol = "sz.000001"
@@ -91,14 +98,12 @@ def test_baostock_provider_adj_factor():
     assert "datetime" in df.columns
     
     # 验证复权因子列存在且类型为 Float64
-    assert "back_adjust_factor" in df.columns, "back_adjust_factor should exist"
-    assert df.schema["back_adjust_factor"] == pl.Float64, "back_adjust_factor should be Float64"
+    assert "back_adj_factor" in df.columns, "back_adj_factor should exist"
+    assert df.schema["back_adj_factor"] == pl.Float64, "back_adj_factor should be Float64"
     
-    # 验证 fore_adjust_factor 和 adjust_factor 也存在
-    assert "fore_adjust_factor" in df.columns
-    assert "adjust_factor" in df.columns
-    assert df.schema["fore_adjust_factor"] == pl.Float64
-    assert df.schema["adjust_factor"] == pl.Float64
+    # 验证 fore_adjust_factor 和 adjust_factor 已被删除
+    assert "fore_adjust_factor" not in df.columns, "fore_adjust_factor should be removed"
+    assert "adjust_factor" not in df.columns, "adjust_factor should be removed"
     
     # 验证 datetime 列格式正确（应为 YYYY-MM-DDT00:00:00.000+08:00）
     # Event 数据的 timestamp 是 dividOperateDate 的 00:00:00 UTC+8 对应的毫秒戳
@@ -115,6 +120,10 @@ def test_baostock_provider_adj_factor():
     assert "symbol" == front_cols[0]
     assert "datetime" == front_cols[1]
     assert "timestamp" == front_cols[2]
+    
+    # 验证只有期望的列（date列会被DataCleaner.standardize删除）
+    expected_columns = ["symbol", "datetime", "timestamp", "back_adj_factor"]
+    assert set(df.columns) == set(expected_columns), f"Expected columns {expected_columns}, got {df.columns}"
     
     print(f"Adj Factor Total Fields ({len(df.columns)}): {df.columns}")
     print(df.head(3))

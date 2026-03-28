@@ -145,9 +145,7 @@
     "symbol": "Utf8",
     "datetime": "Utf8",
     "timestamp": "Int64",
-    "fore_adjust_factor": "Float64",
-    "back_adjust_factor": "Float64",
-    "adjust_factor": "Float64"
+    "back_adj_factor": "Float64"
   },
   "statistics": {
     "start_timestamp": 1104537600000,
@@ -158,6 +156,8 @@
   }
 }
 ```
+
+**注意**: 复权因子数据仅保留后复权因子 (`back_adj_factor`)，前复权因子 (`foreAdjustFactor`) 和其他复权因子 (`adjustFactor`) 已被物理剔除，以防止回溯特性影响增量同步水位线的安全性。
 
 ## 3. 命名与目录规范
 - 模块路径统一采用 `app/...`。

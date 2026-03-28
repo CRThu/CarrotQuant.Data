@@ -15,6 +15,9 @@ class FakeProvider(BaseProvider):
     def get_all_symbols(self, table_id):
         return ["sh.600000"]
 
+    def get_table_category(self, table_id):
+        return "TS"
+
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         data = {
             "timestamp": [start_date, end_date],
@@ -133,6 +136,9 @@ def test_sync_multi_storage_symbol_consistency(temp_storage_root):
         def get_all_symbols(self, table_id):
             return ["sh.600000", "sz.000001", "sz.000002"]
         
+        def get_table_category(self, table_id):
+            return "TS"
+        
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             data = {
                 "timestamp": [start_date, end_date],
@@ -208,6 +214,9 @@ def test_sync_multi_storage_atomic_fetch(temp_storage_root):
             
             def get_all_symbols(self, table_id):
                 return ["sh.600000"]
+            
+            def get_table_category(self, table_id):
+                return "TS"
             
             def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
                 self.fetch_count += 1
@@ -289,6 +298,9 @@ def test_sync_multi_storage_concurrent_formats(temp_storage_root):
         
         def get_all_symbols(self, table_id):
             return ["sh.600000", "sz.000001"]
+        
+        def get_table_category(self, table_id):
+            return "TS"
         
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             data = {
