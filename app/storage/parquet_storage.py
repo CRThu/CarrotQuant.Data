@@ -23,10 +23,9 @@ class ParquetStorage(StorageManager):
         """获取 EV 数据文件的完整路径。文件名固定为 data。"""
         return self.storage_root / table_id / f"year={year}" / "data.parquet"
 
-    def read(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
+    def read_series(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """
-        读取特定年份中包含指定证券的代码的数据。
-        注意：由于是月度大表，需要从该年份所有月份文件中过滤出 symbol。
+        读取 TS 数据：从该年份所有月度大表中过滤出单支证券。
         """
         year_dir = self.storage_root / table_id / f"year={year}"
         if not year_dir.exists():
@@ -42,6 +41,15 @@ class ParquetStorage(StorageManager):
             return pl.DataFrame()
         
         return pl.concat(dfs).sort("timestamp")
+
+    def read_event(self, table_id: str, year: int) -> pl.DataFrame:
+        """
+        读取 EV 数据：读取该年份对应的全量 data.parquet 文件。
+        """
+        path = self._get_event_path(table_id, year)
+        if not path.exists():
+            return pl.DataFrame()
+        return pl.read_parquet(path)
 
     def write_series(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """

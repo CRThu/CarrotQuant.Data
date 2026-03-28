@@ -10,17 +10,31 @@ class StorageManager(abc.ABC):
         self.category = category
 
     @abc.abstractmethod
-    def read(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
+    def read_series(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """
-        读取特定表、代码及年份的数据。
+        读取时间序列数据 (TS)。按证券代码及年份查询单文件。
         
         Args:
-            table_id: 表 ID，格式为 {market}.{freq}.{adj}.{source}
+            table_id: 表 ID
             symbol: 证券代码
             year: 年份
             
         Returns:
             pl.DataFrame: 读取到的数据
+        """
+        pass
+
+    @abc.abstractmethod
+    def read_event(self, table_id: str, year: int) -> pl.DataFrame:
+        """
+        读取事件数据 (EV)。按年份查询年度聚合文件，返回全量数据。
+        
+        Args:
+            table_id: 表 ID
+            year: 年份
+            
+        Returns:
+            pl.DataFrame: 读取到的年度全量数据
         """
         pass
 

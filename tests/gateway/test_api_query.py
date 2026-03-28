@@ -6,94 +6,116 @@ import polars as pl
 
 client = TestClient(app)
 
-def test_query_data_symbol_filter():
+@pytest.fixture
+def mock_provider_manager():
+    with patch("app.gateway.api.ProviderManager") as mock:
+        manager_instance = mock.return_value
+        provider = MagicMock()
+        manager_instance.get_provider.return_value = provider
+        provider.get_table_category.return_value = "TS" # Default to TS
+        yield manager_instance, provider
+
+def test_query_data_symbol_filter(mock_provider_manager):
     """
     测试 GET /api/v1/data/{table_id} 的 symbol 过滤
     """
     table_id = "test.query.symbol"
+    _, provider = mock_provider_manager
+    provider.get_table_category.return_value = "TS"
     
-    # Mock 存储层返回数据
     mock_storage = MagicMock()
-    mock_storage.get_all_symbols.return_value = ["sh.600000", "sz.000001"]
-    
-    # Mock scan_csv 返回 LazyFrame
-    mock_lf = MagicMock()
-    mock_lf.filter.return_value = mock_lf
-    mock_lf.sort.return_value = mock_lf
-    mock_lf.limit.return_value = mock_lf
-    mock_lf.collect.return_value = pl.DataFrame({
+    # mock_storage.read_series 返回数据
+    mock_storage.read_series.return_value = pl.DataFrame({
         "timestamp": [1704067200000],
         "symbol": ["sh.600000"],
         "close": [10.0]
     })
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("polars.scan_csv", return_value=mock_lf):
-            with patch("glob.glob", return_value=["test.csv"]):
-                response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&format=csv")
+        with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
+            response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&format=csv")
     
     assert response.status_code == 200
     data = response.json()
     assert data["table_id"] == table_id
     assert data["count"] == 1
-    assert len(data["data"]) == 1
     assert data["data"][0]["symbol"] == "sh.600000"
 
-def test_query_data_timestamp_range():
+def test_query_data_timestamp_range(mock_provider_manager):
     """
     测试 GET /api/v1/data/{table_id} 的时间戳区间过滤
     """
+    from app.utils.time_utils import parse_date_to_ts
     table_id = "test.query.time"
+    _, provider = mock_provider_manager
+    provider.get_table_category.return_value = "TS"
+    
+    start_ts = parse_date_to_ts("2024-01-01")
+    end_ts = parse_date_to_ts("2024-01-02")
     
     mock_storage = MagicMock()
-    mock_storage.get_all_symbols.return_value = ["sh.600000"]
-    
-    mock_lf = MagicMock()
-    mock_lf.filter.return_value = mock_lf
-    mock_lf.sort.return_value = mock_lf
-    mock_lf.limit.return_value = mock_lf
-    mock_lf.collect.return_value = pl.DataFrame({
-        "timestamp": [1704067200000, 1704153600000],
+    # 确保 mock 数据在 [start_ts, end_ts] 范围内
+    mock_storage.read_series.return_value = pl.DataFrame({
+        "timestamp": [start_ts, end_ts],
         "symbol": ["sh.600000"] * 2,
         "close": [10.0, 10.1]
     })
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("polars.scan_csv", return_value=mock_lf):
-            with patch("glob.glob", return_value=["test.csv"]):
-                response = client.get(f"/api/v1/data/{table_id}?start_date=2024-01-01&end_date=2024-01-02&format=csv")
+        with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
+            response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&start_date=2024-01-01&end_date=2024-01-02&format=csv")
     
     assert response.status_code == 200
     data = response.json()
     assert data["count"] == 2
 
-def test_query_data_symbol_not_found():
+def test_query_data_ts_requires_symbol(mock_provider_manager):
     """
-    测试 symbol 不存在时返回 404
+    测试 TS 类别查询必须带 symbol
     """
-    table_id = "test.query.notfound"
+    table_id = "test.query.ts_no_symbol"
+    _, provider = mock_provider_manager
+    provider.get_table_category.return_value = "TS"
+    
+    response = client.get(f"/api/v1/data/{table_id}")
+    assert response.status_code == 400
+    assert "TS data query requires 'symbol'" in response.json()["detail"]
+
+def test_query_data_ev_no_symbol_ok(mock_provider_manager):
+    """
+    测试 EV 类别查询不带 symbol 也可以
+    """
+    table_id = "test.query.ev_no_symbol"
+    _, provider = mock_provider_manager
+    provider.get_table_category.return_value = "EV"
     
     mock_storage = MagicMock()
-    mock_storage.get_all_symbols.return_value = ["sh.600000"]  # 不包含 sz.000001
+    mock_storage.read_event.return_value = pl.DataFrame({
+        "timestamp": [1704067200000],
+        "symbol": ["sh.600000"],
+        "close": [10.0]
+    })
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        response = client.get(f"/api/v1/data/{table_id}?symbol=sz.000001&format=csv")
+        with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
+            response = client.get(f"/api/v1/data/{table_id}")
     
-    assert response.status_code == 404
-    assert "Symbol sz.000001 not found" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
 
-def test_query_data_no_files():
+def test_query_data_no_files(mock_provider_manager):
     """
     测试没有数据文件时返回空结果
     """
     table_id = "test.query.empty"
+    _, provider = mock_provider_manager
     
     mock_storage = MagicMock()
-    mock_storage.get_all_symbols.return_value = ["sh.600000"]
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[]):  # 没有文件
-            response = client.get(f"/api/v1/data/{table_id}?format=csv")
+            # 对于 TS, 必须带 symbol 才能过第一关校验
+            response = client.get(f"/api/v1/data/{table_id}?symbol=any&format=csv")
     
     assert response.status_code == 200
     data = response.json()
@@ -112,42 +134,34 @@ def test_query_data_invalid_format():
     assert response.status_code == 400
     assert "Unsupported storage format" in response.json()["detail"]
 
-def test_query_data_parquet_format():
+def test_query_data_parquet_format(mock_provider_manager):
     """
     测试 Parquet 格式查询
     """
     table_id = "test.query.parquet"
+    _, provider = mock_provider_manager
     
     mock_storage = MagicMock()
-    mock_storage.get_all_symbols.return_value = ["sh.600000"]
-    
-    mock_lf = MagicMock()
-    mock_lf.filter.return_value = mock_lf
-    mock_lf.sort.return_value = mock_lf
-    mock_lf.limit.return_value = mock_lf
-    mock_lf.collect.return_value = pl.DataFrame({
+    mock_storage.read_series.return_value = pl.DataFrame({
         "timestamp": [1704067200000],
         "symbol": ["sh.600000"],
         "close": [10.0]
     })
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("polars.scan_parquet", return_value=mock_lf):
-            with patch("glob.glob", return_value=["test.parquet"]):
-                response = client.get(f"/api/v1/data/{table_id}?format=parquet")
+        with patch("glob.glob", return_value=[f"storage_root/parquet/{table_id}/year=2024"]):
+            response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&format=parquet")
     
     assert response.status_code == 200
     data = response.json()
     assert data["format"] == "parquet"
 
-def test_query_data_limit_enforcement():
+def test_query_data_limit_enforcement(mock_provider_manager):
     """
     测试返回条数限制（最多1000条）
     """
     table_id = "test.query.limit"
-    
-    mock_storage = MagicMock()
-    mock_storage.get_all_symbols.return_value = ["sh.600000"]
+    _, provider = mock_provider_manager
     
     # 创建一个返回大量数据的 mock
     large_df = pl.DataFrame({
@@ -156,47 +170,13 @@ def test_query_data_limit_enforcement():
         "close": [10.0] * 2000
     })
     
-    mock_lf = MagicMock()
-    mock_lf.filter.return_value = mock_lf
-    mock_lf.sort.return_value = mock_lf
-    mock_lf.limit.return_value = mock_lf
-    mock_lf.collect.return_value = large_df.head(1000)  # limit(1000) 应该被调用
+    mock_storage = MagicMock()
+    mock_storage.read_series.return_value = large_df
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("polars.scan_csv", return_value=mock_lf):
-            with patch("glob.glob", return_value=["test.csv"]):
-                response = client.get(f"/api/v1/data/{table_id}?format=csv")
+        with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=1970"]):
+            response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&format=csv")
     
     assert response.status_code == 200
     data = response.json()
     assert data["count"] == 1000  # 最多返回1000条
-
-def test_query_data_combined_filters():
-    """
-    测试组合过滤条件（symbol + 时间范围）
-    """
-    table_id = "test.query.combined"
-    
-    mock_storage = MagicMock()
-    mock_storage.get_all_symbols.return_value = ["sh.600000", "sz.000001"]
-    
-    mock_lf = MagicMock()
-    mock_lf.filter.return_value = mock_lf
-    mock_lf.sort.return_value = mock_lf
-    mock_lf.limit.return_value = mock_lf
-    mock_lf.collect.return_value = pl.DataFrame({
-        "timestamp": [1704067200000],
-        "symbol": ["sh.600000"],
-        "close": [10.0]
-    })
-    
-    with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("polars.scan_csv", return_value=mock_lf):
-            with patch("glob.glob", return_value=["test.csv"]):
-                response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&start_date=2024-01-01&end_date=2024-01-02&format=csv")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["count"] == 1
-    # 验证 filter 被调用了3次（symbol、start_date、end_date）
-    assert mock_lf.filter.call_count == 3

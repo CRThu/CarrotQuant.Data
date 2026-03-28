@@ -126,15 +126,15 @@ class SyncManager:
         执行物理巡检并更新元数据
         """
         logger.info(f"[*] Updating metadata for {table_id} ({format})...")
-        all_symbols = storage.get_all_symbols(table_id)
+        
+        # 1. 基础物理统计 (低 IO)
         total_bars = storage.get_total_bars(table_id)
         start_ts, end_ts = storage.get_global_time_range(table_id)
-        unique_tss = storage.get_unique_timestamps(table_id)
         
-        # 5. 元数据盖章 (Metadata Stamp)
+        # 2. 元数据加载
         old_metadata = self.metadata_mgr.load(table_id, format)
         
-        # 如果物理巡检结果为 0，且无元数据或已存在元数据时，执行静默拦截逻辑
+        # 3. 如果物理巡检结果为 0，且无元数据或已存在元数据时，执行静默拦截逻辑
         if total_bars == 0:
             if not old_metadata:
                 # 场景 A（初次同步）：若本地无 metadata.json，直接记录 logger.warning 并 return
@@ -145,22 +145,22 @@ class SyncManager:
                 logger.debug(f"[*] Total bars is 0, but metadata already exists for {table_id} | {format}. Keeping existing metadata.")
                 return
 
-        # 物理库存变更判定：仅在数据有新增、强制刷新或元数据不存在时才落盘
+        # 4. 物理库存变更判定：仅在数据有新增、强制刷新或元数据不存在时才落盘
         if not data_written and old_metadata and not force_refresh:
             logger.debug(f"[*] No new data written and metadata exists for {table_id} | {format}. Skipping metadata update.")
             return
 
-        # 仅当 total_bars > 0 且 (有新数据 或 首次生成) 时才更新 Schema 并保存元数据
+        # 5. Schema 提取
         schema_dict = old_metadata.get("schema", {}) if old_metadata else {}
-        
         if last_success_df is not None:
             schema_dict = {k: str(v) for k, v in last_success_df.schema.items()}
         
-        # 根据 category 分类构建统计结构
-        # category == "TS" (TimeSeries): 包含 time_steps 和 symbol_count
-        # category == "EV" (Event): 仅包含 total_bars
+        # 6. 根据 category 分类构建统计结构
         category = storage.category
         if category == "TS":
+            # TS 类别：补齐所有元数据字段（高 IO 扫描）
+            all_symbols = storage.get_all_symbols(table_id)
+            unique_tss = storage.get_unique_timestamps(table_id)
             statistics = {
                 "start_timestamp": start_ts,
                 "end_timestamp": end_ts,
@@ -170,16 +170,8 @@ class SyncManager:
                 "symbol_count": len(all_symbols),
                 "time_steps": len(unique_tss)
             }
-        elif category == "EV":
-            statistics = {
-                "start_timestamp": start_ts,
-                "end_timestamp": end_ts,
-                "start_datetime": ts_to_iso(start_ts),
-                "end_datetime": ts_to_iso(end_ts),
-                "total_bars": total_bars
-            }
         else:
-            # 兼容其他未预期的 category
+            # EV 类别：跳过全量扫描，仅保留基础统计 (0 IO 扫描)
             statistics = {
                 "start_timestamp": start_ts,
                 "end_timestamp": end_ts,
@@ -187,7 +179,7 @@ class SyncManager:
                 "end_datetime": ts_to_iso(end_ts),
                 "total_bars": total_bars
             }
-        
+
         metadata = {
             "table_id": table_id,
             "category": category,

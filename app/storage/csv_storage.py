@@ -23,12 +23,19 @@ class CSVStorage(StorageManager):
         """获取 EV 数据文件的完整路径。文件名固定为 data。"""
         return self.storage_root / table_id / f"year={year}" / "data.csv"
 
-    def read(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
-        """读取 CSV 数据"""
+    def read_series(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
+        """读取 TS 数据"""
         path = self._get_series_path(table_id, symbol, year)
         if not path.exists():
             return pl.DataFrame()
         # CSV 中的 timestamp 建议始终以 Int64 读取
+        return pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
+
+    def read_event(self, table_id: str, year: int) -> pl.DataFrame:
+        """读取 EV 数据。返回整个 DataFrame。"""
+        path = self._get_event_path(table_id, year)
+        if not path.exists():
+            return pl.DataFrame()
         return pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
 
     def write_series(self, table_id: str, df: pl.DataFrame, mode: str = "append"):

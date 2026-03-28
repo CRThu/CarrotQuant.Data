@@ -2,9 +2,15 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from typing import List, Optional
 from pydantic import BaseModel
 from loguru import logger
-from ..service.sync_manager import SyncManager
-from ..config.settings import settings
+from pathlib import Path
+import glob
 import polars as pl
+
+from ..service.sync_manager import SyncManager
+from ..provider.provider_manager import ProviderManager
+from ..config.settings import settings
+from ..storage.storage_factory import StorageFactory
+from ..utils.time_utils import parse_date_to_ts
 
 app = FastAPI(title="CarrotQuant.Data API", version="1.0.0")
 
@@ -94,66 +100,84 @@ async def get_data(
 ):
     """
     查询标准化后的数据。
-    支持按 symbol 和时间范围过滤。
+    TS 模式：必须提供 symbol，基于 [Symbol, Year] 物理路径极速定位。
+    EV 模式：返回全年事件流，支持在内存中按 symbol 灵活过滤。
     """
-    from ..storage.storage_factory import StorageFactory
-    from ..utils.time_utils import parse_date_to_ts
-    
     try:
         storage = StorageFactory.get_storage(format, settings.STORAGE_ROOT)
-    except ValueError as e:
+        provider = ProviderManager().get_provider(table_id)
+        category = provider.get_table_category(table_id)
+    except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # 1. 获取该表所有 symbol 用于验证 (可选)
-    symbols = storage.get_all_symbols(table_id)
-    if symbol and symbol not in symbols:
-        raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found in {table_id}")
-    
-    # 2. 构造查询路径。由于不同存储引擎路径略有不同，这里直接利用 polars 的通配符扫描
-    pattern = ""
-    if format == "csv":
-        pattern = f"{settings.STORAGE_ROOT}/csv/{table_id}/year=*/*.csv"
-    elif format == "parquet":
-        pattern = f"{settings.STORAGE_ROOT}/parquet/{table_id}/year=*/*.parquet"
-    
-    import glob
-    if not glob.glob(pattern):
-        return {
-            "table_id": table_id,
-            "format": format,
-            "data": [],
-            "message": "No data files found for the given criteria."
-        }
+    # 1. 基础参数校验
+    if category == "TS" and not symbol:
+        raise HTTPException(status_code=400, detail="TS data query requires 'symbol' parameter.")
 
+    # 2. 定位可用年份
+    table_path = Path(settings.STORAGE_ROOT) / format / table_id
+    year_dirs = sorted(glob.glob(str(table_path / "year=*")))
+    if not year_dirs:
+        return {"table_id": table_id, "format": format, "data": [], "message": "No data files found."}
+
+    years = [int(p.split("=")[-1]) for p in year_dirs]
+    
+    # 3. 构造查询范围
+    start_ts = parse_date_to_ts(start_date) if start_date else None
+    end_ts = parse_date_to_ts(end_date) if end_date else None
+    
+    # 缩小年份扫描范围
+    if start_date:
+        import datetime
+        start_year = datetime.datetime.fromtimestamp(start_ts/1000, datetime.timezone.utc).year
+        years = [y for y in years if y >= start_year]
+    if end_date:
+        import datetime
+        end_year = datetime.datetime.fromtimestamp(end_ts/1000, datetime.timezone.utc).year
+        years = [y for y in years if y <= end_year]
+
+    all_dfs = []
+    
     try:
-        # 使用 LazyFrame 进行高效过滤
-        if format == "csv":
-            lf = pl.scan_csv(pattern, schema_overrides={"timestamp": pl.Int64})
+        if category == "TS":
+            # TS 逻辑：直接查询
+            for year in years:
+                df = storage.read_series(table_id, symbol, year)
+                if not df.is_empty():
+                    all_dfs.append(df)
         else:
-            lf = pl.scan_parquet(pattern)
+            # EV 逻辑：读取全量并可选过滤
+            for year in years:
+                df = storage.read_event(table_id, year)
+                if not df.is_empty():
+                    if symbol:
+                        # 内存过滤：若用户在 API 请求中传入了 symbol 参数
+                        if "symbol" in df.columns:
+                            df = df.filter(pl.col("symbol") == symbol)
+                    all_dfs.append(df)
+
+        if not all_dfs:
+            return {"table_id": table_id, "format": format, "data": [], "message": "No records match criteria."}
+
+        final_df = pl.concat(all_dfs)
         
-        # 应用过滤条件
-        if symbol:
-            lf = lf.filter(pl.col("symbol") == symbol)
-        
-        if start_date:
-            start_ts = parse_date_to_ts(start_date)
-            lf = lf.filter(pl.col("timestamp") >= start_ts)
-        
-        if end_date:
-            end_ts = parse_date_to_ts(end_date)
-            lf = lf.filter(pl.col("timestamp") <= end_ts)
-        
-        # 排序并限制返回条数，防止 API 响应过大
-        df = lf.sort("timestamp").limit(1000).collect()
+        # 4. 应用时间过滤
+        if start_ts is not None:
+            final_df = final_df.filter(pl.col("timestamp") >= start_ts)
+        if end_ts is not None:
+            final_df = final_df.filter(pl.col("timestamp") <= end_ts)
+            
+        # 5. 排序与限制
+        final_df = final_df.sort("timestamp").limit(1000)
         
         return {
             "table_id": table_id,
+            "category": category,
             "format": format,
-            "count": df.height,
-            "data": df.to_dicts(),
-            "message": "Success" if df.height > 0 else "No records match the filters."
+            "count": final_df.height,
+            "data": final_df.to_dicts(),
+            "message": "Success"
         }
     except Exception as e:
-        logger.error(f"Error querying data: {e}")
+        logger.error(f"Query Error: {e}")
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")

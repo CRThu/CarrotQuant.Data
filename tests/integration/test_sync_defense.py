@@ -210,7 +210,7 @@ def test_storage_duplicate_timestamp_handling(temp_storage_root):
     csv_storage.write_series(table_id, df2)
     
     # 验证去重逻辑
-    read_df = csv_storage.read(table_id, "sh.600000", 2024)
+    read_df = csv_storage.read_series(table_id, "sh.600000", 2024)
     assert len(read_df) == 3, "重复 timestamp 应该被去重"
     
     # 验证 keep="last" 逻辑

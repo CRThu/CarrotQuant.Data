@@ -33,7 +33,7 @@ def test_parquet_storage_write_read(temp_storage_root):
     assert parquet_file.exists(), "2023-01.parquet 文件应该存在"
     
     # 验证读取回的数据顺序和长度
-    read_df = storage.read(table_id, "sh.600000", 2023)
+    read_df = storage.read_series(table_id, "sh.600000", 2023)
     assert len(read_df) == 2, "应该读取到 2 条记录"
     
     # 验证数据按 timestamp 升序排列
@@ -72,7 +72,7 @@ def test_parquet_storage_deduplication(temp_storage_root):
     storage.write_series(table_id, df2)
     
     # 读取数据
-    read_df = storage.read(table_id, "sh.600000", 2023)
+    read_df = storage.read_series(table_id, "sh.600000", 2023)
     
     # 验证去重逻辑：应该保留 3 条记录（01-01, 01-02, 01-03）
     assert len(read_df) == 3, "去重后应该有 3 条记录"
@@ -177,7 +177,7 @@ def test_parquet_storage_multiple_symbols(temp_storage_root):
     
     # 验证每个 symbol 的数据量
     for symbol in symbols:
-        symbol_df = storage.read(table_id, symbol, 2023)
+        symbol_df = storage.read_series(table_id, symbol, 2023)
         assert len(symbol_df) == 1, f"Symbol {symbol} 应该有 1 条记录"
         assert symbol_df["symbol"][0] == symbol
 
@@ -254,7 +254,7 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
     assert data_file.exists(), "数据文件未创建"
     
     # 读取数据验证
-    read_df = pl.read_parquet(data_file)
+    read_df = storage.read_event(table_id, 2024)
     
     # 验证数据完整性
     assert len(read_df) == 3, f"期望3行数据，实际得到{len(read_df)}行"
@@ -275,7 +275,7 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
     storage.write_event(table_id, df_new, mode="append")
     
     # 重新读取验证
-    read_df_final = pl.read_parquet(data_file)
+    read_df_final = storage.read_event(table_id, 2024)
     
     # 验证去重结果：同样应为 5 行
     assert len(read_df_final) == 5, f"期望 5 行（验证全行去重）：原有3 + 新增2，当前 {len(read_df_final)}"

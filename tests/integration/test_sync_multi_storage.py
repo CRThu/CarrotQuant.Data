@@ -347,7 +347,7 @@ def test_sync_multi_storage_concurrent_formats(temp_storage_root):
             
             # 验证每个 symbol 的数据量一致
             for symbol in ["sh.600000", "sz.000001"]:
-                csv_df = csv_storage.read(table_id, symbol, 2024)
-                parquet_df = parquet_storage.read(table_id, symbol, 2024)
+                csv_df = csv_storage.read_series(table_id, symbol, 2024)
+                parquet_df = parquet_storage.read_series(table_id, symbol, 2024)
                 assert len(csv_df) == len(parquet_df), \
                     f"Symbol {symbol} 的 CSV 和 Parquet 数据量应该一致"

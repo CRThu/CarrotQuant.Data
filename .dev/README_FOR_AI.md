@@ -27,14 +27,17 @@
 ### 1.4 Storage (持久化存储层/资产库)
 *   **StorageManager**: 负责数据落地。
 *   **格式派生**: `CSVStorage` (单代码单文件), `ParquetStorage` (月度聚合大表)。
-*   **接口统一**: 提供两个独立的写入接口：
-    - `write_series(table_id, df, mode="append")`: 处理时间序列数据 (TS)，按 symbol 和 year 分区
-    - `write_event(table_id, df, mode="append")`: 处理事件数据 (EV)，按 year 单文件布局，执行全行去重
+*   **接口统一**: 提供独立的读写接口，根据数据类别（TS/EV）采用分层策略：
+    - **TimeSeries (TS)**: `read_series(table_id, symbol, year)` & `write_series(table_id, df, mode="append")`
+    - **Event (EV)**: `read_event(table_id, year)` & `write_event(table_id, df, mode="append")`
+*   **读取逻辑重构**: 
+    - TS 维持“证券/时间”双轴查询，必须提供 `symbol`。
+    - EV 进化为“时间轴”单轴查询，`read_event` 返回全年全量数据。API 层支持内存过滤 `symbol`，存储层保持接口纯粹，不写过滤逻辑。
 *   **去重与排序**: 
     - TS 数据：基于 `[symbol, timestamp]` 复合主键去重 (`keep="last"`)
     - EV 数据：执行全行去重
     - 所有数据按动态排序逻辑处理：若包含 `symbol` 列则按 `["timestamp", "symbol"]` 排序，否则仅按 `["timestamp"]` 排序
-*   **原子写入**: 所有存储写操作必须遵循"先写 `.tmp` 临时文件，成功后通过 `os.replace` 替换原文件"的原子化原则，确保物理安全。
+*   **原子落盘**: 所有存储写操作必须遵循"先写 `.tmp` 临时文件，成功后通过 `os.replace` 替换原文件"的原子化原则，确保物理安全。
 *   **物理巡检**: 同步结束后由 `SyncManager` 针对每个格式触发独立的物理扫描，更新对应的 `metadata.json`。
 *   **动态列校验**: EV 数据支持动态列校验，若 `symbol` 列缺失则自动回退到仅基于 `timestamp` 的排序与统计逻辑，确保宏观数据（如利率、指数成分变动）能正常落地。
 
@@ -187,6 +190,8 @@
   }
 }
 ```
+
+**EV 元数据扫描优化**: 为确保 IO 性能，EV 表的 `metadata.json` 严禁包含 `symbol_count` 和 `time_steps` 字段，巡检时跳过大文件全量扫描。
 
 **注意**: 复权因子数据仅保留后复权因子 (`back_adj_factor`)，前复权因子 (`foreAdjustFactor`) 和其他复权因子 (`adjustFactor`) 已被物理剔除，以防止回溯特性影响增量同步水位线的安全性。
 

@@ -31,7 +31,7 @@ def test_csv_storage_timestamp_merge(temp_storage_root):
     storage.write_series(table_id, df2)
     
     # 读取数据验证覆盖逻辑
-    read_df = storage.read(table_id, "sh.600000", 2023)
+    read_df = storage.read_series(table_id, "sh.600000", 2023)
     
     # 验证去重后有 3 条记录
     assert len(read_df) == 3, "去重后应该有 3 条记录"
@@ -141,7 +141,7 @@ def test_csv_storage_write_read(temp_storage_root):
     assert csv_file.exists(), "sh.600000.csv 文件应该存在"
     
     # 验证读取回的数据
-    read_df = storage.read(table_id, "sh.600000", 2023)
+    read_df = storage.read_series(table_id, "sh.600000", 2023)
     assert len(read_df) == 3, "应该读取到 3 条记录"
     
     # 验证数据按 timestamp 升序排列
@@ -172,7 +172,7 @@ def test_csv_storage_multiple_symbols(temp_storage_root):
     
     # 验证每个 symbol 的数据量
     for symbol in symbols:
-        symbol_df = storage.read(table_id, symbol, 2023)
+        symbol_df = storage.read_series(table_id, symbol, 2023)
         assert len(symbol_df) == 1, f"Symbol {symbol} 应该有 1 条记录"
         assert symbol_df["symbol"][0] == symbol
 
@@ -219,7 +219,7 @@ def test_csv_storage_incremental_update(temp_storage_root):
     storage.write_series(table_id, df2)
     
     # 验证数据合并
-    read_df = storage.read(table_id, "sh.600000", 2023)
+    read_df = storage.read_series(table_id, "sh.600000", 2023)
     assert len(read_df) == 4, "增量更新后应该有 4 条记录"
     
     # 验证数据按时间排序
@@ -253,7 +253,7 @@ def test_csv_storage_deduplication(temp_storage_root):
     storage.write_series(table_id, df2)
     
     # 验证去重逻辑
-    read_df = storage.read(table_id, "sh.600000", 2023)
+    read_df = storage.read_series(table_id, "sh.600000", 2023)
     assert len(read_df) == 3, "重复 timestamp 应该被去重"
     
     # 验证 keep="last" 逻辑
@@ -279,7 +279,7 @@ def test_csv_storage_sorting(temp_storage_root):
     storage.write_series(table_id, df)
     
     # 验证读取的数据是有序的
-    read_df = storage.read(table_id, "sh.600000", 2023)
+    read_df = storage.read_series(table_id, "sh.600000", 2023)
     timestamps = read_df["timestamp"].to_list()
     assert timestamps == sorted(timestamps), "数据应该按 timestamp 升序排列"
     assert timestamps == [1672531200000, 1672617600000, 1672704000000]
@@ -332,7 +332,7 @@ def test_csv_storage_ev_no_symbol(temp_storage_root):
     assert data_file.exists(), "数据文件未创建"
     
     # 读取数据验证
-    read_df = pl.read_csv(data_file)
+    read_df = storage.read_event(table_id, 2024)
     
     # 验证数据完整性
     assert len(read_df) == 3, f"期望3行数据，实际得到{len(read_df)}行"
@@ -353,7 +353,7 @@ def test_csv_storage_ev_no_symbol(temp_storage_root):
     storage.write_event(table_id, df_new, mode="append")
     
     # 重新读取验证
-    read_df_final = pl.read_csv(data_file)
+    read_df_final = storage.read_event(table_id, 2024)
     
     # 验证去重结果：原有3行 + 新增2行（其中一笔完全重复被合并，一笔逻辑重复但值不同被保留）= 5 行
     # 如果系统错误地按 timestamp 去重，则为 4 行；如果不去重，则为 6 行。
