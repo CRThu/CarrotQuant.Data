@@ -20,6 +20,7 @@
 *   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作（`fetch`）与能力发现。
     - **能力发现 (get_supported_tables)**: 驱动强制实现该接口以返回其支持的所有 `table_id` 列表。
     - **原子化下载**: 驱动接口强制单次仅处理**单支 Symbol**，确保任务编排层（Planner）可自由拆分与重试。
+    - **输出静默 (SuppressOutput)**: 驱动内部调用第三方库（如 Baostock）时，必须使用 `SuppressOutput` 上下文管理器包裹所有可能产生标准输出/标准错误打印的方法（如 `login`, `logout`, `query`），确保 CLI 界面仅显示系统定义的结构化日志。
     - **路由分发**: 驱动内部通过 `get_supported_tables` 预校验并分发至私有抓取方法。
 *   **Provider Manager**: 策略工厂模式。解析 `table_id` 的末尾字段（源标识），动态实例化并缓存对应的驱动。
 *   **DataCleaner (数据清洗)**: 在驱动内部通过 `DataCleaner` 对原始数据进行“标准化清洗”，强制补齐 `timestamp` (Int64) 及 ISO8601 `datetime` (String) 字段。
@@ -282,4 +283,26 @@ uv run pytest tests/ -v
 uv run pytest tests/unit/test_utils_time.py -v
 uv run pytest tests/unit/test_utils_time.py::test_ts_to_iso_summer_time -v
 ```
+
+## 7. 日志与输出控制规范 (Logging & Output Control)
+
+### 7.1 日志中心化管理 (Loguru)
+*   **入口**: `app/utils/logger_utils.py` 提供 `setup_logger` 初始化接口。
+*   **分流策略**: 同时挂载控制台 (Stderr) 和物理文件 (File) 处理器。
+    - **控制台**: 带颜色格式化显示，便于开发调试。
+    - **文件**: 记录详细上下文，包含时间戳、函数名及行号。
+
+### 7.2 物理文件持久化规范
+*   **命名方式**: 每次运行生成独立的日志文件，文件名包含前缀与高精度时间点。
+    - 格式：`logs/{prefix}_{YYYYMMDD_HHMMSS}.log`
+    - 示例：`logs/sync_task_20240329_120000.log`
+*   **留存策略 (Retention)**: **禁止自动删除历史日志**（`retention=None`），确保全生命周期数据可追溯。
+*   **滚动与优化**:
+    - **Rotation**: 单个日志文件超过 100MB 时触发物理滚动。
+    - **Compression**: 已滚动的旧日志自动执行 `.zip` 压缩。
+
+### 7.3 控制台整洁防护
+*   **原则**: 严格区分“系统日志”与“类库打印”。
+*   **SuppressOutput 实现**: 核心驱动层必须使用 `SuppressOutput` 拦截第三方同步库（如 Baostock）私自调用的 `print()` 操作，将其静默至 `/dev/null`。
+*   **价值**: 保护引导工具 (`guided_download.py`) 的 UI 界面不受此类垃圾信息污染，确保进度显示直观清晰。
 

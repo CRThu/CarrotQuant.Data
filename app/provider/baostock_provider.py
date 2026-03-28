@@ -6,6 +6,8 @@ from app.provider.base import BaseProvider
 from app.provider.data_cleaner import DataCleaner
 from app.utils.time_utils import ts_to_str
 
+from app.utils.logger_utils import SuppressOutput
+
 class BaostockProvider(BaseProvider):
     """
     Baostock 数据源驱动实现
@@ -25,7 +27,9 @@ class BaostockProvider(BaseProvider):
         """
         初始化并登录 Baostock
         """
-        self.lg = bs.login()
+        with SuppressOutput():
+            self.lg = bs.login()
+            
         if self.lg.error_code != '0':
             logger.error(f"Baostock login failed: {self.lg.error_msg}")
         else:
@@ -36,7 +40,8 @@ class BaostockProvider(BaseProvider):
         析构时退出 Baostock
         """
         try:
-            bs.logout()
+            with SuppressOutput():
+                bs.logout()
             logger.info("Baostock logout success")
         except Exception as e:
             logger.warning(f"Baostock logout error: {e}")
@@ -77,7 +82,8 @@ class BaostockProvider(BaseProvider):
         # 解析 table_id 获取第一个分段 prefix
         prefix = table_id.split('.')[0]
         
-        rs = bs.query_stock_basic()
+        with SuppressOutput():
+            rs = bs.query_stock_basic()
         
         if rs.error_code != '0':
             raise ValueError(f"Baostock discovery (basic) failed: {rs.error_msg}")
@@ -183,11 +189,12 @@ class BaostockProvider(BaseProvider):
         
         logger.debug(f"Fetching {symbol} ({prefix}) kline from Baostock: {start_date} to {end_date} (freq={freq}, adj={adj})")
         
-        rs = bs.query_history_k_data_plus(
-            symbol, fields,
-            start_date=start_date, end_date=end_date,
-            frequency=freq, adjustflag=adj
-        )
+        with SuppressOutput():
+            rs = bs.query_history_k_data_plus(
+                symbol, fields,
+                start_date=start_date, end_date=end_date,
+                frequency=freq, adjustflag=adj
+            )
         
         if rs.error_code != '0':
             logger.error(f"Baostock fetch error: {rs.error_msg}")
@@ -288,7 +295,8 @@ class BaostockProvider(BaseProvider):
         logger.debug(f"Fetching {symbol} adj_factor from Baostock: {start_date} to {end_date}")
         
         # 调用 Baostock 复权因子查询接口
-        rs = bs.query_adjust_factor(code=symbol, start_date=start_date, end_date=end_date)
+        with SuppressOutput():
+            rs = bs.query_adjust_factor(code=symbol, start_date=start_date, end_date=end_date)
         
         if rs.error_code != '0':
             logger.error(f"Baostock adj_factor query error: {rs.error_msg}")

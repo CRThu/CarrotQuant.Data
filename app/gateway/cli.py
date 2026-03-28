@@ -1,7 +1,11 @@
 import typer
 from typing import List, Optional
 from loguru import logger
+from app.utils.logger_utils import setup_logger
 from ..service.sync_manager import SyncManager
+
+# 初始化日志，保存到 logs 目录下，带时间戳
+setup_logger(log_level="INFO", log_file_prefix="sync_task")
 
 app = typer.Typer(help="CarrotQuant.Data CLI 同步工具")
 
