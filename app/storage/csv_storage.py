@@ -7,28 +7,33 @@ from .data_merger import DataMerger
 class CSVStorage(StorageManager):
     """
     CSV 存储实现类，支持 Hive 分区样式的存储格式。
-    路径规则：storage_root/csv/{table_id}/year={yyyy}/{symbol}.csv
+    TS 路径规则：storage_root/csv/{table_id}/year={yyyy}/{symbol}.csv
+    EV 路径规则：storage_root/csv/{table_id}/year={yyyy}/data.csv
     """
 
     def __init__(self, storage_root: str = "storage_root/csv", category: str = "TS"):
         super().__init__(category=category)
         self.storage_root = Path(storage_root)
 
-    def _get_path(self, table_id: str, symbol: str, year: int) -> Path:
-        """获取文件的完整路径。table_id 直接作为文件夹名称。"""
+    def _get_series_path(self, table_id: str, symbol: str, year: int) -> Path:
+        """获取 TS 数据文件的完整路径。"""
         return self.storage_root / table_id / f"year={year}" / f"{symbol}.csv"
+
+    def _get_event_path(self, table_id: str, year: int) -> Path:
+        """获取 EV 数据文件的完整路径。文件名固定为 data。"""
+        return self.storage_root / table_id / f"year={year}" / "data.csv"
 
     def read(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """读取 CSV 数据"""
-        path = self._get_path(table_id, symbol, year)
+        path = self._get_series_path(table_id, symbol, year)
         if not path.exists():
             return pl.DataFrame()
         # CSV 中的 timestamp 建议始终以 Int64 读取
         return pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
 
-    def write(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
+    def write_series(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
-        写入 CSV 数据。
+        写入时间序列数据 (TS)。按 symbol 和 year 分区存储。
         """
         if df.is_empty():
             return
@@ -40,20 +45,60 @@ class CSVStorage(StorageManager):
 
         # 按 symbol 和 _year 分组并处理每一块
         for (symbol, year), group_df in df.partition_by(["symbol", "_year"], as_dict=True).items():
-            path = self._get_path(table_id, symbol, year)
+            path = self._get_series_path(table_id, symbol, year)
             
             # 去除生成的 _year 辅助列，以便写入
             patch_df = group_df.drop("_year")
             
             if mode == "append" and path.exists():
-                # 读取并合并 (内部已含去重和排序)
+                # 读取并合并
                 old_df = pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
-                
-                # 合并并执行 unique([symbol, timestamp]) 去重逻辑
-                final_df = DataMerger.merge_by_symbol_timestamp(old_df, patch_df)
+                # TS 模式：基于 [symbol, timestamp] 去重
+                merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])
             else:
-                # 首次写入或 Overwrite 需确保排序和类型一致性
-                final_df = DataMerger.merge_by_symbol_timestamp(pl.DataFrame(), patch_df)
+                # 首次写入或 Overwrite
+                merged_df = patch_df
+            
+            # 排序
+            final_df = DataMerger.sort(merged_df)
+            
+            # 统一路径创建与原子落盘
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_suffix(".tmp")
+            final_df.write_csv(tmp_path)
+            os.replace(tmp_path, path)
+
+    def write_event(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
+        """
+        写入事件数据 (EV)。按 year 单文件布局存储，执行全行去重。
+        EV 模式采用年份单文件布局与全行去重。
+        """
+        if df.is_empty():
+            return
+
+        # 基于核心的 timestamp (ms) 提取年份用于 Hive 分区
+        df = df.with_columns(
+            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
+        )
+
+        # 按 _year 分组并处理每一块
+        for year, group_df in df.partition_by(["_year"], as_dict=True).items():
+            path = self._get_event_path(table_id, year)
+            
+            # 去除生成的 _year 辅助列，以便写入
+            patch_df = group_df.drop("_year")
+            
+            if mode == "append" and path.exists():
+                # 读取并合并
+                old_df = pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
+                # EV 模式：全行去重
+                merged_df = DataMerger.merge(old_df, patch_df, subset=None)
+            else:
+                # 首次写入或 Overwrite
+                merged_df = patch_df
+            
+            # 排序（DataMerger.sort会自动处理不存在的列）
+            final_df = DataMerger.sort(merged_df)
             
             # 统一路径创建与原子落盘
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -70,7 +115,10 @@ class CSVStorage(StorageManager):
         symbols = set()
         # 遍历 year={year} 目录下的 csv 文件
         for csv_file in table_dir.glob("year=*/*.csv"):
-            symbols.add(csv_file.stem)
+            # 排除 EV 的 data.csv 文件
+            if csv_file.stem != "data":
+                symbols.add(csv_file.stem)
+        
         return sorted(list(symbols))
 
     def get_total_bars(self, table_id: str) -> int:

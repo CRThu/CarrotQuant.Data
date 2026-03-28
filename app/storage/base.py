@@ -25,13 +25,25 @@ class StorageManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def write(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
+    def write_series(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
-        写入数据。根据 mode 参数执行覆盖或增量写入。
+        写入时间序列数据 (TS)。按 symbol 和 year 分区存储。
         
         Args:
             table_id: 表 ID
             df: 包含 symbol 和 timestamp 等字段的 DataFrame
+            mode: 写入模式，支持 "overwrite" (覆盖) 或 "append" (增量)
+        """
+        pass
+
+    @abc.abstractmethod
+    def write_event(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
+        """
+        写入事件数据 (EV)。按 year 单文件布局存储，执行全行去重。
+        
+        Args:
+            table_id: 表 ID
+            df: 包含 timestamp 等字段的 DataFrame
             mode: 写入模式，支持 "overwrite" (覆盖) 或 "append" (增量)
         """
         pass

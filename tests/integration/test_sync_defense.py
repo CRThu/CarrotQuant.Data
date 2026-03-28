@@ -67,7 +67,7 @@ def test_sync_manager_incremental_silent(temp_storage_root, mock_baostock):
         "symbol": ["sh.600000"],
         "open": [10.0]
     })
-    storage.write(table_id, test_df)
+    storage.write_series(table_id, test_df)
     
     # 创建初始元数据
     metadata_mgr = MetadataManager(str(temp_storage_root))
@@ -104,13 +104,13 @@ def test_storage_empty_write_interception(temp_storage_root):
     # CSV
     csv_root = temp_storage_root / "csv"
     csv_storage = CSVStorage(str(csv_root))
-    csv_storage.write("test.table", pl.DataFrame())
+    csv_storage.write_series("test.table", pl.DataFrame())
     assert not (csv_root / "test.table").exists(), "空数据不应该创建表目录"
 
     # Parquet
     pq_root = temp_storage_root / "parquet"
     pq_storage = ParquetStorage(str(pq_root))
-    pq_storage.write("test.table", pl.DataFrame())
+    pq_storage.write_series("test.table", pl.DataFrame())
     assert not (pq_root / "test.table").exists(), "空数据不应该创建表目录"
 
 def test_sync_manager_provider_exception(temp_storage_root):
@@ -206,8 +206,8 @@ def test_storage_duplicate_timestamp_handling(temp_storage_root):
         "close": [99.9, 10.2]  # 修改 01-02 的值
     })
     
-    csv_storage.write(table_id, df1)
-    csv_storage.write(table_id, df2)
+    csv_storage.write_series(table_id, df1)
+    csv_storage.write_series(table_id, df2)
     
     # 验证去重逻辑
     read_df = csv_storage.read(table_id, "sh.600000", 2024)
@@ -232,7 +232,7 @@ def test_storage_cross_year_partition(temp_storage_root):
         "close": [10.5, 10.6]
     })
     
-    csv_storage.write(table_id, df)
+    csv_storage.write_series(table_id, df)
     
     # 验证年份目录存在
     year_2024_dir = temp_storage_root / "csv" / table_id / "year=2024"

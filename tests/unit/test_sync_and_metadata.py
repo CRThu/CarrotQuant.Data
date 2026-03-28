@@ -26,7 +26,7 @@ def test_metadata_and_sync_flow_csv(temp_storage_root):
         "symbol": ["sh.600000", "sz.000001"],
         "close": [10.0, 20.0]
     })
-    storage.write(table_id, df_2023)
+    storage.write_series(table_id, df_2023)
     
     # 注入 2024 年的数据
     df_2024 = pl.DataFrame({
@@ -35,7 +35,7 @@ def test_metadata_and_sync_flow_csv(temp_storage_root):
         "symbol": ["sh.600000", "sz.000002"],
         "close": [10.5, 30.0]
     })
-    storage.write(table_id, df_2024)
+    storage.write_series(table_id, df_2024)
     
     # 验证 Storage 的物理统计方法
     total_bars = storage.get_total_bars(table_id)
@@ -84,7 +84,7 @@ def test_metadata_and_sync_flow_parquet(temp_storage_root):
         "close": [10.0, 20.0, 30.0],
         "volume": [1000000, 2000000, 3000000]
     })
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证物理统计
     total_bars = storage.get_total_bars(table_id)
@@ -124,7 +124,7 @@ def test_metadata_physical_stats_consistency(temp_storage_root):
         "symbol": ["sh.600000", "sz.000001", "sh.600000", "sz.000001"],
         "close": [10.0, 20.0, 10.5, 20.5]
     })
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 获取物理统计
     physical_total_bars = storage.get_total_bars(table_id)
@@ -164,7 +164,7 @@ def test_metadata_schema_validation(temp_storage_root):
         "close": [10.2, 10.8],
         "volume": [1000000, 1100000]
     })
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 创建 MetadataManager 并加载元数据
     metadata_mgr = MetadataManager(str(temp_storage_root))
@@ -197,7 +197,7 @@ def test_metadata_time_range_accuracy(temp_storage_root):
         "symbol": ["sh.600000"] * 3,
         "close": [10.0, 10.5, 11.0]
     })
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证物理时间范围
     time_range = storage.get_global_time_range(table_id)
@@ -252,11 +252,11 @@ def test_metadata_multiple_formats_consistency(temp_storage_root):
     
     # 写入 CSV
     csv_storage = CSVStorage(str(temp_storage_root / "csv"))
-    csv_storage.write(table_id, df)
+    csv_storage.write_series(table_id, df)
     
     # 写入 Parquet
     parquet_storage = ParquetStorage(str(temp_storage_root / "parquet"))
-    parquet_storage.write(table_id, df)
+    parquet_storage.write_series(table_id, df)
     
     # 验证两种格式的物理统计一致
     csv_total_bars = csv_storage.get_total_bars(table_id)

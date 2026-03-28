@@ -7,16 +7,21 @@ from .data_merger import DataMerger
 class ParquetStorage(StorageManager):
     """
     Parquet 存储实现类，按月度大表存储。
-    路径规则：storage_root/parquet/{table_id}/year=YYYY/YYYY-MM.parquet
+    TS 路径规则：storage_root/parquet/{table_id}/year=YYYY/YYYY-MM.parquet
+    EV 路径规则：storage_root/parquet/{table_id}/year=YYYY/data.parquet
     """
 
     def __init__(self, storage_root: str = "storage_root/parquet", category: str = "TS"):
         super().__init__(category=category)
         self.storage_root = Path(storage_root)
 
-    def _get_path(self, table_id: str, year: int, month: int) -> Path:
-        """获取月度 Parquet 文件的完整路径。"""
+    def _get_series_path(self, table_id: str, year: int, month: int) -> Path:
+        """获取 TS 月度 Parquet 文件的完整路径。"""
         return self.storage_root / table_id / f"year={year}" / f"{year}-{month:02d}.parquet"
+
+    def _get_event_path(self, table_id: str, year: int) -> Path:
+        """获取 EV 数据文件的完整路径。文件名固定为 data。"""
+        return self.storage_root / table_id / f"year={year}" / "data.parquet"
 
     def read(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """
@@ -38,14 +43,14 @@ class ParquetStorage(StorageManager):
         
         return pl.concat(dfs).sort("timestamp")
 
-    def write(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
+    def write_series(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
-        写入 Parquet 数据，自动按月分区落盘。
+        写入时间序列数据 (TS)。按月分区落盘。
         """
         if df.is_empty():
             return
 
-        # 提取年份和月份用于分区 (不再强加时区，使用系统默认/原始值)
+        # 提取年份和月份用于分区
         df = df.with_columns([
             pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year"),
             pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.month().alias("_month")
@@ -53,16 +58,56 @@ class ParquetStorage(StorageManager):
 
         # 按 _year 和 _month 分组处理
         for (year, month), group_df in df.partition_by(["_year", "_month"], as_dict=True).items():
-            path = self._get_path(table_id, year, month)
+            path = self._get_series_path(table_id, year, month)
             patch_df = group_df.drop(["_year", "_month"])
 
             if mode == "append" and path.exists():
                 # 读取月度大表并合并
                 old_df = pl.read_parquet(path)
-                final_df = DataMerger.merge_by_symbol_timestamp(old_df, patch_df)
+                # TS 模式：基于 [symbol, timestamp] 去重
+                merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])
             else:
-                # 首次写入或 Overwrite，仍需按复合主键去重排序
-                final_df = DataMerger.merge_by_symbol_timestamp(pl.DataFrame(), patch_df)
+                # 首次写入或 Overwrite
+                merged_df = patch_df
+            
+            # 排序
+            final_df = DataMerger.sort(merged_df)
+
+            # 原子写入
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_suffix(".tmp")
+            final_df.write_parquet(tmp_path, compression="zstd")
+            os.replace(tmp_path, path)
+
+    def write_event(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
+        """
+        写入事件数据 (EV)。按 year 单文件布局存储，执行全行去重。
+        EV 模式采用年份单文件布局与全行去重。
+        """
+        if df.is_empty():
+            return
+
+        # 提取年份用于分区
+        df = df.with_columns(
+            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
+        )
+
+        # 按 _year 分组处理
+        for year, group_df in df.partition_by(["_year"], as_dict=True).items():
+            path = self._get_event_path(table_id, year)
+            patch_df = group_df.drop("_year")
+
+            if mode == "append" and path.exists():
+                # 读取并合并
+                old_df = pl.read_parquet(path)
+                # EV 模式：全行去重
+                merged_df = DataMerger.merge(old_df, patch_df, subset=None)
+            else:
+                # 首次写入或 Overwrite
+                merged_df = patch_df
+            
+            # 排序（DataMerger.sort会自动处理不存在的列）
+            final_df = DataMerger.sort(merged_df)
 
             # 原子写入
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -80,15 +125,21 @@ class ParquetStorage(StorageManager):
         pattern = table_dir / "year=*" / "*.parquet"
         if not any(table_dir.glob("year=*/*.parquet")):
             return []
-            
-        return (
-            pl.scan_parquet(str(pattern))
-            .select("symbol")
-            .unique()
-            .sort("symbol")
-            .collect()["symbol"]
-            .to_list()
-        )
+        
+        try:
+            # 尝试提取 symbol 列
+            symbols = (
+                pl.scan_parquet(str(pattern))
+                .select("symbol")
+                .unique()
+                .sort("symbol")
+                .collect()["symbol"]
+                .to_list()
+            )
+            return symbols
+        except Exception:
+            # 如果提取 symbol 列失败（如 EV 数据没有 symbol 列），返回空列表
+            return []
 
     def get_total_bars(self, table_id: str) -> int:
         """极速统计总行数 (基于 Parquet Metadata)"""

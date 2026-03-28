@@ -23,7 +23,7 @@ def test_parquet_storage_write_read(temp_storage_root):
         "volume": [1000000, 1100000]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证文件系统中是否生成了 year=2023/2023-01.parquet 这种结构的路径
     year_dir = temp_storage_root / "parquet" / table_id / "year=2023"
@@ -60,7 +60,7 @@ def test_parquet_storage_deduplication(temp_storage_root):
         "symbol": ["sh.600000"] * 2,
         "close": [10.0, 10.5]
     })
-    storage.write(table_id, df1)
+    storage.write_series(table_id, df1)
     
     # 第二次写入，包含相同 timestamp 但不同数值的数据
     df2 = pl.DataFrame({
@@ -69,7 +69,7 @@ def test_parquet_storage_deduplication(temp_storage_root):
         "symbol": ["sh.600000"] * 2,
         "close": [99.9, 11.0]  # 01-02 的值被修改
     })
-    storage.write(table_id, df2)
+    storage.write_series(table_id, df2)
     
     # 读取数据
     read_df = storage.read(table_id, "sh.600000", 2023)
@@ -85,7 +85,7 @@ def test_parquet_storage_deduplication(temp_storage_root):
 def test_parquet_storage_sorting(temp_storage_root):
     """
     测试 Parquet 存储层的排序能力
-    写入乱序的股票数据，验证物理磁盘上的 Parquet 文件内部是否已按照 symbol 和 timestamp 升序排列
+    写入乱序的股票数据，验证物理磁盘上的 Parquet 文件内部是否已按照 timestamp 和 symbol 升序排列
     """
     storage = ParquetStorage(str(temp_storage_root / "parquet"))
     table_id = "test.parquet.sorting"
@@ -99,7 +99,7 @@ def test_parquet_storage_sorting(temp_storage_root):
         "close": [20.0, 10.0, 10.5, 19.5]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证逻辑层面的排序（通过 get_all_symbols）
     symbols = storage.get_all_symbols(table_id)
@@ -112,18 +112,19 @@ def test_parquet_storage_sorting(temp_storage_root):
     # 直接读取物理文件验证排序
     physical_df = pl.read_parquet(parquet_file)
     
-    # 验证 symbol 列是有序的
-    physical_symbols = physical_df["symbol"].to_list()
-    for i in range(len(physical_symbols) - 1):
-        assert physical_symbols[i] <= physical_symbols[i + 1], \
-            f"物理文件中 symbol 应该有序: {physical_symbols[i]} > {physical_symbols[i+1]}"
+    # 验证 timestamp 列是有序的（主要排序键）
+    physical_timestamps = physical_df["timestamp"].to_list()
+    for i in range(len(physical_timestamps) - 1):
+        assert physical_timestamps[i] <= physical_timestamps[i + 1], \
+            f"物理文件中 timestamp 应该有序: {physical_timestamps[i]} > {physical_timestamps[i+1]}"
     
-    # 验证相同 symbol 内 timestamp 是有序的
-    for symbol in symbols:
-        symbol_df = physical_df.filter(pl.col("symbol") == symbol)
-        timestamps = symbol_df["timestamp"].to_list()
-        assert timestamps == sorted(timestamps), \
-            f"Symbol {symbol} 的 timestamp 应该按升序排列"
+    # 验证相同 timestamp 内 symbol 是有序的（次要排序键）
+    # 检查相同 timestamp 的记录，symbol 应该按字母顺序排列
+    for ts in set(physical_timestamps):
+        ts_df = physical_df.filter(pl.col("timestamp") == ts)
+        ts_symbols = ts_df["symbol"].to_list()
+        assert ts_symbols == sorted(ts_symbols), \
+            f"Timestamp {ts} 的 symbol 应该按升序排列"
 
 
 def test_parquet_storage_cross_year(temp_storage_root):
@@ -141,7 +142,7 @@ def test_parquet_storage_cross_year(temp_storage_root):
         "close": [10.5, 10.6]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证 2024 年目录和文件
     year_2024_dir = temp_storage_root / "parquet" / table_id / "year=2024"
@@ -169,7 +170,7 @@ def test_parquet_storage_multiple_symbols(temp_storage_root):
         "close": [10.0, 20.0, 30.0]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证所有 symbol 都能正确读取
     symbols = storage.get_all_symbols(table_id)
@@ -191,7 +192,7 @@ def test_parquet_storage_empty_write(temp_storage_root):
     
     # 写入空 DataFrame
     empty_df = pl.DataFrame()
-    storage.write(table_id, empty_df)
+    storage.write_series(table_id, empty_df)
     
     # 验证不应该创建表目录
     table_dir = temp_storage_root / "parquet" / table_id
@@ -213,7 +214,7 @@ def test_parquet_storage_metadata_stats(temp_storage_root):
         "close": [10.0, 10.5, 20.0]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证统计方法
     total_bars = storage.get_total_bars(table_id)
@@ -228,3 +229,54 @@ def test_parquet_storage_metadata_stats(temp_storage_root):
     time_range = storage.get_global_time_range(table_id)
     assert time_range[0] == 1672531200000, "最小时间戳应该是 2023-01-01"
     assert time_range[1] == 1735689600000, "最大时间戳应该是 2025-01-01"
+
+
+def test_parquet_storage_ev_no_symbol(temp_storage_root):
+    """
+    测试 Parquet 存储对无 symbol 列 EV 数据的处理
+    验证系统能够正确处理没有 symbol 列的宏观数据（如利率、指数成分变动）
+    """
+    storage = ParquetStorage(str(temp_storage_root / "parquet"), category="EV")
+    table_id = "test.parquet.ev_no_symbol"
+    
+    # 创建测试数据：没有 symbol 列，只有 timestamp 和 value
+    df = pl.DataFrame({
+        "timestamp": [1704067200000, 1704153600000, 1704240000000],  # 2024-01-01, 02, 03
+        "value": [100.0, 101.0, 102.0]
+    })
+    
+    # 写入数据
+    storage.write_event(table_id, df, mode="overwrite")
+    
+    # 验证文件创建
+    table_dir = temp_storage_root / "parquet" / table_id
+    data_file = table_dir / "year=2024" / "data.parquet"
+    
+    assert data_file.exists(), "数据文件未创建"
+    
+    # 读取数据验证
+    read_df = pl.read_parquet(data_file)
+    
+    # 验证数据完整性
+    assert len(read_df) == 3, f"期望3行数据，实际得到{len(read_df)}行"
+    assert "timestamp" in read_df.columns, "缺少timestamp列"
+    assert "value" in read_df.columns, "缺少value列"
+    assert "symbol" not in read_df.columns, "不应存在symbol列"
+    
+    # 测试增量写入（全行去重）
+    df_new = pl.DataFrame({
+        "timestamp": [1704153600000, 1704326400000],  # 2024-01-02, 04
+        "value": [101.5, 103.0]  # 01-02 有重复时间戳，01-04 是新的
+    })
+    
+    storage.write_event(table_id, df_new, mode="append")
+    
+    # 重新读取验证
+    read_df_final = pl.read_parquet(data_file)
+    
+    # 验证去重：应该有4行（01, 02, 03, 04），01-02 使用新值
+    assert len(read_df_final) == 4, f"期望4行数据，实际得到{len(read_df_final)}行"
+    
+    # 测试 get_all_symbols 方法（应该返回空列表，因为没有 symbol 列）
+    symbols = storage.get_all_symbols(table_id)
+    assert symbols == [], f"期望返回空列表，实际得到 {symbols}"

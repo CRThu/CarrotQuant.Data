@@ -27,10 +27,16 @@
 ### 1.4 Storage (持久化存储层/资产库)
 *   **StorageManager**: 负责数据落地。
 *   **格式派生**: `CSVStorage` (单代码单文件), `ParquetStorage` (月度聚合大表)。
-*   **接口统一**: 通过 `write(table_id, df, mode="append")` 进行 Upsert 落地。
-*   **去重与排序**: 所有存储实现类在写入前必须执行基于 `[symbol, timestamp]` 复合主键的去重 (`keep="last"`) 与升序排序。排序是满足 C# 端 MMF (Memory Mapped Files) 二维矩阵对齐性能的前提。
-*   **原子写入**: 所有存储写操作必须遵循“先写 `.tmp` 临时文件，成功后通过 `os.replace` 替换原文件”的原子化原则，确保物理安全。
+*   **接口统一**: 提供两个独立的写入接口：
+    - `write_series(table_id, df, mode="append")`: 处理时间序列数据 (TS)，按 symbol 和 year 分区
+    - `write_event(table_id, df, mode="append")`: 处理事件数据 (EV)，按 year 单文件布局，执行全行去重
+*   **去重与排序**: 
+    - TS 数据：基于 `[symbol, timestamp]` 复合主键去重 (`keep="last"`)
+    - EV 数据：执行全行去重
+    - 所有数据按动态排序逻辑处理：若包含 `symbol` 列则按 `["timestamp", "symbol"]` 排序，否则仅按 `["timestamp"]` 排序
+*   **原子写入**: 所有存储写操作必须遵循"先写 `.tmp` 临时文件，成功后通过 `os.replace` 替换原文件"的原子化原则，确保物理安全。
 *   **物理巡检**: 同步结束后由 `SyncManager` 针对每个格式触发独立的物理扫描，更新对应的 `metadata.json`。
+*   **动态列校验**: EV 数据支持动态列校验，若 `symbol` 列缺失则自动回退到仅基于 `timestamp` 的排序与统计逻辑，确保宏观数据（如利率、指数成分变动）能正常落地。
 
 ## 2. Gateway 层 (并发防御与多模运行)
 
@@ -52,7 +58,7 @@
 ## 3. Storage 层规范
 
 ### 命名规范 (Table ID)
-所有存储表的 ID 遵循“由大到小”的层级命名逻辑，点号分段。
+所有存储表的 ID 遵循"由大到小"的层级命名逻辑，点号分段。
 推荐格式：`{market}.{category}.{freq}.{adj}.{source}`
 - `market`: 市场或项目标识
     - `ashare`: 专门指向 A 股个股
@@ -66,18 +72,43 @@
 路径：`ashare.kline.1d.baostock` -> `storage_root/csv/ashare.kline.1d.baostock/`
 
 ### 存储路径模板
-数据按格式、表名、年份分片存储，遵循 Hive 分区样式：
+数据按格式、表名、年份分片存储，遵循 Hive 分区样式。根据数据类别（TS/EV）采用不同的物理布局：
 
+#### TimeSeries (TS) 数据布局
 1. **CSV (按代码分片)**:
    `storage_root/csv/{table_id}/year={year}/{symbol}.csv`
 2. **Parquet (月度大表聚合)**:
    `storage_root/parquet/{table_id}/year={year}/{year}-{month}.parquet`
 
+#### Event (EV) 数据布局
+1. **CSV (年份单文件)**:
+   `storage_root/csv/{table_id}/year={year}/data.csv`
+2. **Parquet (年份单文件)**:
+   `storage_root/parquet/{table_id}/year={year}/data.parquet`
+
+**路径参数说明**:
 - `format`: 存储格式（`csv` 或 `parquet`）
 - `table_id`: 见上述命名规范
 - `year`: 数据年份（如 `year=2024`）
 - `month`: 数据月份（如 `01` 到 `12`）
 - `symbol`: 证券代码文件名（如 `sh.600000.csv`）
+
+### 写入接口规范
+存储层提供两个独立的写入接口，根据数据类别调用：
+
+1. **write_series(table_id, df, mode="append")**: 处理时间序列数据
+   - 分区策略：按 `symbol` 和 `year` 分区
+   - 去重策略：基于 `[symbol, timestamp]` 复合主键去重
+   - 排序策略：按 `["timestamp", "symbol"]` 升序排序
+   - 强制要求：必须包含 `symbol` 和 `timestamp` 列
+
+2. **write_event(table_id, df, mode="append")**: 处理事件数据
+   - 分区策略：按 `year` 单文件布局
+   - 去重策略：全行去重（非 symbol+timestamp）
+   - 排序策略：动态排序逻辑
+     - 若包含 `symbol` 列：按 `["timestamp", "symbol"]` 排序
+     - 若不含 `symbol` 列：按 `["timestamp"]` 排序
+   - 列探测：自动检查 `df` 是否包含 `symbol` 列，支持无 `symbol` 列的宏观数据
 
 ### 时间轴标准 (双时间轴协议)
 存储层**强制要求**入库数据符合以下标准，这是物理层合并与分区的唯一凭据：
@@ -185,6 +216,14 @@
     - **验证要求**: 
         - 跨时区验证：如果 `source_tz="UTC"` 且 `display_tz="Asia/Shanghai"`，北京时间 8 点的数据生成的 timestamp 应为 0（UTC 0点）。
         - 夏令时验证：使用 `America/New_York` 测试 6 月份数据，验证 datetime 后缀应自动为 `-04:00`。
+- **无损降级**: 当 EV 数据没有 `symbol` 列时，系统必须能够静默处理，严禁抛出 `ColumnNotFoundError`。
+- **物理布局**: 
+    - TS: `storage_root/{format}/{table_id}/year=2024/{symbol}.{ext}`
+    - EV: `storage_root/{format}/{table_id}/year=2024/data.{ext}`
+- **去重一致性**: EV 模式强制全行去重，这在没有 `symbol` 的宏观数据（如：每天只有一行全市场统计）下依然有效。
+- **元数据巡检适配**: 
+    - `get_all_symbols`: 若为 EV 目录且文件内无 `symbol` 列，应返回空列表。
+    - `get_total_bars`: 维持通配符扫描汇总逻辑。
 - **运行环境**: 所有执行指令必须带有 `uv run` 前缀。
 - **语言**: 代码注释及开发文档必须使用中文。
 

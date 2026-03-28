@@ -19,7 +19,7 @@ def test_csv_storage_timestamp_merge(temp_storage_root):
         "symbol": ["sh.600000"] * 2,
         "close": [10.0, 10.5]
     })
-    storage.write(table_id, df1)
+    storage.write_series(table_id, df1)
     
     # 第二次写入，包含相同时间戳但不同数值的数据
     df2 = pl.DataFrame({
@@ -28,7 +28,7 @@ def test_csv_storage_timestamp_merge(temp_storage_root):
         "symbol": ["sh.600000"] * 2,
         "close": [99.9, 11.0]  # 01-02 的值被修改
     })
-    storage.write(table_id, df2)
+    storage.write_series(table_id, df2)
     
     # 读取数据验证覆盖逻辑
     read_df = storage.read(table_id, "sh.600000", 2023)
@@ -57,7 +57,7 @@ def test_csv_storage_cross_year_partition(temp_storage_root):
         "close": [10.5, 10.6]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证 2024 年目录和文件
     year_2024_dir = temp_storage_root / "csv" / table_id / "year=2024"
@@ -85,7 +85,7 @@ def test_csv_storage_metadata_stats(temp_storage_root):
         "symbol": ["sh.600000", "sz.000001"],
         "close": [10.0, 20.0]
     })
-    storage.write(table_id, df_2024)
+    storage.write_series(table_id, df_2024)
     
     # 写入 2025 年的数据
     df_2025 = pl.DataFrame({
@@ -94,7 +94,7 @@ def test_csv_storage_metadata_stats(temp_storage_root):
         "symbol": ["sh.600000", "sz.000002"],
         "close": [10.5, 30.0]
     })
-    storage.write(table_id, df_2025)
+    storage.write_series(table_id, df_2025)
     
     # 验证统计方法
     total_bars = storage.get_total_bars(table_id)
@@ -131,7 +131,7 @@ def test_csv_storage_write_read(temp_storage_root):
         "volume": [1000000, 1100000, 1200000]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证文件系统中是否生成了 year=2023/sh.600000.csv 这种结构的路径
     year_dir = temp_storage_root / "csv" / table_id / "year=2023"
@@ -164,7 +164,7 @@ def test_csv_storage_multiple_symbols(temp_storage_root):
         "close": [10.0, 20.0, 30.0]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证所有 symbol 都能正确读取
     symbols = storage.get_all_symbols(table_id)
@@ -186,7 +186,7 @@ def test_csv_storage_empty_write(temp_storage_root):
     
     # 写入空 DataFrame
     empty_df = pl.DataFrame()
-    storage.write(table_id, empty_df)
+    storage.write_series(table_id, empty_df)
     
     # 验证不应该创建表目录
     table_dir = temp_storage_root / "csv" / table_id
@@ -207,7 +207,7 @@ def test_csv_storage_incremental_update(temp_storage_root):
         "symbol": ["sh.600000"] * 2,
         "close": [10.0, 10.5]
     })
-    storage.write(table_id, df1)
+    storage.write_series(table_id, df1)
     
     # 第二次写入（增量）
     df2 = pl.DataFrame({
@@ -216,7 +216,7 @@ def test_csv_storage_incremental_update(temp_storage_root):
         "symbol": ["sh.600000"] * 2,
         "close": [11.0, 11.5]
     })
-    storage.write(table_id, df2)
+    storage.write_series(table_id, df2)
     
     # 验证数据合并
     read_df = storage.read(table_id, "sh.600000", 2023)
@@ -249,8 +249,8 @@ def test_csv_storage_deduplication(temp_storage_root):
         "close": [99.9, 11.0]  # 01-02 的值被修改
     })
     
-    storage.write(table_id, df1)
-    storage.write(table_id, df2)
+    storage.write_series(table_id, df1)
+    storage.write_series(table_id, df2)
     
     # 验证去重逻辑
     read_df = storage.read(table_id, "sh.600000", 2023)
@@ -276,7 +276,7 @@ def test_csv_storage_sorting(temp_storage_root):
         "close": [11.0, 10.0, 10.5]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证读取的数据是有序的
     read_df = storage.read(table_id, "sh.600000", 2023)
@@ -300,9 +300,60 @@ def test_csv_storage_global_time_range(temp_storage_root):
         "close": [10.0, 10.5]
     })
     
-    storage.write(table_id, df)
+    storage.write_series(table_id, df)
     
     # 验证全局时间范围
     time_range = storage.get_global_time_range(table_id)
     assert time_range[0] == 1704067200000, "最小时间戳应该是 2024-01-01"
     assert time_range[1] == 1735689600000, "最大时间戳应该是 2025-01-01"
+
+
+def test_csv_storage_ev_no_symbol(temp_storage_root):
+    """
+    测试 CSV 存储对无 symbol 列 EV 数据的处理
+    验证系统能够正确处理没有 symbol 列的宏观数据（如利率、指数成分变动）
+    """
+    storage = CSVStorage(str(temp_storage_root / "csv"), category="EV")
+    table_id = "test.csv.ev_no_symbol"
+    
+    # 创建测试数据：没有 symbol 列，只有 timestamp 和 value
+    df = pl.DataFrame({
+        "timestamp": [1704067200000, 1704153600000, 1704240000000],  # 2024-01-01, 02, 03
+        "value": [100.0, 101.0, 102.0]
+    })
+    
+    # 写入数据
+    storage.write_event(table_id, df, mode="overwrite")
+    
+    # 验证文件创建
+    table_dir = temp_storage_root / "csv" / table_id
+    data_file = table_dir / "year=2024" / "data.csv"
+    
+    assert data_file.exists(), "数据文件未创建"
+    
+    # 读取数据验证
+    read_df = pl.read_csv(data_file)
+    
+    # 验证数据完整性
+    assert len(read_df) == 3, f"期望3行数据，实际得到{len(read_df)}行"
+    assert "timestamp" in read_df.columns, "缺少timestamp列"
+    assert "value" in read_df.columns, "缺少value列"
+    assert "symbol" not in read_df.columns, "不应存在symbol列"
+    
+    # 测试增量写入（全行去重）
+    df_new = pl.DataFrame({
+        "timestamp": [1704153600000, 1704326400000],  # 2024-01-02, 04
+        "value": [101.5, 103.0]  # 01-02 有重复时间戳，01-04 是新的
+    })
+    
+    storage.write_event(table_id, df_new, mode="append")
+    
+    # 重新读取验证
+    read_df_final = pl.read_csv(data_file)
+    
+    # 验证去重：应该有4行（01, 02, 03, 04），01-02 使用新值
+    assert len(read_df_final) == 4, f"期望4行数据，实际得到{len(read_df_final)}行"
+    
+    # 测试 get_all_symbols 方法（应该返回空列表，因为没有 symbol 列）
+    symbols = storage.get_all_symbols(table_id)
+    assert symbols == [], f"期望返回空列表，实际得到 {symbols}"

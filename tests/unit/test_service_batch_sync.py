@@ -35,6 +35,9 @@ def test_sync_manager_batch_write(sync_manager):
     sync_manager.provider_mgr.get_provider.return_value = provider
     provider.get_all_symbols.return_value = symbols
     
+    # 模拟 Provider
+    provider.get_table_category.return_value = "TS"
+    
     # 模拟 Storage
     storage = MagicMock()
     # 设置 Storage 返回规范值
@@ -53,18 +56,18 @@ def test_sync_manager_batch_write(sync_manager):
     # 我们只需要配置这个已有的 mock
     with patch("app.service.sync_manager.StorageFactory.get_storage", return_value=storage):
         # 设置 batch_size=3
-        # 10 支股票，batch_size=3，应调用 storage.write 4 次 (3+3+3+1)
+        # 10 支股票，batch_size=3，应调用 storage.write_series 4 次 (3+3+3+1)
         sync_manager.sync(table_id, format, start_date, end_date, batch_size=3)
         
         # 验证调用次数
-        assert storage.write.call_count == 4
+        assert storage.write_series.call_count == 4
         
         # 验证第一次写入的内容 (全量写，包含 3 支股票)
-        first_write_df = storage.write.call_args_list[0][0][1] # 第二个参数是 df
+        first_write_df = storage.write_series.call_args_list[0][0][1] # 第二个参数是 df
         assert len(first_write_df) == 3
         assert first_write_df["symbol"].to_list() == symbols[:3]
         
         # 验证最后一次写入的内容
-        last_write_df = storage.write.call_args_list[3][0][1]
+        last_write_df = storage.write_series.call_args_list[3][0][1]
         assert len(last_write_df) == 1
         assert last_write_df["symbol"].to_list() == symbols[9:]

@@ -97,9 +97,18 @@ class SyncManager:
             # Step 2: 批次内存聚合与多路下沉
             if batch_dfs:
                 big_df = pl.concat(batch_dfs)
+                
+                # 获取表类别 (TS 或 EV)
+                category = provider.get_table_category(table_id)
+                
                 for fmt, storage in storages.items():
-                    logger.debug(f"[BATCH] Writing to storage: {fmt}")
-                    storage.write(table_id, big_df, mode="append")
+                    logger.debug(f"[BATCH] Writing to storage: {fmt} (category={category})")
+                    # 根据类别调用不同的写入方法
+                    if category == "EV":
+                        storage.write_event(table_id, big_df, mode="append")
+                    else:
+                        # 默认为 TS
+                        storage.write_series(table_id, big_df, mode="append")
                 
                 data_written = True
                 logger.info(f"[BATCH] Aggregated {len(batch_dfs)} symbols, total {len(big_df)} rows written to {formats}.")
