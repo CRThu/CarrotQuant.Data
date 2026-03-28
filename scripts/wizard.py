@@ -1,10 +1,35 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "akshare>=1.18.39",
+#     "baostock>=0.8.9",
+#     "fastapi>=0.135.1",
+#     "httpx>=0.28.1",
+#     "loguru>=0.7.3",
+#     "polars>=1.39.0",
+#     "pydantic>=2.12.5",
+#     "pydantic-settings>=2.13.1",
+#     "pyyaml>=6.0.3",
+#     "typer>=0.24.1",
+#     "uvicorn>=0.41.0",
+# ]
+# ///
+
 import subprocess
 import sys
 import os
 import importlib
 import inspect
+import io
 from pathlib import Path
 
+if sys.platform == "win32":
+    # 强制当前进程输出为 UTF-8
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+    # 强制后续所有 subprocess 默认也使用 UTF-8
+    os.environ["PYTHONUTF8"] = "1"
+    
 # 添加对项目路径的引用以便导入 app 模块
 project_root = Path(__file__).parent.parent.absolute()
 if str(project_root) not in sys.path:
@@ -170,6 +195,7 @@ def start_wizard():
     try:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(get_project_root())
+        env["PYTHONUTF8"] = "1"  # 强制子进程开启 UTF-8 模式
         
         process = subprocess.Popen(
             cmd,
@@ -177,6 +203,7 @@ def start_wizard():
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",    # 明确指定编码为 UTF-8
             bufsize=1,
             universal_newlines=True
         )
