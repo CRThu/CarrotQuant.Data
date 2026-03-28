@@ -93,7 +93,7 @@ class ParquetStorage(StorageManager):
         )
 
         # 按 _year 分组处理
-        for year, group_df in df.partition_by(["_year"], as_dict=True).items():
+        for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
             path = self._get_event_path(table_id, year)
             patch_df = group_df.drop("_year")
 

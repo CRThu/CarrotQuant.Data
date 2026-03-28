@@ -263,10 +263,14 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
     assert "value" in read_df.columns, "缺少value列"
     assert "symbol" not in read_df.columns, "不应存在symbol列"
     
-    # 测试增量写入（全行去重）
+    # 测试增量写入（验证全行去重逻辑）
     df_new = pl.DataFrame({
-        "timestamp": [1704153600000, 1704326400000],  # 2024-01-02, 04
-        "value": [101.5, 103.0]  # 01-02 有重复时间戳，01-04 是新的
+        "timestamp": [
+            1704067200000,  # 01-01: 与第一笔数据完全相同 -> 应被去重合并
+            1704153600000,  # 01-02: timestamp 相同但 value 不同 -> 应均被保留 (README 规范：全行去重)
+            1704326400000   # 01-04: 全新数据 -> 应新增
+        ],
+        "value": [100.0, 101.5, 103.0]
     })
     
     storage.write_event(table_id, df_new, mode="append")
@@ -274,8 +278,8 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
     # 重新读取验证
     read_df_final = pl.read_parquet(data_file)
     
-    # 验证去重：应该有4行（01, 02, 03, 04），01-02 使用新值
-    assert len(read_df_final) == 4, f"期望4行数据，实际得到{len(read_df_final)}行"
+    # 验证去重结果：同样应为 5 行
+    assert len(read_df_final) == 5, f"期望 5 行（验证全行去重）：原有3 + 新增2，当前 {len(read_df_final)}"
     
     # 测试 get_all_symbols 方法（应该返回空列表，因为没有 symbol 列）
     symbols = storage.get_all_symbols(table_id)

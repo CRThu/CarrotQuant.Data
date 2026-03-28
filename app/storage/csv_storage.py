@@ -82,7 +82,7 @@ class CSVStorage(StorageManager):
         )
 
         # 按 _year 分组并处理每一块
-        for year, group_df in df.partition_by(["_year"], as_dict=True).items():
+        for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
             path = self._get_event_path(table_id, year)
             
             # 去除生成的 _year 辅助列，以便写入
