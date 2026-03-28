@@ -96,19 +96,19 @@
 ### 写入接口规范
 存储层提供两个独立的写入接口，根据数据类别调用：
 
-1. **write_series(table_id, df, mode="append")**: 处理时间序列数据
+1. **write_series(table_id, df, mode="append")**: 处理时间序列数据 (TS)
    - 分区策略：按 `symbol` 和 `year` 分区
    - 去重策略：基于 `[symbol, timestamp]` 复合主键去重
-   - 排序策略：按 `["timestamp", "symbol"]` 升序排序
+   - 排序策略：
+     - **CSV**: 按 `["timestamp"]` 排序（单 symbol 文件语义）
+     - **Parquet**: 按 `["symbol", "timestamp"]` 排序（Symbol-First，适配 C# MMF 索引）
    - 强制要求：必须包含 `symbol` 和 `timestamp` 列
 
-2. **write_event(table_id, df, mode="append")**: 处理事件数据
+2. **write_event(table_id, df, mode="append")**: 处理事件数据 (EV)
    - 分区策略：按 `year` 单文件布局
    - 去重策略：全行去重（非 symbol+timestamp）
-   - 排序策略：动态排序逻辑
-     - 若包含 `symbol` 列：按 `["timestamp", "symbol"]` 排序
-     - 若不含 `symbol` 列：按 `["timestamp"]` 排序
-   - 列探测：自动检查 `df` 是否包含 `symbol` 列，支持无 `symbol` 列的宏观数据
+   - 排序策略：显式按 `["timestamp", "symbol"]` 升序排序（Time-First，维护年度事件流）
+   - 列探测：自动检查 `df` 是否包含 `symbol` 列，若不包含则仅按 `["timestamp"]` 排序，支持无 `symbol` 列的宏观数据
 
 ### 时间轴标准 (双时间轴协议)
 存储层**强制要求**入库数据符合以下标准，这是物理层合并与分区的唯一凭据：
@@ -120,7 +120,7 @@
 3.  **datetime (可读列)**: 标准 Datetime 类型（在 CSV 中表现为 ISO8601 字符串）。
 
 ### 核心逻辑要求
-1.  **物理主键**: 全系统去重与排序标准统一为 `["symbol", "timestamp"]`。
+1.  **物理主键**: 全系统去重统一为 `["symbol", "timestamp"]`，但物理排序键（Physical Index）按 TS (Symbol-First) 与 EV (Time-First) 策略区分对齐。
 2.  **分子区规则**: 分区路径必须通过 `timestamp` 计算得出。
 3.  **增量去重**: `append` 操作必须强制校验并使用 `unique(subset=["symbol", "timestamp"], keep="last")`。
 4.  **原子落盘**: 严禁直接 `write`，必须通过 `.tmp` 中转 + `os.replace`。

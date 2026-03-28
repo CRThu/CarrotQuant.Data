@@ -59,8 +59,8 @@ class CSVStorage(StorageManager):
                 # 首次写入或 Overwrite
                 merged_df = patch_df
             
-            # 排序
-            final_df = DataMerger.sort(merged_df)
+            # 显式使用单 symbol 时间轴排序
+            final_df = DataMerger.sort(merged_df, keys=["timestamp"])
             
             # 统一路径创建与原子落盘
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -97,8 +97,8 @@ class CSVStorage(StorageManager):
                 # 首次写入或 Overwrite
                 merged_df = patch_df
             
-            # 排序（DataMerger.sort会自动处理不存在的列）
-            final_df = DataMerger.sort(merged_df)
+            # 显式使用 Time-First 排序，维护事件流
+            final_df = DataMerger.sort(merged_df, keys=["timestamp", "symbol"])
             
             # 统一路径创建与原子落盘
             path.parent.mkdir(parents=True, exist_ok=True)

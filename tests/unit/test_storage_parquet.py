@@ -112,19 +112,18 @@ def test_parquet_storage_sorting(temp_storage_root):
     # 直接读取物理文件验证排序
     physical_df = pl.read_parquet(parquet_file)
     
-    # 验证 timestamp 列是有序的（主要排序键）
-    physical_timestamps = physical_df["timestamp"].to_list()
-    for i in range(len(physical_timestamps) - 1):
-        assert physical_timestamps[i] <= physical_timestamps[i + 1], \
-            f"物理文件中 timestamp 应该有序: {physical_timestamps[i]} > {physical_timestamps[i+1]}"
+    # 验证 Symbol-First 排序：1. symbol 有序；2. 同一 symbol 内 timestamp 有序
     
-    # 验证相同 timestamp 内 symbol 是有序的（次要排序键）
-    # 检查相同 timestamp 的记录，symbol 应该按字母顺序排列
-    for ts in set(physical_timestamps):
-        ts_df = physical_df.filter(pl.col("timestamp") == ts)
-        ts_symbols = ts_df["symbol"].to_list()
-        assert ts_symbols == sorted(ts_symbols), \
-            f"Timestamp {ts} 的 symbol 应该按升序排列"
+    # 1. 验证 symbol 列是有序的
+    physical_symbols = physical_df["symbol"].to_list()
+    assert physical_symbols == sorted(physical_symbols), "物理文件中 symbol 应该按升序排列 (Primary Key)"
+    
+    # 2. 验证相同 symbol 内 timestamp 是有序的 (Secondary Key)
+    for symbol in set(physical_symbols):
+        symbol_df = physical_df.filter(pl.col("symbol") == symbol)
+        symbol_timestamps = symbol_df["timestamp"].to_list()
+        assert symbol_timestamps == sorted(symbol_timestamps), \
+            f"Symbol {symbol} 的 timestamp 应该按升序排列"
 
 
 def test_parquet_storage_cross_year(temp_storage_root):
