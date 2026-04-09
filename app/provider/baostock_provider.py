@@ -115,11 +115,7 @@ class BaostockProvider(BaseProvider):
         # 0. 预校验支持库
         supported = self.get_supported_tables()
         if table_id not in supported:
-            # 特殊处理：如果是一个包含 baostock 后缀但不明确支持的表，记录警告
-            if table_id.endswith('.baostock'):
-                logger.warning(f"Table '{table_id}' is explicitly handled by Baostock but not in supported_tables list.")
-            else:
-                raise ValueError(f"Table '{table_id}' is not supported by BaostockProvider.")
+            raise ValueError(f"Table '{table_id}' is not supported by BaostockProvider.")
 
         # 1. 参数标准化：转换毫秒戳为 YYYY-MM-DD
         if isinstance(start_date, int):
@@ -174,16 +170,11 @@ class BaostockProvider(BaseProvider):
         if is_index:
             # 1. 校验复权：指数仅支持 raw，显式拦截其他请求
             if adj_raw != 'raw':
-                logger.warning(f"Baostock indices only support 'raw' (unadjusted) data, but '{adj_raw}' was requested for {symbol}. Returning empty standardized DF.")
-                # 指数不支持分钟线，所以 fields 必定是 day_fields (包含 date)
-                df_empty = pl.DataFrame(None, schema={f: pl.Utf8 for f in fields.split(',')})
-                return DataCleaner.standardize(df_empty, "date", time_fmt="%Y-%m-%d")
+                raise ValueError(f"Baostock indices only support 'raw' (unadjusted) data, but '{adj_raw}' was requested for {symbol}.")
             
             # 2. 校验频率：指数仅支持日线，分钟数据极其不完整且不受官方正式支持，统一拦截
             if freq != 'd':
-                logger.warning(f"Baostock doesn't support reliable minute kline for indices: {symbol}. Returning empty standardized DF.")
-                df_empty = pl.DataFrame(None, schema={f: pl.Utf8 for f in fields.split(',')})
-                return DataCleaner.standardize(df_empty, "date", time_fmt="%Y-%m-%d")
+                raise ValueError(f"Baostock doesn't support reliable minute kline for indices: {symbol}.")
             
             adj = "3"
         
@@ -197,13 +188,7 @@ class BaostockProvider(BaseProvider):
             )
         
         if rs.error_code != '0':
-            logger.error(f"Baostock fetch error: {rs.error_msg}")
-            # 出错时也返回标准化的空表
-            df_empty = pl.DataFrame(None, schema={f: pl.Utf8 for f in fields.split(',')})
-            if is_day:
-                return DataCleaner.standardize(df_empty, "date", time_fmt="%Y-%m-%d")
-            else:
-                return DataCleaner.standardize(df_empty, "time", time_fmt="%Y%m%d%H%M%S%3f")
+            raise RuntimeError(f"Baostock API Error: {rs.error_msg} (code={rs.error_code})")
 
         # 转换为 Polars DataFrame
         data_list = []
@@ -299,11 +284,7 @@ class BaostockProvider(BaseProvider):
             rs = bs.query_adjust_factor(code=symbol, start_date=start_date, end_date=end_date)
         
         if rs.error_code != '0':
-            logger.error(f"Baostock adj_factor query error: {rs.error_msg}")
-            # 出错时返回标准化的空表（只包含需要的字段）
-            df_empty = pl.DataFrame({"code": [], "dividOperateDate": [], "backAdjustFactor": []})
-            return DataCleaner.standardize(df_empty, "dividOperateDate", time_fmt="%Y-%m-%d", 
-                                           source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+            raise RuntimeError(f"Baostock API Error: {rs.error_msg} (code={rs.error_code})")
         
         # 转换为 Polars DataFrame
         data_list = []

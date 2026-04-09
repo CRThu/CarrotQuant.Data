@@ -33,7 +33,8 @@
     - **Event (EV)**: `read_event(table_id, year)` & `write_event(table_id, df, mode="append")`
 *   **读取逻辑重构**: 
     - TS 维持“证券/时间”双轴查询，必须提供 `symbol`。
-    - EV 进化为“时间轴”单轴查询，`read_event` 返回全年全量数据。API 层支持内存过滤 `symbol`，存储层保持接口纯粹，不写过滤逻辑。
+    - EV 进化为“时间轴”单轴查询，`read_event` 返回全年全量数据。
+    - **读取强锁 (Read Lock)**: 全格式实现读取强锁。读取前必须校验 `metadata.json` 并根据 `schema` 字段进行显式 `cast`，禁止依赖自动推断，防止不同分区文件合并时出现类型溢出。
 *   **去重与排序**: 
     - TS 数据：基于 `[symbol, timestamp]` 复合主键去重 (`keep="last"`)
     - EV 数据：执行全行去重
@@ -231,6 +232,11 @@
     - `get_all_symbols`: 若为 EV 目录且文件内无 `symbol` 列，应返回空列表。
     - `get_total_bars`: 维持通配符扫描汇总逻辑。
 - **运行环境**: 所有执行指令必须带有 `uv run` 前缀。
+- **类型规约与读取强锁 (Type Convention & Read Locking)**:
+    - **写入端 (Provider Layer)**: 驱动层必须确保所有数值列（Open, High, Low, Close, Volume, Amount 等）在进入系统前强制 `cast(pl.Float64)`，`timestamp` 必须为 `Int64`。
+    - **读取端 (Storage Layer)**: 所有存储格式（CSV/Parquet）的读取操作**严禁**依赖 Polars 自动类型推断。必须先行加载 `metadata.json` 中的 `schema` 字段，将其动态解析为 `dict[str, DataType]` 后执行显式 `cast`（CSV 在 `read_csv` 时透传 `schema`，Parquet 在 `read_parquet` 后执行 `cast`）。**若物理文件存在但元数据缺失，系统必须直接抛出 RuntimeError 以阻断后续合并污染。**
+    - **聚合一致性 (Strict Aggregation)**: `SyncManager` 内存聚合及 `DataMerger` 物理合并过程中**严禁使用 `how="diagonal"`**。数据源列缺失属于 Provider 问题，系统应触发 `ColumnNotFoundError` 报错中断，禁止通过 `null` 填充自动掩盖数据缺陷（物理真空原则的逻辑延伸）。
+    - **价值**: 彻底解决 Polars 在处理碎片化数据时由于采样不足导致的类型推断崩溃，并确保数据源变更能及早暴露。
 - **语言**: 代码注释及开发文档必须使用中文。
 
 ## 5. 空数据防御逻辑 (Empty Data Defense Logic)
@@ -253,6 +259,13 @@
     1.  **初次同步无数据**: 若磁盘物理巡检 `total_bars == 0` 且本地无元数据，则不创建任何文件。
     2.  **增量同步无新增**: 若本次同步未产生实际数据下载（`data_written == False`）且本地已有元数据，且非 `force_refresh` 模式，则跳过 `metadata.json` 的更新（保持 mtime 不变）。
     3.  **价值**: 保证元数据的时间轴描述与物理磁盘文件同步，避免 Planner 基于虚空的元数据做出错误规划。
+
+### 5.4 异常分发原则
+*   **核心准则**: 驱动层必须严格区分“业务性空数据”（API 成功但无结果）与“技术中断/非法请求”。
+*   **实现方法**: 
+    - **技术中断/非法参数**: 包括但不限于网络波动、授权失效、请求了该 Provider 不支持的 table_id、复权方式或频率等。此类场景必须通过 `raise` 中断流水线，严禁为了保持代码运行而降级为空 DataFrame 返回，否则会导致水位线误识别并推进。
+    - **业务性成功（空数据）**: 仅在 API 执行成功且逻辑上确无数据（如证券停牌、除权因子未到生效期）时，允许返回标准化后的空 DataFrame。
+*   **价值**: 确保任何驱动层的异常或非法配置都能直接阻断 `SyncManager` 调用 `MetadataManager.save()`，防止在本地存储中留下由于抓取失败导致的错误水位线（Data Hole）。
 
 ## 6. 单元测试文件结构
 

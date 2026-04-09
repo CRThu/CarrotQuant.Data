@@ -8,14 +8,33 @@ from app.storage.csv_storage import CSVStorage
 from app.storage.parquet_storage import ParquetStorage
 from app.service.metadata_manager import MetadataManager
 
-def test_baostock_provider_empty_fetch(mock_baostock):
+def test_baostock_provider_error_fetch(mock_baostock):
     """
-    测试 BaostockProvider 空数据抓取：返回空 DataFrame 但包含标准列
+    测试 BaostockProvider API 报错：应当抛出 RuntimeError (取代原 test_baostock_provider_empty_fetch)
     """
     provider = BaostockProvider()
     table_id = "ashare.kline.1d.adj.baostock"
     
-    # Mock 返回空数据
+    # Mock 返回错误码
+    mock_rs = MagicMock()
+    mock_rs.error_code = "10001001"
+    mock_rs.error_msg = "用户未登录"
+    mock_baostock.query_history_k_data_plus.return_value = mock_rs
+    
+    with pytest.raises(RuntimeError) as exc_info:
+        provider.fetch(table_id, "sh.600000", "2024-01-01", "2024-01-02")
+    
+    assert "Baostock API Error" in str(exc_info.value)
+    assert "10001001" in str(exc_info.value)
+
+def test_baostock_provider_legit_empty(mock_baostock):
+    """
+    测试 BaostockProvider 正常无数据（如停牌）：返回标准化的空 DataFrame
+    """
+    provider = BaostockProvider()
+    table_id = "ashare.kline.1d.adj.baostock"
+    
+    # Mock 返回成功但无数据
     mock_rs = MagicMock()
     mock_rs.error_code = "0"
     mock_rs.next.return_value = False
@@ -30,6 +49,32 @@ def test_baostock_provider_empty_fetch(mock_baostock):
     assert "timestamp" in df.columns
     assert "symbol" in df.columns
     assert "datetime" in df.columns
+
+def test_baostock_index_unsupported_adj():
+    """
+    测试 Baostock 指数不支持复权：请求 aindex + adj 应该抛出 ValueError
+    """
+    provider = BaostockProvider()
+    # 虽然 Table ID 可能合法，但 Provider 内部拦截
+    table_id = "aindex.kline.1d.adj.baostock"
+    
+    with pytest.raises(ValueError) as exc_info:
+        # fetch 内部解析 table_id 后发现是 index 且 adj != raw
+        provider.fetch(table_id, "sh.000001", "2024-01-01", "2024-01-02")
+    
+    assert "is not supported by BaostockProvider" in str(exc_info.value)
+
+def test_baostock_index_unsupported_freq():
+    """
+    测试 Baostock 指数不支持分钟线：请求 aindex + 5m 应该抛出 ValueError
+    """
+    provider = BaostockProvider()
+    table_id = "aindex.kline.5m.raw.baostock"
+    
+    with pytest.raises(ValueError) as exc_info:
+        provider.fetch(table_id, "sh.000001", "2024-01-01", "2024-01-02")
+    
+    assert "is not supported by BaostockProvider" in str(exc_info.value)
 
 def test_sync_manager_initial_silent(temp_storage_root, mock_baostock):
     """
@@ -71,6 +116,7 @@ def test_sync_manager_incremental_silent(temp_storage_root, mock_baostock):
     
     # 创建初始元数据
     metadata_mgr = MetadataManager(str(temp_storage_root))
+    metadata_mgr.save(table_id, "csv", {"table_id": table_id, "format": "csv", "schema": {k: str(v) for k, v in test_df.schema.items()}})
     initial_metadata = {
         "table_id": table_id,
         "format": format,
@@ -207,6 +253,8 @@ def test_storage_duplicate_timestamp_handling(temp_storage_root):
     })
     
     csv_storage.write_series(table_id, df1)
+    metadata_mgr = MetadataManager(str(temp_storage_root))
+    metadata_mgr.save(table_id, "csv", {"table_id": table_id, "format": "csv", "schema": {k: str(v) for k, v in df1.schema.items()}})
     csv_storage.write_series(table_id, df2)
     
     # 验证去重逻辑

@@ -1,7 +1,16 @@
-import pytest
-import polars as pl
 from pathlib import Path
+import polars as pl
 from app.storage.csv_storage import CSVStorage
+from app.service.metadata_manager import MetadataManager
+
+
+def _stamp_metadata(storage, table_id, df, category="TS"):
+    """辅助函数：为测试生成元数据"""
+    meta_mgr = MetadataManager(storage.storage_root.parent)
+    meta_mgr.save(table_id, "csv", {
+        "table_id": table_id, "category": category, "format": "csv",
+        "schema": {k: str(v) for k, v in df.schema.items()}
+    })
 
 
 def test_csv_storage_timestamp_merge(temp_storage_root):
@@ -20,6 +29,7 @@ def test_csv_storage_timestamp_merge(temp_storage_root):
         "close": [10.0, 10.5]
     })
     storage.write_series(table_id, df1)
+    _stamp_metadata(storage, table_id, df1)
     
     # 第二次写入，包含相同时间戳但不同数值的数据
     df2 = pl.DataFrame({
@@ -58,6 +68,7 @@ def test_csv_storage_cross_year_partition(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证 2024 年目录和文件
     year_2024_dir = temp_storage_root / "csv" / table_id / "year=2024"
@@ -132,6 +143,7 @@ def test_csv_storage_write_read(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证文件系统中是否生成了 year=2023/sh.600000.csv 这种结构的路径
     year_dir = temp_storage_root / "csv" / table_id / "year=2023"
@@ -165,6 +177,7 @@ def test_csv_storage_multiple_symbols(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证所有 symbol 都能正确读取
     symbols = storage.get_all_symbols(table_id)
@@ -208,6 +221,7 @@ def test_csv_storage_incremental_update(temp_storage_root):
         "close": [10.0, 10.5]
     })
     storage.write_series(table_id, df1)
+    _stamp_metadata(storage, table_id, df1)
     
     # 第二次写入（增量）
     df2 = pl.DataFrame({
@@ -250,6 +264,7 @@ def test_csv_storage_deduplication(temp_storage_root):
     })
     
     storage.write_series(table_id, df1)
+    _stamp_metadata(storage, table_id, df1)
     storage.write_series(table_id, df2)
     
     # 验证去重逻辑
@@ -277,6 +292,7 @@ def test_csv_storage_sorting(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证读取的数据是有序的
     read_df = storage.read_series(table_id, "sh.600000", 2023)
@@ -301,6 +317,7 @@ def test_csv_storage_global_time_range(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证全局时间范围
     time_range = storage.get_global_time_range(table_id)
@@ -324,6 +341,14 @@ def test_csv_storage_ev_no_symbol(temp_storage_root):
     
     # 写入数据
     storage.write_event(table_id, df, mode="overwrite")
+    _stamp_metadata(storage, table_id, df, category="EV")
+    
+    # 手动补齐元数据
+    meta_mgr = MetadataManager(storage.storage_root.parent)
+    meta_mgr.save(table_id, "csv", {
+        "table_id": table_id, "category": "EV", "format": "csv",
+        "schema": {k: str(v) for k, v in df.schema.items()}
+    })
     
     # 验证文件创建
     table_dir = temp_storage_root / "csv" / table_id

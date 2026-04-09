@@ -2,6 +2,18 @@ import pytest
 import polars as pl
 from pathlib import Path
 from app.storage.parquet_storage import ParquetStorage
+from app.service.metadata_manager import MetadataManager
+
+
+def _stamp_metadata(storage, table_id, df, category="TS"):
+    """辅助函数：为测试生成元数据，绕过物理巡检"""
+    meta_mgr = MetadataManager(storage.storage_root.parent)
+    meta_mgr.save(table_id, "parquet", {
+        "table_id": table_id, 
+        "category": category, 
+        "format": "parquet",
+        "schema": {k: str(v) for k, v in df.schema.items()}
+    })
 
 
 def test_parquet_storage_write_read(temp_storage_root):
@@ -24,6 +36,7 @@ def test_parquet_storage_write_read(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证文件系统中是否生成了 year=2023/2023-01.parquet 这种结构的路径
     year_dir = temp_storage_root / "parquet" / table_id / "year=2023"
@@ -61,6 +74,7 @@ def test_parquet_storage_deduplication(temp_storage_root):
         "close": [10.0, 10.5]
     })
     storage.write_series(table_id, df1)
+    _stamp_metadata(storage, table_id, df1)
     
     # 第二次写入，包含相同 timestamp 但不同数值的数据
     df2 = pl.DataFrame({
@@ -100,6 +114,7 @@ def test_parquet_storage_sorting(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证逻辑层面的排序（通过 get_all_symbols）
     symbols = storage.get_all_symbols(table_id)
@@ -142,6 +157,7 @@ def test_parquet_storage_cross_year(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证 2024 年目录和文件
     year_2024_dir = temp_storage_root / "parquet" / table_id / "year=2024"
@@ -170,6 +186,7 @@ def test_parquet_storage_multiple_symbols(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证所有 symbol 都能正确读取
     symbols = storage.get_all_symbols(table_id)
@@ -214,6 +231,7 @@ def test_parquet_storage_metadata_stats(temp_storage_root):
     })
     
     storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
     
     # 验证统计方法
     total_bars = storage.get_total_bars(table_id)
@@ -246,6 +264,7 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
     
     # 写入数据
     storage.write_event(table_id, df, mode="overwrite")
+    _stamp_metadata(storage, table_id, df, category="EV")
     
     # 验证文件创建
     table_dir = temp_storage_root / "parquet" / table_id

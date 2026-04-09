@@ -3,6 +3,7 @@ import polars as pl
 import os
 from .base import StorageManager
 from .data_merger import DataMerger
+from ..service.metadata_manager import MetadataManager
 
 class CSVStorage(StorageManager):
     """
@@ -23,20 +24,56 @@ class CSVStorage(StorageManager):
         """获取 EV 数据文件的完整路径。文件名固定为 data。"""
         return self.storage_root / table_id / f"year={year}" / "data.csv"
 
+    def _read_with_schema(self, table_id: str, path: Path, schema_override: dict = None) -> pl.DataFrame:
+        """辅助方法：使用元数据中的 Schema 强锁类型读取 CSV"""
+        # 1. 优先使用传入的 override schema (用于同步过程中的增量合并)
+        if schema_override:
+            return pl.read_csv(path, schema=schema_override)
+
+        # 2. 加载元数据
+        # self.storage_root 传入时已是 storage_root/csv，MetadataManager 需要 base_root
+        meta_mgr = MetadataManager(self.storage_root.parent)
+        metadata = meta_mgr.load(table_id, "csv")
+        
+        schema_dict = metadata.get("schema")
+        if schema_dict:
+            # 映射表：String -> Polars DataType
+            type_map = {
+                "Int64": pl.Int64,
+                "Float64": pl.Float64,
+                "String": pl.String,
+                "Boolean": pl.Boolean,
+                "Date": pl.Date,
+                "Datetime": pl.Datetime
+            }
+            
+            polars_schema = {}
+            for col, dtype_str in schema_dict.items():
+                # 处理可能带参数的 Datetime 字符串
+                if dtype_str.startswith("Datetime"):
+                    polars_schema[col] = pl.Datetime
+                else:
+                    polars_schema[col] = type_map.get(dtype_str, pl.String)
+            
+            return pl.read_csv(path, schema=polars_schema)
+            
+        # 强制要求元数据：禁止自动推断以消除类型风险
+        raise RuntimeError(f"Metadata not found for table '{table_id}' (format: csv). "
+                          f"CSV reading requires explicit schema from metadata.json to ensure type safety.")
+
     def read_series(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """读取 TS 数据"""
         path = self._get_series_path(table_id, symbol, year)
         if not path.exists():
             return pl.DataFrame()
-        # CSV 中的 timestamp 建议始终以 Int64 读取
-        return pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
+        return self._read_with_schema(table_id, path)
 
     def read_event(self, table_id: str, year: int) -> pl.DataFrame:
         """读取 EV 数据。返回整个 DataFrame。"""
         path = self._get_event_path(table_id, year)
         if not path.exists():
             return pl.DataFrame()
-        return pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
+        return self._read_with_schema(table_id, path)
 
     def write_series(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
@@ -59,7 +96,7 @@ class CSVStorage(StorageManager):
             
             if mode == "append" and path.exists():
                 # 读取并合并
-                old_df = pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
+                old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
                 # TS 模式：基于 [symbol, timestamp] 去重
                 merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])
             else:
@@ -97,7 +134,7 @@ class CSVStorage(StorageManager):
             
             if mode == "append" and path.exists():
                 # 读取并合并
-                old_df = pl.read_csv(path).with_columns(pl.col("timestamp").cast(pl.Int64))
+                old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
                 # EV 模式：全行去重
                 merged_df = DataMerger.merge(old_df, patch_df, subset=None)
             else:

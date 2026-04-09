@@ -3,6 +3,7 @@ import os
 import polars as pl
 from .base import StorageManager
 from .data_merger import DataMerger
+from ..service.metadata_manager import MetadataManager
 
 class ParquetStorage(StorageManager):
     """
@@ -23,6 +24,47 @@ class ParquetStorage(StorageManager):
         """获取 EV 数据文件的完整路径。文件名固定为 data。"""
         return self.storage_root / table_id / f"year={year}" / "data.parquet"
 
+    def _read_with_schema(self, table_id: str, path: Path, schema_override: dict = None) -> pl.DataFrame:
+        """辅助方法：使用元数据中的 Schema 强锁类型读取 Parquet"""
+        # 1. 物理读取
+        df = pl.read_parquet(path)
+        
+        # 2. 优先使用传入的 override schema (用于同步过程中的增量合并)
+        if schema_override:
+            # 过滤掉不存在于 df 中的列，防止 cast 报错
+            valid_schema = {k: v for k, v in schema_override.items() if k in df.columns}
+            return df.cast(valid_schema)
+
+        # 3. 加载元数据
+        meta_mgr = MetadataManager(self.storage_root.parent)
+        metadata = meta_mgr.load(table_id, "parquet")
+        
+        schema_dict = metadata.get("schema")
+        if schema_dict:
+            # 映射表：String -> Polars DataType
+            type_map = {
+                "Int64": pl.Int64,
+                "Float64": pl.Float64,
+                "String": pl.String,
+                "Boolean": pl.Boolean,
+                "Date": pl.Date,
+                "Datetime": pl.Datetime
+            }
+            
+            polars_schema = {}
+            for col, dtype_str in schema_dict.items():
+                if dtype_str.startswith("Datetime"):
+                    polars_schema[col] = pl.Datetime
+                else:
+                    polars_schema[col] = type_map.get(dtype_str, pl.String)
+            
+            # 显式执行 cast 强制对齐类型
+            return df.cast(polars_schema)
+            
+        # 强制要求元数据：保持架构统一性
+        raise RuntimeError(f"Metadata not found for table '{table_id}' (format: parquet). "
+                          f"Parquet reading requires explicit schema from metadata.json to ensure type safety.")
+
     def read_series(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """
         读取 TS 数据：从该年份所有月度大表中过滤出单支证券。
@@ -33,7 +75,8 @@ class ParquetStorage(StorageManager):
         
         dfs = []
         for file in year_dir.glob("*.parquet"):
-            df = pl.read_parquet(file).filter(pl.col("symbol") == symbol)
+            # 使用强锁读取
+            df = self._read_with_schema(table_id, file).filter(pl.col("symbol") == symbol)
             if not df.is_empty():
                 dfs.append(df)
         
@@ -49,7 +92,7 @@ class ParquetStorage(StorageManager):
         path = self._get_event_path(table_id, year)
         if not path.exists():
             return pl.DataFrame()
-        return pl.read_parquet(path)
+        return self._read_with_schema(table_id, path)
 
     def write_series(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
@@ -70,8 +113,8 @@ class ParquetStorage(StorageManager):
             patch_df = group_df.drop(["_year", "_month"])
 
             if mode == "append" and path.exists():
-                # 读取月度大表并合并
-                old_df = pl.read_parquet(path)
+                # 读取月度大表并合并（使用强锁对齐 patch_df 的类型）
+                old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
                 # TS 模式：基于 [symbol, timestamp] 去重
                 merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])
             else:
@@ -106,8 +149,8 @@ class ParquetStorage(StorageManager):
             patch_df = group_df.drop("_year")
 
             if mode == "append" and path.exists():
-                # 读取并合并
-                old_df = pl.read_parquet(path)
+                # 读取并合并（使用强锁对齐 patch_df 的类型）
+                old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
                 # EV 模式：全行去重
                 merged_df = DataMerger.merge(old_df, patch_df, subset=None)
             else:
