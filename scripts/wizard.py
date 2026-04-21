@@ -191,6 +191,7 @@ def start_wizard():
 
     print(f"\n[*] 正在启动同步流程...")
     print("-" * 60)
+    print(cmd)
     
     try:
         env = os.environ.copy()

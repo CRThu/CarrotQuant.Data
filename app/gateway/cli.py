@@ -7,7 +7,20 @@ from ..service.sync_manager import SyncManager
 # 初始化日志，保存到 logs 目录下，带时间戳
 setup_logger(log_level="INFO", log_file_prefix="sync_task")
 
-app = typer.Typer(help="CarrotQuant.Data CLI 同步工具")
+app = typer.Typer(help="CarrotQuant.Data CLI 数据同步工具", no_args_is_help=True)
+
+@app.command()
+def server(
+    host: str = typer.Option("0.0.0.0", "--host", "-h", help="监听地址"),
+    port: int = typer.Option(8000, "--port", "-p", help="监听端口"),
+    reload: bool = typer.Option(True, "--reload", help="是否开启热重载")
+):
+    """
+    启动 API 服务
+    """
+    import uvicorn
+    logger.info(f"[*] Starting API Server on {host}:{port} (reload={reload})")
+    uvicorn.run("app.gateway.api:app", host=host, port=port, reload=reload)
 
 @app.command()
 def sync(
