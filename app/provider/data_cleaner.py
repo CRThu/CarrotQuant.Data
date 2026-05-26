@@ -9,7 +9,8 @@ class DataCleaner:
 
     @staticmethod
     def standardize(df: pl.DataFrame, time_col: str, time_fmt: str = None, 
-                   source_tz: str = "Asia/Shanghai", display_tz: str = "Asia/Shanghai") -> pl.DataFrame:
+                   source_tz: str = "Asia/Shanghai", display_tz: str = "Asia/Shanghai",
+                   time_shift_hours: int = 0) -> pl.DataFrame:
         """
         标准化时间列，生成 timestamp (Int64) 和 datetime (String) 字段
         
@@ -19,6 +20,7 @@ class DataCleaner:
             time_fmt: 字符串时间解析格式 (例如 "%Y-%m-%d" 或 "%Y%m%d%H%M%S%.3f")
             source_tz: 原始数据的时区名称 (IANA 格式，默认 Asia/Shanghai)
             display_tz: 展示时区名称 (IANA 格式，默认 Asia/Shanghai)
+            time_shift_hours: 时间偏移（小时），正数表示向后偏移，用于将00:00对齐到收盘时间（如15:00）
             
         Returns:
             标准化后的 DataFrame，包含 timestamp 和 datetime 列
@@ -58,6 +60,10 @@ class DataCleaner:
                 df = df.with_columns(pl.col(time_col).str.to_datetime())
         elif df.schema[time_col] == pl.Date:
             df = df.with_columns(pl.col(time_col).cast(pl.Datetime))
+        
+        # 可选：时间偏移，用于将日期调整至收盘时间 (如 15:00)
+        if time_shift_hours != 0:
+            df = df.with_columns(pl.col(time_col) + pl.duration(hours=time_shift_hours))
         
         # 2. 标签化：将 naive datetime 视为 source_tz 的当地时间
         # 使用 replace_time_zone 设置时区信息

@@ -217,7 +217,7 @@ class BaostockProvider(BaseProvider):
         if df.is_empty():
             if is_day:
                 return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
-                                             source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+                                             source_tz="Asia/Shanghai", display_tz="Asia/Shanghai", time_shift_hours=15)
             else:
                 # Baostock 分钟线 time 格式: YYYYMMDDHHMMSSsss (无小数点)
                 # 此时 date 列是多余的，一并删除
@@ -250,9 +250,10 @@ class BaostockProvider(BaseProvider):
 
         # 数据清洗与标准化
         # Baostock 数据源为北京时间 (UTC+8)，显式传入时区参数
+        # 强制将日期时间对齐至收盘时间 15:00:00，以确保分区边界安全
         if is_day:
             return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
-                                         source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+                                         source_tz="Asia/Shanghai", display_tz="Asia/Shanghai", time_shift_hours=15)
         else:
             # Baostock 分钟线 time 格式: YYYYMMDDHHMMSSsss (无小数点)
             # 此时 date 列是多余的，一并删除
@@ -309,7 +310,7 @@ class BaostockProvider(BaseProvider):
         # 如果是空数据，直接返回标准化的空表
         if df.is_empty():
             return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
-                                           source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+                                           source_tz="Asia/Shanghai", display_tz="Asia/Shanghai", time_shift_hours=15)
         
         # 转换为数值类型（复权因子必须是浮点数）
         # 处理可能的空值
@@ -320,7 +321,8 @@ class BaostockProvider(BaseProvider):
             )
         
         # 数据清洗与标准化
-        # Event 数据的 timestamp 必须是 date 的 00:00:00 UTC+8 对应的毫秒戳
+        # 数据清洗与标准化
+        # Event 数据的 timestamp 必须是 date 的 15:00:00 (收盘时间) UTC+8 对应的毫秒戳
         return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
-                                       source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
+                                       source_tz="Asia/Shanghai", display_tz="Asia/Shanghai", time_shift_hours=15)
 

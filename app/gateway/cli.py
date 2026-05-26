@@ -29,10 +29,14 @@ def sync(
     start_date: Optional[str] = typer.Option(None, "--start", "-s", help="起始日期 (YYYY-MM-DD)"),
     end_date: Optional[str] = typer.Option(None, "--end", "-e", help="结束日期 (YYYY-MM-DD)"),
     force: bool = typer.Option(False, "--force", help="是否强制全量刷新水位线"),
-    batch_size: int = typer.Option(100, "--batch", help="批量聚合长度")
+    batch_size: int = typer.Option(100, "--batch", help="批量聚合长度"),
+    symbol_limit: Optional[int] = typer.Option(None, "--limit", help="限制同步的证券数量 (常用于生成测试数据)")
 ):
     """
     启动数据同步流程
+
+    示例 (生成测试数据):
+        uv run app/gateway/cli.py sync --tables "ashare.kline.1d.adj.baostock" --formats "csv,parquet" --start "2023-05-26" --limit 10
     """
     table_list = [t.strip() for t in tables.split(",") if t.strip()]
     format_list = [f.strip() for f in formats.split(",") if f.strip()]
@@ -52,7 +56,8 @@ def sync(
             start_date=start_date,
             end_date=end_date,
             force_refresh=force,
-            batch_size=batch_size
+            batch_size=batch_size,
+            symbol_limit=symbol_limit
         )
         logger.info("[+] CLI Sync completed successfully.")
     except Exception as e:
