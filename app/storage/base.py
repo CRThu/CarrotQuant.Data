@@ -9,6 +9,18 @@ class StorageManager(abc.ABC):
     def __init__(self, category: str = "TS"):
         self.category = category
 
+    @property
+    @abc.abstractmethod
+    def partition(self) -> str:
+        """分区策略: 'symbol' (按代码分片) 或 'none' (全量聚合)"""
+        pass
+
+    @property
+    @abc.abstractmethod
+    def layout(self) -> str:
+        """布局类型: 'hive' (Hive分区样式) 或 'flat' (平铺目录)"""
+        pass
+
     @abc.abstractmethod
     def read_series(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """

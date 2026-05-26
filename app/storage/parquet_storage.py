@@ -12,9 +12,19 @@ class ParquetStorage(StorageManager):
     EV 路径规则：storage_root/parquet/{table_id}/year=YYYY/data.parquet
     """
 
-    def __init__(self, storage_root: str = "storage_root/parquet", category: str = "TS"):
+    def __init__(self, storage_root: str = "storage_root/parquet", category: str = "TS", partition: str = "symbol", layout: str = "hive"):
         super().__init__(category=category)
         self.storage_root = Path(storage_root)
+        self._partition = partition
+        self._layout = layout
+
+    @property
+    def partition(self) -> str:
+        return self._partition
+
+    @property
+    def layout(self) -> str:
+        return self._layout
 
     def _get_series_path(self, table_id: str, year: int, month: int) -> Path:
         """获取 TS 月度 Parquet 文件的完整路径。"""

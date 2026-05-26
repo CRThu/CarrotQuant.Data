@@ -136,9 +136,13 @@
 元数据由 `SyncManager` 在同步完成后触发“Storage 元数据更新”自动生成，是该数据集本地物理状态的**真实映射**。
 - **路径**: `storage_root/{format}/{table_id}/metadata.json`
 - **属性释义**:
-    - `total_bars`: 该目录下所有 CSV/Parquet 文件的行数物理总和。
-    - `time_steps`: 全局去重后的 `timestamp` 时间点个数。
-    - `symbol_count`: 物理存在的证券代码个数。
+    - `table_id`: 表标识符
+    - `category`: 数据类别 (TS/EV)
+    - `format`: 存储格式 (csv/parquet)
+    - `partition`: 分区策略 (`symbol` 或 `none`)
+    - `layout`: 布局类型 (`hive` 或 `flat`)
+    - `schema`: 字段类型映射表
+    - `statistics`: 物理统计数据 (total_bars, start_timestamp, 等)
 
 #### 元数据示例 (metadata.json)
 
@@ -148,6 +152,8 @@
   "table_id": "ashare.kline.1d.adj.baostock",
   "category": "TS",
   "format": "csv",
+  "partition": "symbol",
+  "layout": "hive",
   "schema": {
     "symbol": "Utf8",
     "datetime": "Utf8",

@@ -180,11 +180,23 @@ class SyncManager:
         
         # 6. 根据 category 分类构建统计结构
         category = storage.category
+        
+        # 补充存储元信息（平铺在第一级）
+        metadata = {
+            "table_id": table_id,
+            "category": category,
+            "format": format,
+            "partition": storage.partition,
+            "layout": storage.layout,
+            "schema": schema_dict,
+            "statistics": {} # 稍后填充
+        }
+
         if category == "TS":
             # TS 类别：补齐所有元数据字段（高 IO 扫描）
             all_symbols = storage.get_all_symbols(table_id)
             unique_tss = storage.get_unique_timestamps(table_id)
-            statistics = {
+            metadata["statistics"] = {
                 "start_timestamp": start_ts,
                 "end_timestamp": end_ts,
                 "start_datetime": ts_to_iso(start_ts),
@@ -195,21 +207,13 @@ class SyncManager:
             }
         else:
             # EV 类别：跳过全量扫描，仅保留基础统计 (0 IO 扫描)
-            statistics = {
+            metadata["statistics"] = {
                 "start_timestamp": start_ts,
                 "end_timestamp": end_ts,
                 "start_datetime": ts_to_iso(start_ts),
                 "end_datetime": ts_to_iso(end_ts),
                 "total_bars": total_bars
             }
-
-        metadata = {
-            "table_id": table_id,
-            "category": category,
-            "format": format,
-            "schema": schema_dict,
-            "statistics": statistics
-        }
 
         # 6. 原子化保存元数据
         self.metadata_mgr.save(table_id, format, metadata)
