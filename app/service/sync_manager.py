@@ -60,9 +60,13 @@ class SyncManager:
         """
         # 1. 获取驱动
         provider = self.provider_mgr.get_provider(table_id)
+        # 获取类别
+        category = provider.get_table_category(table_id)
         
         # 2. 获取所有目标存储引擎
-        storages = {fmt: StorageFactory.get_storage(fmt, self.storage_root) for fmt in formats}
+        storages = {fmt: StorageFactory.get_storage(fmt, self.storage_root, category=category) for fmt in formats}
+        for storage in storages.values():
+            storage.category = category
         
         # 3. 自动发现全量代码
         symbols = provider.get_all_symbols(table_id)

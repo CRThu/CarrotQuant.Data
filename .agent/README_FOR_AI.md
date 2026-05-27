@@ -19,6 +19,7 @@
 ### 1.3 Provider (驱动提供层/手脚)
 *   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作（`fetch`）与能力发现。
     - **能力发现 (get_supported_tables)**: 驱动强制实现该接口以返回其支持的所有 `table_id` 列表。
+    - **类别发现 (get_table_category)**: 驱动必须实现该接口以返回指定 `table_id` 的数据类别（`"TS"` 时间序列 或 `"EV"` 事件数据），供 `SyncManager` 在同步时传递给存储层用于分区策略的动态适配。
     - **原子化下载**: 驱动接口强制单次仅处理**单支 Symbol**，确保任务编排层（Planner）可自由拆分与重试。
     - **输出静默 (SuppressOutput)**: 驱动内部调用第三方库（如 Baostock）时，必须使用 `SuppressOutput` 上下文管理器包裹所有可能产生标准输出/标准错误打印的方法（如 `login`, `logout`, `query`），确保 CLI 界面仅显示系统定义的结构化日志。
     - **路由分发**: 驱动内部通过 `get_supported_tables` 预校验并分发至私有抓取方法。
@@ -26,8 +27,10 @@
 *   **DataCleaner (数据清洗)**: 在驱动内部通过 `DataCleaner` 对原始数据进行“标准化清洗”，强制补齐 `timestamp` (Int64) 及 ISO8601 `datetime` (String) 字段。
 
 ### 1.4 Storage (持久化存储层/资产库)
-*   **StorageManager**: 负责数据落地。
+*   **StorageManager**: 负责数据落地。存储实例由 `StorageFactory.get_storage(format, storage_root, category)` 根据 `category` 参数创建，自动将数据类别透传给各存储引擎。
 *   **格式派生**: `CSVStorage` (单代码单文件), `ParquetStorage` (年度聚合大表)。
+    - `CSVStorage` 根据 `category` 自动选择分区默认值：TS 默认为 `"symbol"`，EV 默认为 `"none"`。
+    - `ParquetStorage` 默认分区为 `"none"`（按年度单文件聚合）。
 *   **接口统一**: 提供独立的读写接口，根据数据类别（TS/EV）采用分层策略：
     - **TimeSeries (TS)**: `read_series(table_id, symbol, year)` & `write_series(table_id, df, mode="append")`
     - **Event (EV)**: `read_event(table_id, year)` & `write_event(table_id, df, mode="append")`
@@ -185,6 +188,8 @@
   "table_id": "ashare.adj_factor.baostock",
   "category": "EV",
   "format": "csv",
+  "partition": "none",
+  "layout": "hive",
   "schema": {
     "symbol": "Utf8",
     "datetime": "Utf8",

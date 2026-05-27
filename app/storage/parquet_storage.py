@@ -12,7 +12,11 @@ class ParquetStorage(StorageManager):
     EV 路径规则：storage_root/parquet/{table_id}/year=YYYY/data.parquet
     """
 
-    def __init__(self, storage_root: str = "storage_root/parquet", category: str = "TS", partition: str = "symbol", layout: str = "hive"):
+    def __init__(self, storage_root: str = "storage_root/parquet", category: str = "TS", partition: str = None, layout: str = "hive"):
+        # 逻辑纠偏：如果是 EV，partition 默认为 "none"；如果是 TS，默认为 "none" (因为 Parquet 按年聚合，物理文件级别分区为 none)
+        if partition is None:
+            partition = "none"
+            
         super().__init__(category=category)
         self.storage_root = Path(storage_root)
         self._partition = partition
