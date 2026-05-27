@@ -37,7 +37,7 @@ def sync(
     启动数据同步流程
 
     示例 (生成测试数据):
-        uv run -m app.gateway.cli sync --tables "ashare.kline.1d.adj.baostock" --formats "csv,parquet" --start "2021-01-01" --end "2025-12-31" --limit 10 --output "./my_data"
+        uv run -m app.gateway.cli sync --tables "ashare.kline.1d.adj.baostock" --formats "csv,parquet" --start "2021-01-01" --end "2025-12-31" --limit 10 --output "./test_data_root"
     """
     table_list = [t.strip() for t in tables.split(",") if t.strip()]
     format_list = [f.strip() for f in formats.split(",") if f.strip()]

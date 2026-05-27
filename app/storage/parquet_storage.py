@@ -7,8 +7,8 @@ from ..service.metadata_manager import MetadataManager
 
 class ParquetStorage(StorageManager):
     """
-    Parquet 存储实现类，按月度大表存储。
-    TS 路径规则：storage_root/parquet/{table_id}/year=YYYY/YYYY-MM.parquet
+    Parquet 存储实现类，按年度大表存储。
+    TS 路径规则：storage_root/parquet/{table_id}/year=YYYY/data.parquet
     EV 路径规则：storage_root/parquet/{table_id}/year=YYYY/data.parquet
     """
 
@@ -26,9 +26,9 @@ class ParquetStorage(StorageManager):
     def layout(self) -> str:
         return self._layout
 
-    def _get_series_path(self, table_id: str, year: int, month: int) -> Path:
-        """获取 TS 月度 Parquet 文件的完整路径。"""
-        return self.storage_root / table_id / f"year={year}" / f"{year}-{month:02d}.parquet"
+    def _get_series_path(self, table_id: str, year: int) -> Path:
+        """获取 TS 年度 Parquet 文件的完整路径。"""
+        return self.storage_root / table_id / f"year={year}" / "data.parquet"
 
     def _get_event_path(self, table_id: str, year: int) -> Path:
         """获取 EV 数据文件的完整路径。文件名固定为 data。"""
@@ -77,23 +77,18 @@ class ParquetStorage(StorageManager):
 
     def read_series(self, table_id: str, symbol: str, year: int) -> pl.DataFrame:
         """
-        读取 TS 数据：从该年份所有月度大表中过滤出单支证券。
+        读取 TS 数据：从该年份全量 Parquet 文件中过滤出单支证券。
         """
-        year_dir = self.storage_root / table_id / f"year={year}"
-        if not year_dir.exists():
+        path = self._get_series_path(table_id, year)
+        if not path.exists():
             return pl.DataFrame()
         
-        dfs = []
-        for file in year_dir.glob("*.parquet"):
-            # 使用强锁读取
-            df = self._read_with_schema(table_id, file).filter(pl.col("symbol") == symbol)
-            if not df.is_empty():
-                dfs.append(df)
+        df = self._read_with_schema(table_id, path).filter(pl.col("symbol") == symbol)
         
-        if not dfs:
+        if df.is_empty():
             return pl.DataFrame()
         
-        return pl.concat(dfs).sort("timestamp")
+        return df.sort("timestamp")
 
     def read_event(self, table_id: str, year: int) -> pl.DataFrame:
         """
@@ -106,24 +101,23 @@ class ParquetStorage(StorageManager):
 
     def write_series(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
-        写入时间序列数据 (TS)。按月分区落盘。
+        写入时间序列数据 (TS)。按年分区落盘。
         """
         if df.is_empty():
             return
 
-        # 提取年份和月份用于分区
-        df = df.with_columns([
-            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year"),
-            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.month().alias("_month")
-        ])
+        # 提取年份用于分区
+        df = df.with_columns(
+            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
+        )
 
-        # 按 _year 和 _month 分组处理
-        for (year, month), group_df in df.partition_by(["_year", "_month"], as_dict=True).items():
-            path = self._get_series_path(table_id, year, month)
-            patch_df = group_df.drop(["_year", "_month"])
+        # 按 _year 分组处理
+        for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
+            path = self._get_series_path(table_id, year)
+            patch_df = group_df.drop("_year")
 
             if mode == "append" and path.exists():
-                # 读取月度大表并合并（使用强锁对齐 patch_df 的类型）
+                # 读取并合并（使用强锁对齐 patch_df 的类型）
                 old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
                 # TS 模式：基于 [symbol, timestamp] 去重
                 merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])

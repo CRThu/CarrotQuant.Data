@@ -281,7 +281,7 @@ def test_sync_multi_storage_file_generation(temp_storage_root):
             # 验证 Parquet 数据文件存在
             parquet_year_dir = parquet_table_dir / "year=2024"
             assert parquet_year_dir.exists(), "Parquet 2024 年目录应该存在"
-            parquet_data_file = parquet_year_dir / "2024-01.parquet"
+            parquet_data_file = parquet_year_dir / "data.parquet"
             assert parquet_data_file.exists(), "Parquet 数据文件应该存在"
 
 

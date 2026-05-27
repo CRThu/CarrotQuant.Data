@@ -38,12 +38,12 @@ def test_parquet_storage_write_read(temp_storage_root):
     storage.write_series(table_id, df)
     _stamp_metadata(storage, table_id, df)
     
-    # 验证文件系统中是否生成了 year=2023/2023-01.parquet 这种结构的路径
+    # 验证文件系统中是否生成了 year=2023/data.parquet 这种结构的路径
     year_dir = temp_storage_root / "parquet" / table_id / "year=2023"
     assert year_dir.exists(), "2023 年目录应该存在"
     
-    parquet_file = year_dir / "2023-01.parquet"
-    assert parquet_file.exists(), "2023-01.parquet 文件应该存在"
+    parquet_file = year_dir / "data.parquet"
+    assert parquet_file.exists(), "data.parquet 文件应该存在"
     
     # 验证读取回的数据顺序和长度
     read_df = storage.read_series(table_id, "sh.600000", 2023)
@@ -121,7 +121,7 @@ def test_parquet_storage_sorting(temp_storage_root):
     assert symbols == sorted(symbols), "symbol 列表应该按字母顺序排列"
     
     # 验证物理存储的排序（直接读取 Parquet 文件）
-    parquet_file = temp_storage_root / "parquet" / table_id / "year=2023" / "2023-01.parquet"
+    parquet_file = temp_storage_root / "parquet" / table_id / "year=2023" / "data.parquet"
     assert parquet_file.exists(), "Parquet 文件应该存在"
     
     # 直接读取物理文件验证排序
@@ -162,12 +162,12 @@ def test_parquet_storage_cross_year(temp_storage_root):
     # 验证 2024 年目录和文件
     year_2024_dir = temp_storage_root / "parquet" / table_id / "year=2024"
     assert year_2024_dir.exists(), "2024 年目录应该存在"
-    assert (year_2024_dir / "2024-12.parquet").exists(), "2024-12.parquet 文件应该存在"
+    assert (year_2024_dir / "data.parquet").exists(), "data.parquet 文件应该存在"
     
     # 验证 2025 年目录和文件
     year_2025_dir = temp_storage_root / "parquet" / table_id / "year=2025"
     assert year_2025_dir.exists(), "2025 年目录应该存在"
-    assert (year_2025_dir / "2025-01.parquet").exists(), "2025-01.parquet 文件应该存在"
+    assert (year_2025_dir / "data.parquet").exists(), "data.parquet 文件应该存在"
 
 
 def test_parquet_storage_multiple_symbols(temp_storage_root):

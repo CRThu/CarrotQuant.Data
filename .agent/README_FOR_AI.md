@@ -27,7 +27,7 @@
 
 ### 1.4 Storage (持久化存储层/资产库)
 *   **StorageManager**: 负责数据落地。
-*   **格式派生**: `CSVStorage` (单代码单文件), `ParquetStorage` (月度聚合大表)。
+*   **格式派生**: `CSVStorage` (单代码单文件), `ParquetStorage` (年度聚合大表)。
 *   **接口统一**: 提供独立的读写接口，根据数据类别（TS/EV）采用分层策略：
     - **TimeSeries (TS)**: `read_series(table_id, symbol, year)` & `write_series(table_id, df, mode="append")`
     - **Event (EV)**: `read_event(table_id, year)` & `write_event(table_id, df, mode="append")`
@@ -82,8 +82,8 @@
 #### TimeSeries (TS) 数据布局
 1. **CSV (按代码分片)**:
    `storage_root/csv/{table_id}/year={year}/{symbol}.csv`
-2. **Parquet (月度大表聚合)**:
-   `storage_root/parquet/{table_id}/year={year}/{year}-{month}.parquet`
+2. **Parquet (年度大表聚合)**:
+   `storage_root/parquet/{table_id}/year={year}/data.parquet`
 
 #### Event (EV) 数据布局
 1. **CSV (年份单文件)**:
@@ -102,7 +102,9 @@
 存储层提供两个独立的写入接口，根据数据类别调用：
 
 1. **write_series(table_id, df, mode="append")**: 处理时间序列数据 (TS)
-   - 分区策略：按 `symbol` 和 `year` 分区
+   - 分区策略：
+     - **CSV**: 按 `year` 目录下的 `symbol` 文件分区
+     - **Parquet**: 按 `year` 目录下的 `data.parquet` 全量文件分区
    - 去重策略：基于 `[symbol, timestamp]` 复合主键去重
    - 排序策略：
      - **CSV**: 按 `["timestamp"]` 排序（单 symbol 文件语义）
