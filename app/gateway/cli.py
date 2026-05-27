@@ -30,13 +30,14 @@ def sync(
     end_date: Optional[str] = typer.Option(None, "--end", "-e", help="结束日期 (YYYY-MM-DD)"),
     force: bool = typer.Option(False, "--force", help="是否强制全量刷新水位线"),
     batch_size: int = typer.Option(100, "--batch", help="批量聚合长度"),
-    symbol_limit: Optional[int] = typer.Option(None, "--limit", help="限制同步的证券数量 (常用于生成测试数据)")
+    symbol_limit: Optional[int] = typer.Option(None, "--limit", help="限制同步的证券数量 (常用于生成测试数据)"),
+    output_dir: Optional[str] = typer.Option(None, "--output", "-o", help="自定义存储根目录")
 ):
     """
     启动数据同步流程
 
     示例 (生成测试数据):
-        uv run app/gateway/cli.py sync --tables "ashare.kline.1d.adj.baostock" --formats "csv,parquet" --start "2023-05-26" --limit 10
+        uv run -m app.gateway.cli sync --tables "ashare.kline.1d.adj.baostock" --formats "csv,parquet" --start "2021-01-01" --end "2025-12-31" --limit 10 --output "./my_data"
     """
     table_list = [t.strip() for t in tables.split(",") if t.strip()]
     format_list = [f.strip() for f in formats.split(",") if f.strip()]
@@ -49,7 +50,7 @@ def sync(
     logger.info(f"[*] Formats: {format_list}")
     
     try:
-        sync_mgr = SyncManager()
+        sync_mgr = SyncManager(storage_root=output_dir)
         sync_mgr.sync(
             table_ids=table_list,
             formats=format_list,

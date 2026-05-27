@@ -14,9 +14,9 @@ class SyncManager:
     支持单次抓取、多格式并行落地。
     """
 
-    def __init__(self):
+    def __init__(self, storage_root: str = None):
         # 内部自治实例化：基于配置中心
-        self.storage_root = settings.STORAGE_ROOT
+        self.storage_root = storage_root or settings.STORAGE_ROOT
         self.metadata_mgr = MetadataManager(self.storage_root)
         self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()
