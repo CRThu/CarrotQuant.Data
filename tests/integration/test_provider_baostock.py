@@ -105,14 +105,14 @@ def test_baostock_provider_adj_factor():
     assert "fore_adjust_factor" not in df.columns, "fore_adjust_factor should be removed"
     assert "adjust_factor" not in df.columns, "adjust_factor should be removed"
     
-    # 验证 datetime 列格式正确（应为 YYYY-MM-DDT00:00:00.000+08:00）
-    # Event 数据的 timestamp 是 dividOperateDate 的 00:00:00 UTC+8 对应的毫秒戳
-    # 经过 DataCleaner.standardize 处理后，datetime 应该显示原始日期的 00:00:00+08:00
+    # 验证 datetime 列格式正确（应为 YYYY-MM-DDT15:00:00.000+08:00）
+    # Event 数据的 timestamp 是 dividOperateDate 的 15:00:00 UTC+8 对应的毫秒戳
+    # 经过 DataCleaner.standardize 处理后，datetime 应该显示为 15:00:00+08:00
     if not df.is_empty():
         first_dt = df["datetime"][0]
         logger.info(f"First datetime = {first_dt}")
-        # 验证 datetime 格式正确：包含 T00:00:00 和 +08:00
-        assert "T00:00:00" in first_dt, "datetime should contain 00:00:00 time"
+        # 验证 datetime 格式正确：包含 T15:00:00 和 +08:00
+        assert "T15:00:00" in first_dt, "datetime should contain 15:00:00 time"
         assert "+08:00" in first_dt, "datetime should have +08:00 timezone suffix"
     
     # 验证列顺序：symbol, datetime, timestamp 应该在最前面
