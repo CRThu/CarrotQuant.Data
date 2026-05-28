@@ -15,7 +15,7 @@ class FakeProvider(BaseProvider):
         return ["sh.600000", "sz.000001"]
 
     def get_table_category(self, table_id):
-        return "TS"
+        return "timeseries"
 
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         # 简单根据 symbol 和日期生成 mock 数据
@@ -157,7 +157,7 @@ def test_sync_empty_data_defense(temp_storage_root):
             return []
         
         def get_table_category(self, table_id):
-            return "TS"
+            return "timeseries"
         
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             return pl.DataFrame()

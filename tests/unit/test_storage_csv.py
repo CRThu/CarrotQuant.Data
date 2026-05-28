@@ -4,7 +4,7 @@ from app.storage.csv_storage import CSVStorage
 from app.service.metadata_manager import MetadataManager
 
 
-def _stamp_metadata(storage, table_id, df, category="TS"):
+def _stamp_metadata(storage, table_id, df, category="timeseries"):
     """辅助函数：为测试生成元数据"""
     meta_mgr = MetadataManager(storage.storage_root.parent)
     meta_mgr.save(table_id, "csv", {
@@ -330,7 +330,7 @@ def test_csv_storage_ev_no_symbol(temp_storage_root):
     测试 CSV 存储对无 symbol 列 EV 数据的处理
     验证系统能够正确处理没有 symbol 列的宏观数据（如利率、指数成分变动）
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"), category="EV")
+    storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
     table_id = "test.csv.ev_no_symbol"
     
     # 创建测试数据：没有 symbol 列，只有 timestamp 和 value
@@ -341,12 +341,12 @@ def test_csv_storage_ev_no_symbol(temp_storage_root):
     
     # 写入数据
     storage.write_event(table_id, df, mode="overwrite")
-    _stamp_metadata(storage, table_id, df, category="EV")
+    _stamp_metadata(storage, table_id, df, category="event")
     
     # 手动补齐元数据
     meta_mgr = MetadataManager(storage.storage_root.parent)
     meta_mgr.save(table_id, "csv", {
-        "table_id": table_id, "category": "EV", "format": "csv",
+        "table_id": table_id, "category": "event", "format": "csv",
         "schema": {k: str(v) for k, v in df.schema.items()}
     })
     

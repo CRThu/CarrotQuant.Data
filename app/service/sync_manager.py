@@ -131,7 +131,7 @@ class SyncManager:
                 for fmt, storage in storages.items():
                     logger.debug(f"[BATCH] Writing to storage: {fmt} (category={category})")
                     # 根据类别调用不同的写入方法
-                    if category == "EV":
+                    if category == "event":
                         storage.write_event(table_id, big_df, mode="append")
                     else:
                         # 默认为 TS
@@ -196,7 +196,7 @@ class SyncManager:
             "statistics": {} # 稍后填充
         }
 
-        if category == "TS":
+        if category == "timeseries":
             # TS 类别：补齐所有元数据字段（高 IO 扫描）
             all_symbols = storage.get_all_symbols(table_id)
             unique_tss = storage.get_unique_timestamps(table_id)

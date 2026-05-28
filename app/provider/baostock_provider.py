@@ -15,12 +15,12 @@ class BaostockProvider(BaseProvider):
     
     # 类常量：table_id 到数据类别的映射
     _SUPPORTED_TABLE_MAP: dict[str, str] = {
-        "ashare.kline.1d.adj.baostock": "TS",
-        "ashare.kline.1d.raw.baostock": "TS",
-        "ashare.kline.5m.adj.baostock": "TS",
-        "ashare.kline.5m.raw.baostock": "TS",
-        "aindex.kline.1d.raw.baostock": "TS",
-        "ashare.adj_factor.baostock": "EV"
+        "ashare.kline.1d.adj.baostock": "timeseries",
+        "ashare.kline.1d.raw.baostock": "timeseries",
+        "ashare.kline.5m.adj.baostock": "timeseries",
+        "ashare.kline.5m.raw.baostock": "timeseries",
+        "aindex.kline.1d.raw.baostock": "timeseries",
+        "ashare.adj_factor.baostock": "event"
     }
 
     def __init__(self):
@@ -60,7 +60,7 @@ class BaostockProvider(BaseProvider):
             table_id: 表标识符 (例如 ashare.kline.1d.adj.baostock)
             
         Returns:
-            str: 数据类别，"TS" 表示时间序列数据，"EV" 表示事件数据。
+            str: 数据类别，"timeseries" 表示时间序列数据，"event" 表示事件数据。
         """
         if table_id not in self._SUPPORTED_TABLE_MAP:
             raise ValueError(f"Table '{table_id}' is not supported by BaostockProvider.")

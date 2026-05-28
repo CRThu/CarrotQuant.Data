@@ -12,10 +12,10 @@ class CSVStorage(StorageManager):
     EV 路径规则：storage_root/csv/{table_id}/year={yyyy}/data.csv
     """
 
-    def __init__(self, storage_root: str = "storage_root/csv", category: str = "TS", partition: str = None, layout: str = "hive"):
+    def __init__(self, storage_root: str = "storage_root/csv", category: str = "timeseries", partition: str = None, layout: str = "hive"):
         # 逻辑纠偏：如果是 EV，partition 默认为 "none"；如果是 TS，默认为 "symbol"
         if partition is None:
-            partition = "none" if category == "EV" else "symbol"
+            partition = "none" if category == "event" else "symbol"
             
         super().__init__(category=category)
         self.storage_root = Path(storage_root)
@@ -167,7 +167,7 @@ class CSVStorage(StorageManager):
     def get_all_symbols(self, table_id: str) -> list[str]:
         """扫描所有 year 目录，提取唯一 Symbol (文件名)"""
         # 如果是 EV 表，直接返回空列表，因为它没有按 symbol 分区
-        if self.category == "EV":
+        if self.category == "event":
             return []
             
         table_dir = self.storage_root / table_id

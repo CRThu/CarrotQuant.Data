@@ -36,7 +36,7 @@ def test_sync_manager_batch_write(sync_manager):
     provider.get_all_symbols.return_value = symbols
     
     # 模拟 Provider
-    provider.get_table_category.return_value = "TS"
+    provider.get_table_category.return_value = "timeseries"
     
     # 模拟 Storage
     storage = MagicMock()
@@ -46,7 +46,7 @@ def test_sync_manager_batch_write(sync_manager):
     storage.get_global_time_range.return_value = (0, 0)
     storage.get_unique_timestamps.return_value = []
     storage.read.return_value = pl.DataFrame()
-    storage.category = "TS"
+    storage.category = "timeseries"
     
     # 直接在 sync_manager 的 mock StorageFactory 上设置返回值
     from app.service import sync_manager as sm_mod

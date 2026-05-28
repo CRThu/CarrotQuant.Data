@@ -12,7 +12,7 @@ def mock_provider_manager():
         manager_instance = mock.return_value
         provider = MagicMock()
         manager_instance.get_provider.return_value = provider
-        provider.get_table_category.return_value = "TS" # Default to TS
+        provider.get_table_category.return_value = "timeseries" # Default to timeseries
         yield manager_instance, provider
 
 def test_query_data_symbol_filter(mock_provider_manager):
@@ -21,7 +21,7 @@ def test_query_data_symbol_filter(mock_provider_manager):
     """
     table_id = "test.query.symbol"
     _, provider = mock_provider_manager
-    provider.get_table_category.return_value = "TS"
+    provider.get_table_category.return_value = "timeseries"
     
     mock_storage = MagicMock()
     # mock_storage.read_series 返回数据
@@ -48,7 +48,7 @@ def test_query_data_timestamp_range(mock_provider_manager):
     from app.utils.time_utils import parse_date_to_ts
     table_id = "test.query.time"
     _, provider = mock_provider_manager
-    provider.get_table_category.return_value = "TS"
+    provider.get_table_category.return_value = "timeseries"
     
     start_ts = parse_date_to_ts("2024-01-01")
     end_ts = parse_date_to_ts("2024-01-02")
@@ -75,7 +75,7 @@ def test_query_data_ts_requires_symbol(mock_provider_manager):
     """
     table_id = "test.query.ts_no_symbol"
     _, provider = mock_provider_manager
-    provider.get_table_category.return_value = "TS"
+    provider.get_table_category.return_value = "timeseries"
     
     response = client.get(f"/api/v1/data/{table_id}")
     assert response.status_code == 400
@@ -87,7 +87,7 @@ def test_query_data_ev_no_symbol_ok(mock_provider_manager):
     """
     table_id = "test.query.ev_no_symbol"
     _, provider = mock_provider_manager
-    provider.get_table_category.return_value = "EV"
+    provider.get_table_category.return_value = "event"
     
     mock_storage = MagicMock()
     mock_storage.read_event.return_value = pl.DataFrame({

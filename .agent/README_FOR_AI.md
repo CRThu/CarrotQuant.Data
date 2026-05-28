@@ -19,7 +19,7 @@
 ### 1.3 Provider (驱动提供层/手脚)
 *   **Source Drivers**: 插件化架构。`BaseProvider` 抽象类定义标准下载动作（`fetch`）与能力发现。
     - **能力发现 (get_supported_tables)**: 驱动强制实现该接口以返回其支持的所有 `table_id` 列表。
-    - **类别发现 (get_table_category)**: 驱动必须实现该接口以返回指定 `table_id` 的数据类别（`"TS"` 时间序列 或 `"EV"` 事件数据），供 `SyncManager` 在同步时传递给存储层用于分区策略的动态适配。
+    - **类别发现 (get_table_category)**: 驱动必须实现该接口以返回指定 `table_id` 的数据类别（`"timeseries"` 时间序列 或 `"event"` 事件数据），供 `SyncManager` 在同步时传递给存储层用于分区策略的动态适配。
     - **原子化下载**: 驱动接口强制单次仅处理**单支 Symbol**，确保任务编排层（Planner）可自由拆分与重试。
     - **输出静默 (SuppressOutput)**: 驱动内部调用第三方库（如 Baostock）时，必须使用 `SuppressOutput` 上下文管理器包裹所有可能产生标准输出/标准错误打印的方法（如 `login`, `logout`, `query`），确保 CLI 界面仅显示系统定义的结构化日志。
     - **路由分发**: 驱动内部通过 `get_supported_tables` 预校验并分发至私有抓取方法。
@@ -151,11 +151,11 @@
 
 #### 元数据示例 (metadata.json)
 
-**TimeSeries 类型 (category: "TS")**:
+**TimeSeries 类型 (category: "timeseries")**:
 ```json
 {
   "table_id": "ashare.kline.1d.adj.baostock",
-  "category": "TS",
+  "category": "timeseries",
   "format": "csv",
   "partition": "symbol",
   "layout": "hive",
@@ -182,11 +182,11 @@
 }
 ```
 
-**Event 类型 (category: "EV")**:
+**Event 类型 (category: "event")**:
 ```json
 {
   "table_id": "ashare.adj_factor.baostock",
-  "category": "EV",
+  "category": "event",
   "format": "csv",
   "partition": "none",
   "layout": "hive",

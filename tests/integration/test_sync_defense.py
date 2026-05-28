@@ -178,7 +178,7 @@ def test_sync_manager_provider_exception(temp_storage_root):
             raise RuntimeError("模拟网络异常")
         
         def get_table_category(self, table_id):
-            return "TS"
+            return "timeseries"
     
     with patch.object(sync_mgr.provider_mgr, 'get_provider', return_value=ExceptionProvider()):
         # 同步应该抛出异常
@@ -220,7 +220,7 @@ def test_sync_manager_partial_failure(temp_storage_root):
                 raise RuntimeError("第二个 symbol 失败")
         
         def get_table_category(self, table_id):
-            return "TS"
+            return "timeseries"
     
     with patch.object(sync_mgr.provider_mgr, 'get_provider', return_value=PartialFailureProvider()):
         # 同步应该抛出异常（Fail-Fast）

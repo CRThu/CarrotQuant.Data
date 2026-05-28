@@ -111,7 +111,7 @@ async def get_data(
         raise HTTPException(status_code=400, detail=str(e))
 
     # 1. 基础参数校验
-    if category == "TS" and not symbol:
+    if category == "timeseries" and not symbol:
         raise HTTPException(status_code=400, detail="TS data query requires 'symbol' parameter.")
 
     # 2. 定位可用年份
@@ -139,7 +139,7 @@ async def get_data(
     all_dfs = []
     
     try:
-        if category == "TS":
+        if category == "timeseries":
             # TS 逻辑：直接查询
             for year in years:
                 df = storage.read_series(table_id, symbol, year)

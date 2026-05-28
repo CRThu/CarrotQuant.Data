@@ -53,6 +53,6 @@ class BaseProvider(abc.ABC):
             table_id: 表标识符 (例如 ashare.kline.1d.adj.baostock)
             
         Returns:
-            str: 数据类别，"TS" 表示时间序列数据，"EV" 表示事件数据。
+            str: 数据类别，"timeseries" 表示时间序列数据，"event" 表示事件数据。
         """
         pass

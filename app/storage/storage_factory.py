@@ -6,7 +6,7 @@ class StorageFactory:
     """存储工厂类，负责根据格式返回对应的存储引擎实例 (Simplifying dependencies)"""
 
     @staticmethod
-    def get_storage(storage_format: str, storage_root: str, category: str = "TS") -> StorageManager:
+    def get_storage(storage_format: str, storage_root: str, category: str = "timeseries") -> StorageManager:
         """
         获取存储引擎。
         
