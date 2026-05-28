@@ -66,18 +66,21 @@
 ## 3. Storage 层规范
 
 ### 命名规范 (Table ID)
-所有存储表的 ID 遵循"由大到小"的层级命名逻辑，点号分段。
-推荐格式：`{market}.{category}.{freq}.{adj}.{source}`
-- `market`: 市场或项目标识
+所有存储表的 ID 遵循“由大到小”的层级命名逻辑，通过点号 (`.`) 分段，以实现组件的动态解析与路由。
+
+**规范格式**: `{market}.{category}.[sub_category/freq/adj].{source}`
+
+**参数详解**:
+- **`market` (第一段)**: 市场或项目标识
     - `ashare`: 专门指向 A 股个股
     - `aindex`: 专门指向 A 股指数
-- `category`: 数据类别（如 `lhb`, `kline`）
-- `freq`: 频率（如 `1d`, `5m`, `1m`）
-- `adj`: 复权方式（如 `adj`, `qfq`, `hfq`, `raw`）
-- `source`: 数据来源（如 `baostock`, `akshare`, `eastmoney`）
+- **`category`**: 数据类别（如 `lhb`, `kline`, `adj_factor`）
+- **`sub_category/freq/adj`**: 中间段落，由驱动自行解析（例如频率 `1d`, `5m`；复权 `adj`, `raw`）
+- **`source` (最后一段)**: 数据来源（如 `baostock`, `akshare`, `eastmoney`）。驱动工厂以此分发至对应的实现类。
 
-示例：`ashare.kline.1d.adj.baostock`, `ashare.lhb.eastmoney`
-路径：`ashare.kline.1d.baostock` -> `storage_root/csv/ashare.kline.1d.baostock/`
+**示例**: 
+- `ashare.kline.1d.adj.baostock` (五段式: 市场.类别.频率.复权.来源)
+- `ashare.lhb.eastmoney` (三段式: 市场.类别.来源)
 
 ### 存储路径模板
 数据按格式、表名、年份分片存储，遵循 Hive 分区样式。根据数据类别（TS/EV）采用不同的物理布局：
