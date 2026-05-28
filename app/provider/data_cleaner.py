@@ -32,7 +32,7 @@ class DataCleaner:
                 # 添加 timestamp 和 datetime 列（即使为空）
                 df = df.with_columns([
                     pl.lit(None).cast(pl.Int64).alias("timestamp"),
-                    pl.lit(None).cast(pl.Utf8).alias("datetime")
+                    pl.lit(None).cast(pl.String).alias("datetime")
                 ])
                 
                 # 按照规范，将核心列 [timestamp, datetime, symbol] 移动到最前面
@@ -53,7 +53,7 @@ class DataCleaner:
                 return df
             
         # 1. 检测并转换 time_col 为 pl.Datetime (不带时区)
-        if df.schema[time_col] == pl.Utf8:
+        if df.schema[time_col] == pl.String:
             if time_fmt:
                 df = df.with_columns(pl.col(time_col).str.to_datetime(format=time_fmt))
             else:

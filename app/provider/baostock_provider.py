@@ -195,7 +195,7 @@ class BaostockProvider(BaseProvider):
         while (rs.error_code == '0') & rs.next():
             data_list.append(rs.get_row_data())
             
-        df = pl.DataFrame(data_list, schema={f: pl.Utf8 for f in fields.split(',')}, orient="row")
+        df = pl.DataFrame(data_list, schema={f: pl.String for f in fields.split(',')}, orient="row")
         
         # 字段清洗与重命名（无论是空数据还是有数据都需要重命名）
         rename_map = {
@@ -293,7 +293,7 @@ class BaostockProvider(BaseProvider):
             data_list.append(rs.get_row_data())
         
         # 使用所有字段创建 DataFrame
-        df = pl.DataFrame(data_list, schema={f: pl.Utf8 for f in all_fields.split(',')}, orient="row")
+        df = pl.DataFrame(data_list, schema={f: pl.String for f in all_fields.split(',')}, orient="row")
         
         # 按照要求，只保留需要的字段并重命名
         # 1. 选择需要的列

@@ -160,8 +160,8 @@
   "partition": "symbol",
   "layout": "hive",
   "schema": {
-    "symbol": "Utf8",
-    "datetime": "Utf8",
+    "symbol": "String",
+    "datetime": "String",
     "timestamp": "Int64",
     "open": "Float64",
     "high": "Float64",
@@ -191,8 +191,8 @@
   "partition": "none",
   "layout": "hive",
   "schema": {
-    "symbol": "Utf8",
-    "datetime": "Utf8",
+    "symbol": "String",
+    "datetime": "String",
     "timestamp": "Int64",
     "back_adj_factor": "Float64"
   },
