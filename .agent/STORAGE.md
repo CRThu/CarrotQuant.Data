@@ -71,11 +71,6 @@
     "close": "Float64",
     "volume": "Float64",
     "amount": "Float64"
-  },
-  "statistics": {
-    "start_timestamp": 1704067200000,
-    "end_timestamp": 1716163200000,
-    "total_bars": 485600
   }
 }
 ```
@@ -85,7 +80,7 @@
 *   `category`: `timeseries` 或 `event`。
 *   `format`: `csv` 或 `parquet`。
 *   `schema`: 类型映射表，Value 必须为 `String`, `Int64`, `Float64`, `Boolean`, `Date`, `Datetime`。
-*   `statistics`: 物理巡检产出的状态描述，EV 数据严禁包含 `symbol_count` 和 `time_steps`。
+*   `statistics` (可选): 物理巡检产出的状态描述，仅用于分析用途，系统不再依赖此字段进行路径调度。
 
 ## 5. 类型转换字典
 在读取数据时，Agent 应使用以下映射逻辑：
