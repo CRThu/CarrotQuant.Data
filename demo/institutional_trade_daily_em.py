@@ -7,19 +7,20 @@
 
 API: https://datacenter-web.eastmoney.com/api/data/v1/get
 报表: RPT_ORGANIZATION_TRADE_DETAILSNEW
+目标地址: https://data.eastmoney.com/stock/jgmy.html
 
 Usage:
     # 单日
-    uv run python institutional_trade_daily_em.py --start 2026-06-18 --end 2026-06-18
+    uv run institutional_trade_daily_em.py --start 2026-06-18 --end 2026-06-18
 
     # 跨月批量（自动按月分批）
-    uv run python institutional_trade_daily_em.py --start 2026-04-01 --end 2026-06-18
+    uv run institutional_trade_daily_em.py --start 2026-04-01 --end 2026-06-18
 
     # 指定股票
-    uv run python institutional_trade_daily_em.py --code 000858 --start 2026-06-01 --end 2026-06-18
+    uv run institutional_trade_daily_em.py --code 000858 --start 2026-06-01 --end 2026-06-18
 
     # 导出CSV
-    uv run python institutional_trade_daily_em.py --csv inst_data.csv
+    uv run institutional_trade_daily_em.py --csv inst_data.csv
 """
 
 from __future__ import annotations
@@ -291,8 +292,8 @@ def format_output(df: pd.DataFrame) -> str:
         ratio = row.get("机构净买额占总成交额比")
         turnover = row.get("换手率")
         free_cap = row.get("流通市值")
-        d1 = row.get("D1_CLOSE_ADJCHRATE")
-        d5 = row.get("D5_CLOSE_ADJCHRATE")
+        d1 = row.get("上榜后1日")
+        d5 = row.get("上榜后5日")
 
         buy_t_s = f"{int(buy_t)}" if pd.notna(buy_t) else "-"
         sell_t_s = f"{int(sell_t)}" if pd.notna(sell_t) else "-"
@@ -328,7 +329,7 @@ def main():
     parser.add_argument("--csv", default=None, help="导出 CSV 路径")
     args = parser.parse_args()
 
-    start = args.start or "2000-01-01"
+    start = args.start or "2024-01-01"
     end = args.end or datetime.now().strftime("%Y-%m-%d")
 
     print(f"机构交易: {args.code or '全市场'} {start} ~ {end}")

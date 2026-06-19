@@ -7,19 +7,20 @@
 
 API: https://datacenter-web.eastmoney.com/api/data/v1/get
 报表: RPT_DAILYBILLBOARD_DETAILSNEW
+目标地址: https://data.eastmoney.com/stock/lhb.html
 
 Usage:
     # 单日
-    uv run python dragon_tiger_em.py --start 2026-06-18 --end 2026-06-18
+    uv run dragon_tiger_em.py --start 2026-06-18 --end 2026-06-18
 
     # 跨月批量（自动按月分批）
-    uv run python dragon_tiger_em.py --start 2026-04-01 --end 2026-06-18
+    uv run dragon_tiger_em.py --start 2026-04-01 --end 2026-06-18
 
     # 指定股票
-    uv run python dragon_tiger_em.py --code 000858 --start 2026-06-01 --end 2026-06-18
+    uv run dragon_tiger_em.py --code 000858 --start 2026-06-01 --end 2026-06-18
 
     # 导出CSV
-    uv run python dragon_tiger_em.py --csv lhb_data.csv
+    uv run dragon_tiger_em.py --csv lhb_data.csv
 """
 
 from __future__ import annotations
@@ -333,7 +334,7 @@ def main():
     parser.add_argument("--csv", default=None, help="导出 CSV 路径")
     args = parser.parse_args()
 
-    start = args.start or "2000-01-01"
+    start = args.start or "2024-01-01"
     end = args.end or datetime.now().strftime("%Y-%m-%d")
 
     print(f"龙虎榜: {args.code or '全市场'} {start} ~ {end}")
