@@ -141,11 +141,11 @@ class SyncManager:
                 logger.info(f"[BATCH] Aggregated {len(batch_dfs)} symbols, total {len(big_df)} rows written to {formats}.")
                 batch_dfs.clear()
                 del big_df
-        
-        # 6. 巡检与元数据更新 (针对每个格式独立更新)
-        for fmt, storage in storages.items():
-            self._update_metadata(table_id, fmt, storage, last_success_df, data_written, force_refresh)
 
+                # 批次级元数据更新：支持断点续传
+                for fmt, storage in storages.items():
+                    self._update_metadata(table_id, fmt, storage, last_success_df, True, force_refresh)
+        
         logger.info(f"[+] Sync finished for {table_id}. Success: {success_count}/{total_tasks}")
 
     def _update_metadata(self, table_id: str, format: str, storage: Any, last_success_df: pl.DataFrame, data_written: bool, force_refresh: bool):

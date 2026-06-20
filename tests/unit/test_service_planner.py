@@ -316,6 +316,7 @@ def test_plan_full_patch_scenario():
 def test_plan_edge_case_same_start_end():
     """
     测试边界情况：start_date == end_date（单点查询）
+    单点查询应生成一个任务（fetch 会返回当天数据）
     """
     metadata_mgr = MagicMock()
     metadata_mgr.load.return_value = {"statistics": {}}
@@ -325,8 +326,9 @@ def test_plan_edge_case_same_start_end():
     # 单点查询
     tasks = planner.plan("test.table", ["csv"], ["sh.600000"], "2024-01-01", "2024-01-01")
     
-    # TaskPlanner 会跳过 task_start >= task_end 的任务，所以单点查询不生成任务
-    assert len(tasks) == 0
+    # 单点查询应生成 1 个任务
+    assert len(tasks) == 1
+    assert tasks[0]["symbol"] == "sh.600000"
 
 
 def test_plan_edge_case_start_after_end():

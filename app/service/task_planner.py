@@ -92,8 +92,8 @@ class TaskPlanner:
             else:
                 continue
                 
-            # 安全检查：如果计算出的任务区间无效（起点 >= 终点），跳过
-            if task_start >= task_end:
+            # 安全检查：如果计算出的任务区间无效（起点 > 终点），跳过
+            if task_start > task_end:
                 continue
                 
             planned_tasks.append({

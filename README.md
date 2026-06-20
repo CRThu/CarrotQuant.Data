@@ -55,6 +55,7 @@ graph TB
     subgraph Provider["采集层"]
         PM["ProviderManager"]
         BP["BaostockProvider"]
+        EP["EastMoneyProvider"]
     end
 
     subgraph Storage["存储层"]
@@ -73,9 +74,25 @@ graph TB
     TP --> MM
     SM --> MM
     PM --> BP
+    PM --> EP
     SF --> CSV
     SF --> PQ
 ```
+
+## 📊 支持的数据表 (Supported Tables)
+
+| Table ID | 类型 | 说明 |
+|----------|------|------|
+| `ashare.kline.1d.adj.baostock` | TS | A 股日线后复权 |
+| `ashare.kline.1d.raw.baostock` | TS | A 股日线不复权 |
+| `ashare.kline.5m.adj.baostock` | TS | A 股 5 分钟线后复权 |
+| `ashare.kline.5m.raw.baostock` | TS | A 股 5 分钟线不复权 |
+| `aindex.kline.1d.raw.baostock` | TS | A 股指数日线 |
+| `ashare.adj_factor.baostock` | EV | A 股复权因子 |
+| `ashare.concept.eastmoney` | EV | 概念板块成分股 |
+| `ashare.industry.eastmoney` | EV | 行业板块成分股 |
+| `ashare.dragon_tiger.eastmoney` | EV | 龙虎榜 |
+| `ashare.inst_trade.eastmoney` | EV | 机构买卖每日统计 |
 
 ## 🛠️ 安装指南 (Installation)
 

@@ -1,6 +1,7 @@
 from typing import Dict
 from app.provider.base import BaseProvider
 from app.provider.baostock_provider import BaostockProvider
+from app.provider.eastmoney_provider import EastMoneyProvider
 
 class ProviderManager:
     """
@@ -27,6 +28,8 @@ class ProviderManager:
         if source not in self._providers:
             if source == 'baostock':
                 self._providers[source] = BaostockProvider()
+            elif source == 'eastmoney':
+                self._providers[source] = EastMoneyProvider()
             else:
                 raise ValueError(f"Unsupported data source: {source}")
                 
