@@ -263,7 +263,7 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
     })
     
     # 写入数据
-    storage.write_event(table_id, df, mode="overwrite")
+    storage.write_event(table_id, df, mode="overwrite", sort_keys=["timestamp"])
     _stamp_metadata(storage, table_id, df, category="event")
     
     # 验证文件创建
@@ -291,7 +291,7 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
         "value": [100.0, 101.5, 103.0]
     })
     
-    storage.write_event(table_id, df_new, mode="append")
+    storage.write_event(table_id, df_new, mode="append", sort_keys=["timestamp"])
     
     # 重新读取验证
     read_df_final = storage.read_event(table_id, 2024)

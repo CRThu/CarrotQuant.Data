@@ -41,7 +41,7 @@ class TestCSVFlat:
             "symbol": ["sh.600000", "sz.000001", "sh.600000"],
             "stock_name": ["股票A", "股票B", "股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         # 验证文件路径
         flat_path = temp_storage_root / "csv" / table_id / "data.csv"
@@ -62,7 +62,7 @@ class TestCSVFlat:
             "symbol": ["sh.600000", "sz.000001"],
             "stock_name": ["股票A", "股票B"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         _stamp_metadata(storage, table_id, df, fmt="csv")
         
         # 读取（不传 year 参数）
@@ -81,7 +81,7 @@ class TestCSVFlat:
             "symbol": ["sh.600000", "sz.000001", "sh.600000"],
             "stock_name": ["股票A", "股票B", "股票A"],
         })
-        storage.write_event(table_id, df1, mode="overwrite")
+        storage.write_event(table_id, df1, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         _stamp_metadata(storage, table_id, df1, fmt="csv")
         
         # 第二次写入：完全重复 + 新增
@@ -91,14 +91,14 @@ class TestCSVFlat:
             "symbol": ["sh.600000", "sz.000001", "sz.300001"],
             "stock_name": ["股票A", "股票B", "股票C"],
         })
-        storage.write_event(table_id, df2, mode="append")
+        storage.write_event(table_id, df2, mode="append", sort_keys=["board_code", "board_name", "symbol"])
         
         read_df = storage.read_event(table_id)
         # BK0001+sh.600000 重复1行去重，BK0001+sz.000001 重复1行去重，BK0002 保留，BK0003 新增 = 4行
         assert len(read_df) == 4, f"期望 4 行，实际 {len(read_df)}"
 
     def test_flat_sort_by_first_two_cols(self, temp_storage_root):
-        """平铺数据应按前两列 + symbol 排序。"""
+        """平铺数据应按指定 sort_keys 排序。"""
         storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
         table_id = "test.flat.sort"
         
@@ -108,12 +108,31 @@ class TestCSVFlat:
             "symbol": ["sh.600000", "sz.000001", "sh.600000"],
             "stock_name": ["股票A", "股票B", "股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         _stamp_metadata(storage, table_id, df, fmt="csv")
         
         read_df = storage.read_event(table_id)
-        # 应按 board_code, board_name, symbol 排序
+        # 默认排序：board_code, board_name, symbol
         assert read_df["board_code"].to_list() == ["BK0001", "BK0001", "BK0002"]
+
+    def test_flat_custom_sort_keys(self, temp_storage_root):
+        """传入 sort_keys 时应按指定列排序。"""
+        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        table_id = "test.flat.custom_sort"
+        
+        df = pl.DataFrame({
+            "board_code": ["BK0002", "BK0001", "BK0001"],
+            "board_name": ["板块B", "板块A", "板块A"],
+            "symbol": ["sh.600000", "sz.000001", "sh.600000"],
+            "stock_name": ["股票A", "股票B", "股票A"],
+        })
+        # 按 stock_name 排序
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["stock_name", "symbol"])
+        _stamp_metadata(storage, table_id, df, fmt="csv")
+        
+        read_df = storage.read_event(table_id)
+        # 应按 stock_name 排序: 股票A, 股票A, 股票B
+        assert read_df["stock_name"].to_list() == ["股票A", "股票A", "股票B"]
 
     def test_flat_total_bars(self, temp_storage_root):
         """get_total_bars 应返回正确的行数。"""
@@ -126,7 +145,7 @@ class TestCSVFlat:
             "symbol": ["sh.600000", "sz.000001", "sh.600000"],
             "stock_name": ["股票A", "股票B", "股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         assert storage.get_total_bars(table_id) == 3
 
@@ -141,7 +160,7 @@ class TestCSVFlat:
             "symbol": ["sh.600000"],
             "stock_name": ["股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         assert storage.get_global_time_range(table_id) == (0, 0)
 
@@ -156,7 +175,7 @@ class TestCSVFlat:
             "symbol": ["sh.600000"],
             "stock_name": ["股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         assert storage.get_unique_timestamps(table_id) == []
 
@@ -179,7 +198,7 @@ class TestParquetFlat:
             "symbol": ["sh.600000", "sz.000001", "sh.600000"],
             "stock_name": ["股票A", "股票B", "股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         flat_path = temp_storage_root / "parquet" / table_id / "data.parquet"
         assert flat_path.exists(), "应创建平铺文件 data.parquet"
@@ -198,7 +217,7 @@ class TestParquetFlat:
             "symbol": ["sh.600000", "sz.000001"],
             "stock_name": ["股票A", "股票B"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         _stamp_metadata(storage, table_id, df, fmt="parquet")
         
         read_df = storage.read_event(table_id)
@@ -216,7 +235,7 @@ class TestParquetFlat:
             "symbol": ["sh.600000", "sz.000001", "sh.600000"],
             "stock_name": ["股票A", "股票B", "股票A"],
         })
-        storage.write_event(table_id, df1, mode="overwrite")
+        storage.write_event(table_id, df1, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         _stamp_metadata(storage, table_id, df1, fmt="parquet")
         
         df2 = pl.DataFrame({
@@ -225,7 +244,7 @@ class TestParquetFlat:
             "symbol": ["sh.600000", "sz.000001", "sz.300001"],
             "stock_name": ["股票A", "股票B", "股票C"],
         })
-        storage.write_event(table_id, df2, mode="append")
+        storage.write_event(table_id, df2, mode="append", sort_keys=["board_code", "board_name", "symbol"])
         
         read_df = storage.read_event(table_id)
         assert len(read_df) == 4, f"期望 4 行，实际 {len(read_df)}"
@@ -241,7 +260,7 @@ class TestParquetFlat:
             "symbol": ["sh.600000", "sz.000001", "sh.600000"],
             "stock_name": ["股票A", "股票B", "股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         assert storage.get_total_bars(table_id) == 3
 
@@ -256,7 +275,7 @@ class TestParquetFlat:
             "symbol": ["sh.600000"],
             "stock_name": ["股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         assert storage.get_global_time_range(table_id) == (0, 0)
 
@@ -271,6 +290,6 @@ class TestParquetFlat:
             "symbol": ["sh.600000"],
             "stock_name": ["股票A"],
         })
-        storage.write_event(table_id, df, mode="overwrite")
+        storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         assert storage.get_unique_timestamps(table_id) == []

@@ -33,7 +33,7 @@ def test_query_data_symbol_filter(mock_provider_manager):
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
-            response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&format=csv")
+            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=csv")
     
     assert response.status_code == 200
     data = response.json()
@@ -63,7 +63,7 @@ def test_query_data_timestamp_range(mock_provider_manager):
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
-            response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&start_date=2024-01-01&end_date=2024-01-02&format=csv")
+            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000,start:2024-01-01,end:2024-01-02&format=csv")
     
     assert response.status_code == 200
     data = response.json()
@@ -115,7 +115,7 @@ def test_query_data_no_files(mock_provider_manager):
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[]):  # 没有文件
             # 对于 TS, 必须带 symbol 才能过第一关校验
-            response = client.get(f"/api/v1/data/{table_id}?symbol=any&format=csv")
+            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:any&format=csv")
     
     assert response.status_code == 200
     data = response.json()
@@ -150,7 +150,7 @@ def test_query_data_parquet_format(mock_provider_manager):
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/parquet/{table_id}/year=2024"]):
-            response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&format=parquet")
+            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=parquet")
     
     assert response.status_code == 200
     data = response.json()
@@ -175,7 +175,7 @@ def test_query_data_limit_enforcement(mock_provider_manager):
     
     with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=1970"]):
-            response = client.get(f"/api/v1/data/{table_id}?symbol=sh.600000&format=csv")
+            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=csv")
     
     assert response.status_code == 200
     data = response.json()

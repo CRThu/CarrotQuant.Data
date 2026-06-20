@@ -64,8 +64,6 @@ class TestBoardCons:
         assert "stock_name" in df.columns
         assert "board_code" in df.columns
         assert "board_name" in df.columns
-        assert "datetime" in df.columns
-        assert "timestamp" in df.columns
         assert df["board_code"].unique().to_list() == [first_code]
         # symbol 格式验证：必须带 sh./sz./bj. 前缀
         for sym in df["symbol"].unique().to_list():

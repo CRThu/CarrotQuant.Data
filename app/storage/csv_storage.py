@@ -145,7 +145,7 @@ class CSVStorage(StorageManager):
             final_df.write_csv(tmp_path)
             os.replace(tmp_path, path)
 
-    def write_event(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
+    def write_event(self, table_id: str, df: pl.DataFrame, mode: str, sort_keys: list[str]):
         """
         写入事件数据 (EV)。
         - 有 timestamp 列: 按 year Hive 分区布局 + 全行去重
@@ -164,9 +164,7 @@ class CSVStorage(StorageManager):
             else:
                 merged_df = df
             
-            # 动态排序：取前两列作为排序键（跳过 symbol）
-            sort_cols = [c for c in df.columns if c != "symbol"][:2] + ["symbol"]
-            final_df = DataMerger.sort(merged_df, keys=sort_cols)
+            final_df = DataMerger.sort(merged_df, keys=sort_keys)
             
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = path.with_suffix(".tmp")
@@ -195,8 +193,7 @@ class CSVStorage(StorageManager):
                 # 首次写入或 Overwrite
                 merged_df = patch_df
             
-            # 显式使用 Time-First 排序，维护事件流
-            final_df = DataMerger.sort(merged_df, keys=["timestamp", "symbol"])
+            final_df = DataMerger.sort(merged_df, keys=sort_keys)
             
             # 统一路径创建与原子落盘
             path.parent.mkdir(parents=True, exist_ok=True)

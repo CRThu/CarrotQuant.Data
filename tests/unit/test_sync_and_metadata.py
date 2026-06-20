@@ -26,6 +26,9 @@ class FakeProvider(BaseProvider):
     def get_table_category(self, table_id):
         return "timeseries"
 
+    def get_sort_keys(self, table_id):
+        return ["timestamp"]
+
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         if symbol in self._data_map:
             return self._data_map[symbol]
@@ -53,6 +56,9 @@ class FakeEVProvider(BaseProvider):
 
     def get_table_category(self, table_id):
         return "event"
+
+    def get_sort_keys(self, table_id):
+        return ["timestamp", "symbol"]
 
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         if self._data_df is not None:

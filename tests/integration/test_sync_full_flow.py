@@ -17,6 +17,9 @@ class FakeProvider(BaseProvider):
     def get_table_category(self, table_id):
         return "timeseries"
 
+    def get_sort_keys(self, table_id):
+        return ["timestamp"]
+
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         # 简单根据 symbol 和日期生成 mock 数据
         data = {
@@ -158,6 +161,9 @@ def test_sync_empty_data_defense(temp_storage_root):
         
         def get_table_category(self, table_id):
             return "timeseries"
+        
+        def get_sort_keys(self, table_id):
+            return ["timestamp"]
         
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             return pl.DataFrame()

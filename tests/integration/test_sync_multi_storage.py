@@ -18,6 +18,9 @@ class FakeProvider(BaseProvider):
     def get_table_category(self, table_id):
         return "timeseries"
 
+    def get_sort_keys(self, table_id):
+        return ["timestamp"]
+
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         data = {
             "timestamp": [start_date, end_date],
@@ -139,6 +142,9 @@ def test_sync_multi_storage_symbol_consistency(temp_storage_root):
         def get_table_category(self, table_id):
             return "timeseries"
         
+        def get_sort_keys(self, table_id):
+            return ["timestamp"]
+        
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             data = {
                 "timestamp": [start_date, end_date],
@@ -217,6 +223,9 @@ def test_sync_multi_storage_atomic_fetch(temp_storage_root):
             
             def get_table_category(self, table_id):
                 return "timeseries"
+            
+            def get_sort_keys(self, table_id):
+                return ["timestamp"]
             
             def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
                 self.fetch_count += 1
@@ -301,6 +310,9 @@ def test_sync_multi_storage_concurrent_formats(temp_storage_root):
         
         def get_table_category(self, table_id):
             return "timeseries"
+        
+        def get_sort_keys(self, table_id):
+            return ["timestamp"]
         
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             data = {

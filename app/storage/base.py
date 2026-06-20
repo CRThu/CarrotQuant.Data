@@ -63,7 +63,7 @@ class StorageManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def write_event(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
+    def write_event(self, table_id: str, df: pl.DataFrame, mode: str, sort_keys: list[str]):
         """
         写入事件数据 (EV)。按 year 单文件布局存储，执行全行去重。
         
@@ -71,6 +71,7 @@ class StorageManager(abc.ABC):
             table_id: 表 ID
             df: 包含 timestamp 等字段的 DataFrame
             mode: 写入模式，支持 "overwrite" (覆盖) 或 "append" (增量)
+            sort_keys: 排序列列表，由 Provider 显式指定
         """
         pass
 

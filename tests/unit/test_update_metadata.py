@@ -23,6 +23,9 @@ class FakeTSProvider:
     def get_table_category(self, table_id):
         return "timeseries"
 
+    def get_sort_keys(self, table_id):
+        return ["timestamp"]
+
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         return pl.DataFrame({
             "timestamp": [start_date, end_date],
@@ -47,6 +50,9 @@ class FakeEVProvider:
     def get_table_category(self, table_id):
         return "event"
 
+    def get_sort_keys(self, table_id):
+        return ["timestamp", "symbol"]
+
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         return pl.DataFrame({
             "timestamp": [start_date, end_date],
@@ -67,6 +73,9 @@ class FakeEmptyProvider:
 
     def get_table_category(self, table_id):
         return "timeseries"
+
+    def get_sort_keys(self, table_id):
+        return ["timestamp"]
 
     def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
         return pl.DataFrame({

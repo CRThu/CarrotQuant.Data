@@ -67,6 +67,15 @@ class BaostockProvider(BaseProvider):
             raise ValueError(f"Table '{table_id}' is not supported by BaostockProvider.")
         return self._SUPPORTED_TABLE_MAP[table_id]
 
+    def get_sort_keys(self, table_id: str) -> list[str]:
+        """
+        返回指定 table_id 的排序列列表。
+        """
+        category = self.get_table_category(table_id)
+        if category == "timeseries":
+            return ["timestamp"]
+        return ["timestamp", "symbol"]
+
     def get_all_symbols(self, table_id: str) -> list[str]:
         """
         全量证券列表发现逻辑（基础信息库）。使用 query_stock_basic 获取全市场（含退市）的所有证券代码。

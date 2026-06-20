@@ -56,3 +56,16 @@ class BaseProvider(abc.ABC):
             str: 数据类别，"timeseries" 表示时间序列数据，"event" 表示事件数据。
         """
         pass
+
+    @abc.abstractmethod
+    def get_sort_keys(self, table_id: str) -> list[str]:
+        """
+        返回指定 table_id 的排序列列表。
+        
+        Args:
+            table_id: 表标识符
+            
+        Returns:
+            list[str]: 排序列列表，如 ["timestamp", "symbol"]
+        """
+        pass

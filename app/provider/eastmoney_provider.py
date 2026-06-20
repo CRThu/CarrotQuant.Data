@@ -257,6 +257,16 @@ class EastMoneyProvider(BaseProvider):
             raise ValueError(f"Table '{table_id}' is not supported by EastMoneyProvider.")
         return self._SUPPORTED_TABLE_MAP[table_id]
 
+    def get_sort_keys(self, table_id: str) -> list[str]:
+        """
+        返回指定 table_id 的排序列列表。
+        板块成分股无 timestamp，按 board_code, board_name, symbol 排序。
+        龙虎榜/机构交易有 timestamp，按 timestamp, symbol 排序。
+        """
+        if table_id in ("ashare.concept.eastmoney", "ashare.industry.eastmoney"):
+            return ["board_code", "board_name", "symbol"]
+        return ["timestamp", "symbol"]
+
     def get_all_symbols(self, table_id: str) -> list[str]:
         """发现全量代码。市场宽表返回 ['_ALL_']，板块成分股表返回板块代码列表。"""
         if table_id not in self.get_supported_tables():

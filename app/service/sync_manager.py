@@ -126,14 +126,15 @@ class SyncManager:
             if batch_dfs:
                 big_df = pl.concat(batch_dfs)
                 
-                # 获取表类别 (TS 或 EV)
+                # 获取表类别 (TS 或 EV) 和排序键
                 category = provider.get_table_category(table_id)
+                sort_keys = provider.get_sort_keys(table_id)
                 
                 for fmt, storage in storages.items():
                     logger.debug(f"[BATCH] Writing to storage: {fmt} (category={category})")
                     # 根据类别调用不同的写入方法
                     if category == "event":
-                        storage.write_event(table_id, big_df, mode="append")
+                        storage.write_event(table_id, big_df, mode="append", sort_keys=sort_keys)
                     else:
                         # 默认为 TS
                         storage.write_series(table_id, big_df, mode="append")
