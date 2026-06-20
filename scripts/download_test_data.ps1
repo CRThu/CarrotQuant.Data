@@ -20,6 +20,25 @@ uv run -m app.gateway.cli sync `
     --limit 10 `
     --output "./test_data_root"
 
+# 3. 下载东方财富板块成分股数据
+Write-Host ">>> 正在下载东方财富板块成分股数据 (概念/行业)..." -ForegroundColor Yellow
+uv run -m app.gateway.cli sync `
+    --tables "ashare.concept.eastmoney,ashare.industry.eastmoney" `
+    --formats "csv,parquet" `
+    --start "2021-01-01" `
+    --end "2025-12-31" `
+    --limit 5 `
+    --output "./test_data_root"
+
+# 4. 下载东方财富龙虎榜和机构交易数据
+Write-Host ">>> 正在下载东方财富龙虎榜和机构交易数据..." -ForegroundColor Yellow
+uv run -m app.gateway.cli sync `
+    --tables "ashare.dragon_tiger.eastmoney,ashare.inst_trade.eastmoney" `
+    --formats "csv,parquet" `
+    --start "2026-05-01" `
+    --end "2026-06-18" `
+    --output "./test_data_root"
+
 if ($LASTEXITCODE -eq 0) {
     Write-Host "--- 所有数据下载完成 ---" -ForegroundColor Green
 } else {

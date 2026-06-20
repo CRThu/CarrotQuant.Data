@@ -413,6 +413,10 @@ class EastMoneyProvider(BaseProvider):
             pl.lit(now_str).alias("datetime"),
             pl.lit(int(datetime.now().timestamp() * 1000)).alias("timestamp"),
         ])
+        # symbol 标准化
+        df = df.with_columns(
+            pl.col("symbol").map_elements(self._to_standard_symbol, return_dtype=pl.String).alias("symbol")
+        )
         # 核心列置前
         cols = list(df.columns)
         for col in ["symbol", "datetime", "timestamp"]:
@@ -473,6 +477,12 @@ class EastMoneyProvider(BaseProvider):
         # 重命名
         actual_rename = {k: v for k, v in self._LHB_FIELD_MAP.items() if k in df.columns}
         df = df.rename(actual_rename)
+
+        # symbol 标准化
+        if "symbol" in df.columns:
+            df = df.with_columns(
+                pl.col("symbol").map_elements(self._to_standard_symbol, return_dtype=pl.String)
+            )
 
         # 标准化时间轴
         if "trade_date" in df.columns:
@@ -536,6 +546,12 @@ class EastMoneyProvider(BaseProvider):
         # 重命名
         actual_rename = {k: v for k, v in self._INST_FIELD_MAP.items() if k in df.columns}
         df = df.rename(actual_rename)
+
+        # symbol 标准化
+        if "symbol" in df.columns:
+            df = df.with_columns(
+                pl.col("symbol").map_elements(self._to_standard_symbol, return_dtype=pl.String)
+            )
 
         # 标准化时间轴
         if "trade_date" in df.columns:
@@ -657,3 +673,16 @@ class EastMoneyProvider(BaseProvider):
             if clean.endswith(suffix):
                 clean = clean[:-len(suffix)]
         return clean
+
+    @staticmethod
+    def _to_standard_symbol(code: str) -> str:
+        """将纯数字股票代码转换为标准格式 (sh./sz./bj. 前缀)。
+
+        规则: 6开头 → sh, 8/4开头 → bj, 其余 → sz
+        """
+        code = code.strip()
+        if code.startswith("6"):
+            return f"sh.{code}"
+        elif code.startswith("8") or code.startswith("4"):
+            return f"bj.{code}"
+        return f"sz.{code}"

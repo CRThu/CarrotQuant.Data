@@ -428,6 +428,24 @@ class TestCleanCode:
         assert EastMoneyProvider._clean_code(input_code) == expected
 
 
+class TestToStandardSymbol:
+    """测试 _to_standard_symbol 工具方法。"""
+
+    @pytest.mark.parametrize("input_code,expected", [
+        ("600000", "sh.600000"),
+        ("601318", "sh.601318"),
+        ("000001", "sz.000001"),
+        ("002594", "sz.002594"),
+        ("300750", "sz.300750"),
+        ("830000", "bj.830000"),
+        ("430000", "bj.430000"),
+        (" 600000 ", "sh.600000"),
+    ])
+    def test_to_standard_symbol(self, input_code, expected):
+        """_to_standard_symbol 应将纯数字代码转换为标准格式。"""
+        assert EastMoneyProvider._to_standard_symbol(input_code) == expected
+
+
 # ---------------------------------------------------------------------------
 # 空数据防御
 # ---------------------------------------------------------------------------

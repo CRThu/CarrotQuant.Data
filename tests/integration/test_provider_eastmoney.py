@@ -67,6 +67,9 @@ class TestBoardCons:
         assert "datetime" in df.columns
         assert "timestamp" in df.columns
         assert df["board_code"].unique().to_list() == [first_code]
+        # symbol 格式验证：必须带 sh./sz./bj. 前缀
+        for sym in df["symbol"].unique().to_list():
+            assert sym.startswith(("sh.", "sz.", "bj.")), f"symbol 格式错误: {sym}"
         logger.info(f"板块 {first_code} 成分股数量: {len(df)}")
 
 
@@ -83,6 +86,9 @@ class TestDragonTiger:
         assert "symbol" in df.columns
         assert "datetime" in df.columns
         assert "timestamp" in df.columns
+        # symbol 格式验证
+        for sym in df["symbol"].unique().to_list():
+            assert sym.startswith(("sh.", "sz.", "bj.")), f"symbol 格式错误: {sym}"
         logger.info(f"龙虎榜数据量: {len(df)}")
 
     def test_dragon_tiger_timestamp_valid(self, provider):
@@ -134,6 +140,9 @@ class TestInstTrade:
         assert "symbol" in df.columns
         assert "datetime" in df.columns
         assert "timestamp" in df.columns
+        # symbol 格式验证
+        for sym in df["symbol"].unique().to_list():
+            assert sym.startswith(("sh.", "sz.", "bj.")), f"symbol 格式错误: {sym}"
         logger.info(f"机构交易数据量: {len(df)}")
 
     def test_inst_trade_timestamp_valid(self, provider):

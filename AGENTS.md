@@ -267,6 +267,7 @@ SyncManager.sync()
   - `_fetch_inst_trade()`: datacenter 机构交易，按月分批 + 自动分页
 - 日期默认值: `start_date=None` → `"2020-01-01"`, `end_date=None` → `datetime.now()`
 - 空数据防御: 创建 DataFrame 时指定 schema（所有列 String），空数据时也执行 cast 和时间标准化，与有数据时保持单一代码路径
+- symbol 标准化: `_to_standard_symbol()` 将纯数字代码转为 `sh./sz./bj.` 前缀格式（6→sh, 8/4→bj, 其余→sz），三处调用：板块成分股、龙虎榜、机构交易
 - 防封策略: curl_cffi TLS 指纹模拟 + 全局节流 + tenacity 自动重试
 
 **`app/provider/em_utils.py` — 东财 HTTP 工具**
@@ -756,6 +757,7 @@ tests/
 │   └── test_provider_eastmoney.py # EastMoneyProvider 东财驱动测试
 ├── integration/
 │   ├── test_provider_baostock.py  # Baostock 真实 API 测试 (需网络)
+│   ├── test_provider_eastmoney.py # EastMoneyProvider 东财驱动测试 (需网络)
 │   ├── test_sync_full_flow.py     # 全链路: 全量→增量→巡检→盖章
 │   ├── test_sync_defense.py       # 空数据防御/异常中断/Fail-Fast
 │   └── test_sync_multi_storage.py # 多格式一致性
