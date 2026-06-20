@@ -94,10 +94,23 @@ class ParquetStorage(StorageManager):
         
         return df.sort("timestamp")
 
-    def read_event(self, table_id: str, year: int) -> pl.DataFrame:
-        """
-        读取 EV 数据：读取该年份对应的全量 data.parquet 文件。
-        """
+    def _get_flat_event_path(self, table_id: str) -> Path:
+        """获取平铺 EV 数据文件路径（无 Hive 分区）。"""
+        return self.storage_root / table_id / "data.parquet"
+
+    def _is_flat_event(self, table_id: str) -> bool:
+        """判断该表是否使用平铺布局（无 timestamp 列的板块数据等）。"""
+        return self._get_flat_event_path(table_id).exists()
+
+    def read_event(self, table_id: str, year: int = None) -> pl.DataFrame:
+        """读取 EV 数据。优先检查平铺文件，其次按年份读取。"""
+        # 平铺模式
+        if self._is_flat_event(table_id):
+            path = self._get_flat_event_path(table_id)
+            return self._read_with_schema(table_id, path)
+        # Hive 分区模式
+        if year is None:
+            return pl.DataFrame()
         path = self._get_event_path(table_id, year)
         if not path.exists():
             return pl.DataFrame()
@@ -140,13 +153,34 @@ class ParquetStorage(StorageManager):
 
     def write_event(self, table_id: str, df: pl.DataFrame, mode: str = "append"):
         """
-        写入事件数据 (EV)。按 year 单文件布局存储，执行全行去重。
-        EV 模式采用年份单文件布局与全行去重。
+        写入事件数据 (EV)。
+        - 有 timestamp 列: 按 year Hive 分区布局 + 全行去重
+        - 无 timestamp 列: 平铺布局 + 全行去重 (板块成分股等静态列表)
         """
         if df.is_empty():
             return
 
-        # 提取年份用于分区
+        if "timestamp" not in df.columns:
+            # 平铺模式：无 Hive 分区，文件路径为 {root}/{table_id}/data.parquet
+            path = self._get_flat_event_path(table_id)
+            
+            if mode == "append" and path.exists():
+                old_df = self._read_with_schema(table_id, path, schema_override=df.schema)
+                merged_df = DataMerger.merge(old_df, df, subset=None)
+            else:
+                merged_df = df
+            
+            # 动态排序：取前两列作为排序键（跳过 symbol）
+            sort_cols = [c for c in df.columns if c != "symbol"][:2] + ["symbol"]
+            final_df = DataMerger.sort(merged_df, keys=sort_cols)
+            
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = path.with_suffix(".tmp")
+            final_df.write_parquet(tmp_path, compression="zstd")
+            os.replace(tmp_path, path)
+            return
+
+        # Hive 分区模式：提取年份用于分区
         df = df.with_columns(
             pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
         )
@@ -202,6 +236,11 @@ class ParquetStorage(StorageManager):
 
     def get_total_bars(self, table_id: str) -> int:
         """极速统计总行数 (基于 Parquet Metadata)"""
+        # 平铺模式
+        if self._is_flat_event(table_id):
+            path = self._get_flat_event_path(table_id)
+            return pl.scan_parquet(str(path)).select(pl.len()).collect().item()
+        # Hive 分区模式
         table_dir = self.storage_root / table_id
         pattern = table_dir / "year=*" / "*.parquet"
         if not any(table_dir.glob("year=*/*.parquet")):
@@ -211,6 +250,10 @@ class ParquetStorage(StorageManager):
 
     def get_global_time_range(self, table_id: str) -> tuple[int, int]:
         """计算数据集全局最小/最大时间戳"""
+        # 平铺模式（无 timestamp）返回 (0, 0)
+        if self._is_flat_event(table_id):
+            return (0, 0)
+        # Hive 分区模式
         table_dir = self.storage_root / table_id
         pattern = table_dir / "year=*" / "*.parquet"
         if not any(table_dir.glob("year=*/*.parquet")):
@@ -227,6 +270,10 @@ class ParquetStorage(StorageManager):
 
     def get_unique_timestamps(self, table_id: str) -> list[int]:
         """获取全局去重后的时间点"""
+        # 平铺模式（无 timestamp）返回空列表
+        if self._is_flat_event(table_id):
+            return []
+        # Hive 分区模式
         table_dir = self.storage_root / table_id
         pattern = table_dir / "year=*" / "*.parquet"
         if not any(table_dir.glob("year=*/*.parquet")):

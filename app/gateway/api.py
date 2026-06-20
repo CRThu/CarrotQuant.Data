@@ -93,16 +93,30 @@ async def get_active_tasks():
 @app.get("/api/v1/data/{table_id}")
 async def get_data(
     table_id: str,
-    symbol: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    filters: Optional[str] = None,
     format: str = "csv"
 ):
     """
     查询标准化后的数据。
-    TS 模式：必须提供 symbol，基于 [Symbol, Year] 物理路径极速定位。
-    EV 模式：返回全年事件流，支持在内存中按 symbol 灵活过滤。
+    
+    参数:
+        table_id: 表标识符
+        filters: 通用过滤条件，格式 key:value，多个用逗号分隔
+                  - symbol:sh.600000    按证券代码过滤 (TS 必填)
+                  - board_code:BK1717   按板块代码过滤
+                  - start:2024-01-01    起始日期
+                  - end:2024-12-31      结束日期
+                  例: "symbol:sh.600000,start:2024-01-01,end:2024-12-31"
+        format: 存储格式 csv/parquet
     """
+    # 1. 解析 filters 参数
+    filter_dict = {}
+    if filters:
+        for pair in filters.split(","):
+            if ":" in pair:
+                k, v = pair.split(":", 1)
+                filter_dict[k.strip()] = v.strip()
+
     try:
         storage = StorageFactory.get_storage(format, settings.STORAGE_ROOT)
         provider = ProviderManager().get_provider(table_id)
@@ -110,21 +124,25 @@ async def get_data(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # 1. 基础参数校验
-    if category == "timeseries" and not symbol:
-        raise HTTPException(status_code=400, detail="TS data query requires 'symbol' parameter.")
+    # 2. TS 必须提供 symbol
+    if category == "timeseries" and "symbol" not in filter_dict:
+        raise HTTPException(status_code=400, detail="TS data query requires 'symbol' in filters.")
 
-    # 2. 定位可用年份
+    # 3. 提取时间参数
+    start_date = filter_dict.pop("start", None)
+    end_date = filter_dict.pop("end", None)
+    start_ts = parse_date_to_ts(start_date) if start_date else None
+    end_ts = parse_date_to_ts(end_date) if end_date else None
+
+    # 4. 定位可用年份
     table_path = Path(settings.STORAGE_ROOT) / format / table_id
+    flat_file = table_path / "data.csv" if format == "csv" else table_path / "data.parquet"
     year_dirs = sorted(glob.glob(str(table_path / "year=*")))
-    if not year_dirs:
+    
+    if not year_dirs and not flat_file.exists():
         return {"table_id": table_id, "format": format, "data": [], "message": "No data files found."}
 
     years = [int(p.split("=")[-1]) for p in year_dirs]
-    
-    # 3. 构造查询范围
-    start_ts = parse_date_to_ts(start_date) if start_date else None
-    end_ts = parse_date_to_ts(end_date) if end_date else None
     
     # 缩小年份扫描范围
     if start_date:
@@ -140,20 +158,22 @@ async def get_data(
     
     try:
         if category == "timeseries":
-            # TS 逻辑：直接查询
+            # TS 逻辑：直接按 symbol 查询
+            symbol = filter_dict.pop("symbol")
             for year in years:
                 df = storage.read_series(table_id, symbol, year)
                 if not df.is_empty():
                     all_dfs.append(df)
+        elif flat_file.exists():
+            # 平铺 EV 逻辑：直接读取单文件
+            df = storage.read_event(table_id)
+            if not df.is_empty():
+                all_dfs.append(df)
         else:
-            # EV 逻辑：读取全量并可选过滤
+            # Hive 分区 EV 逻辑：读取全量
             for year in years:
                 df = storage.read_event(table_id, year)
                 if not df.is_empty():
-                    if symbol:
-                        # 内存过滤：若用户在 API 请求中传入了 symbol 参数
-                        if "symbol" in df.columns:
-                            df = df.filter(pl.col("symbol") == symbol)
                     all_dfs.append(df)
 
         if not all_dfs:
@@ -161,14 +181,22 @@ async def get_data(
 
         final_df = pl.concat(all_dfs)
         
-        # 4. 应用时间过滤
-        if start_ts is not None:
-            final_df = final_df.filter(pl.col("timestamp") >= start_ts)
-        if end_ts is not None:
-            final_df = final_df.filter(pl.col("timestamp") <= end_ts)
+        # 5. 应用字段过滤条件
+        for key, value in filter_dict.items():
+            if key in final_df.columns:
+                final_df = final_df.filter(pl.col(key) == value)
+        
+        # 6. 应用时间过滤（仅在有 timestamp 列时）
+        if "timestamp" in final_df.columns:
+            if start_ts is not None:
+                final_df = final_df.filter(pl.col("timestamp") >= start_ts)
+            if end_ts is not None:
+                final_df = final_df.filter(pl.col("timestamp") <= end_ts)
             
-        # 5. 排序与限制
-        final_df = final_df.sort("timestamp").limit(1000)
+        # 7. 排序与限制
+        if "timestamp" in final_df.columns:
+            final_df = final_df.sort("timestamp")
+        final_df = final_df.limit(1000)
         
         return {
             "table_id": table_id,

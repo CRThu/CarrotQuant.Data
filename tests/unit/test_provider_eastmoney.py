@@ -216,8 +216,8 @@ class TestFetchRouting:
     def test_fetch_concept_routes_to_cons(self, provider):
         """concept 应路由到 _fetch_board_cons_df。"""
         empty_df = pl.DataFrame(schema={
-            "symbol": pl.String, "stock_name": pl.String, "board_code": pl.String, "board_name": pl.String,
-            "datetime": pl.String, "timestamp": pl.Int64,
+            "board_code": pl.String, "board_name": pl.String,
+            "symbol": pl.String, "stock_name": pl.String,
         })
         with patch.object(provider, "_fetch_board_cons_df", return_value=empty_df) as mock:
             provider.fetch("ashare.concept.eastmoney", "BK0001", "2024-01-01", "2024-12-31")
@@ -226,8 +226,8 @@ class TestFetchRouting:
     def test_fetch_industry_routes_to_cons(self, provider):
         """industry 应路由到 _fetch_board_cons_df。"""
         empty_df = pl.DataFrame(schema={
-            "symbol": pl.String, "stock_name": pl.String, "board_code": pl.String, "board_name": pl.String,
-            "datetime": pl.String, "timestamp": pl.Int64,
+            "board_code": pl.String, "board_name": pl.String,
+            "symbol": pl.String, "stock_name": pl.String,
         })
         with patch.object(provider, "_fetch_board_cons_df", return_value=empty_df) as mock:
             provider.fetch("ashare.industry.eastmoney", "BK0010", "2024-01-01", "2024-12-31")
@@ -301,15 +301,20 @@ class TestBoardConsFetch:
                 assert df["board_name"].unique().to_list() == ["板块A"]
 
     def test_fetch_board_cons_df_has_standard_columns(self, provider, sample_board_cons):
-        """成分股 DataFrame 应包含 symbol, datetime, timestamp 标准列。"""
+        """成分股 DataFrame 应包含 board_code, board_name, symbol, stock_name，无时间列。"""
         with patch("app.provider.eastmoney_provider.em_push2") as mock_push2:
             mock_push2.return_value.json.return_value = sample_board_cons
             with patch.object(provider, "_fetch_board_list", return_value={"BK0001": "板块A"}):
                 df = provider._fetch_board_cons_df("concept", "BK0001")
+                # 板块成分股为静态列表，不含 timestamp/datetime
                 assert "symbol" in df.columns
-                assert "datetime" in df.columns
-                assert "timestamp" in df.columns
                 assert "stock_name" in df.columns
+                assert "board_code" in df.columns
+                assert "board_name" in df.columns
+                assert "timestamp" not in df.columns
+                assert "datetime" not in df.columns
+                # 列顺序: [board_code, board_name, symbol, stock_name]
+                assert df.columns == ["board_code", "board_name", "symbol", "stock_name"]
 
 
 # ---------------------------------------------------------------------------
@@ -454,7 +459,7 @@ class TestEmptyDataDefense:
     """测试空数据场景的防御性处理。"""
 
     def test_empty_board_cons(self, provider):
-        """空成分股应返回空 DataFrame 且 schema 正确。"""
+        """空成分股应返回空 DataFrame 且 schema 正确（无时间列）。"""
         empty_response = {"data": {"total": 0, "diff": []}}
         with patch("app.provider.eastmoney_provider.em_push2") as mock_push2:
             mock_push2.return_value.json.return_value = empty_response
@@ -464,6 +469,8 @@ class TestEmptyDataDefense:
                 assert df.schema["symbol"] == pl.String
                 assert df.schema["board_code"] == pl.String
                 assert df.schema["board_name"] == pl.String
+                assert "timestamp" not in df.columns
+                assert "datetime" not in df.columns
 
     def test_empty_datacenter_response(self, provider):
         """空 datacenter 响应应返回空 DataFrame 且 schema 正确，时区已归一化。"""

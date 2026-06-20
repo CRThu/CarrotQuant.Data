@@ -394,7 +394,11 @@ class EastMoneyProvider(BaseProvider):
         ]
 
     def _fetch_board_cons_df(self, board_type: str, board_code: str) -> pl.DataFrame:
-        """拉取板块成分股，返回标准化 Polars DataFrame。"""
+        """拉取板块成分股，返回标准化 Polars DataFrame。
+
+        板块成分股为静态列表数据，无事件时间属性，不生成 timestamp/datetime 列。
+        主键: [board_code, symbol]，列顺序: [board_code, board_name, symbol, stock_name]
+        """
         cons = self._fetch_board_cons(board_type, board_code)
         # 创建 DataFrame，指定 schema（空数据时也保持列结构）
         cons_cols = list(self._CONS_FIELD_MAP.values())
@@ -407,23 +411,12 @@ class EastMoneyProvider(BaseProvider):
             pl.lit(board_code).alias("board_code"),
             pl.lit(board_name).alias("board_name"),
         ])
-        # 添加展示时间列
-        now_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000+08:00")
-        df = df.with_columns([
-            pl.lit(now_str).alias("datetime"),
-            pl.lit(int(datetime.now().timestamp() * 1000)).alias("timestamp"),
-        ])
         # symbol 标准化
         df = df.with_columns(
             pl.col("symbol").map_elements(self._to_standard_symbol, return_dtype=pl.String).alias("symbol")
         )
-        # 核心列置前
-        cols = list(df.columns)
-        for col in ["symbol", "datetime", "timestamp"]:
-            if col in cols:
-                cols.remove(col)
-                cols.insert(0, col)
-        return df.select(cols)
+        # 主键列置前: [board_code, board_name, symbol, stock_name]
+        return df.select(["board_code", "board_name", "symbol", "stock_name"])
 
     # -----------------------------------------------------------------------
     # 龙虎榜

@@ -24,9 +24,10 @@ class DataMerger:
         if new_df.is_empty():
             return old_df
 
-        # 确保 timestamp 类型一致 (Int64)
-        old_df = old_df.with_columns(pl.col("timestamp").cast(pl.Int64))
-        new_df = new_df.with_columns(pl.col("timestamp").cast(pl.Int64))
+        # 确保 timestamp 类型一致 (Int64)，无 timestamp 列时跳过
+        if "timestamp" in old_df.columns:
+            old_df = old_df.with_columns(pl.col("timestamp").cast(pl.Int64))
+            new_df = new_df.with_columns(pl.col("timestamp").cast(pl.Int64))
 
         combined_df = pl.concat([old_df, new_df])
         

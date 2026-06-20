@@ -1,5 +1,6 @@
 from loguru import logger
 import polars as pl
+from pathlib import Path
 from .task_planner import TaskPlanner
 from ..provider.provider_manager import ProviderManager
 from .metadata_manager import MetadataManager
@@ -185,13 +186,19 @@ class SyncManager:
         # 6. 根据 category 分类构建统计结构
         category = storage.category
         
+        # 动态判断 layout：平铺文件存在时为 "flat"，否则为 "hive"
+        table_path = Path(self.storage_root) / format / table_id
+        flat_csv = table_path / "data.csv"
+        flat_pq = table_path / "data.parquet"
+        layout = "flat" if flat_csv.exists() or flat_pq.exists() else "hive"
+        
         # 补充存储元信息（平铺在第一级）
         metadata = {
             "table_id": table_id,
             "category": category,
             "format": format,
             "partition": storage.partition,
-            "layout": storage.layout,
+            "layout": layout,
             "schema": schema_dict,
             "statistics": {} # 稍后填充
         }
@@ -208,6 +215,11 @@ class SyncManager:
                 "total_bars": total_bars,
                 "symbol_count": len(all_symbols),
                 "time_steps": len(unique_tss)
+            }
+        elif start_ts == 0 and end_ts == 0:
+            # 平铺模式（无 timestamp）：仅保留基础统计
+            metadata["statistics"] = {
+                "total_bars": total_bars
             }
         else:
             # EV 类别：跳过全量扫描，仅保留基础统计 (0 IO 扫描)
