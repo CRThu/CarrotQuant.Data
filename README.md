@@ -63,7 +63,10 @@ graph TB
         PQ["ParquetStorage"]
     end
 
-    Gateway --> SM
+    CLI --> SM
+    API --> SM
+    WIZARD --> SM
+
     SM --> TP
     SM --> PM
     SM --> SF
