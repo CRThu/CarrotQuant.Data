@@ -59,7 +59,77 @@ CarrotQuant.Data/
 
 ---
 
-## 3. 数据流：一次同步的完整链路
+## 3. 系统架构
+
+### 3.1 分层架构图
+
+```mermaid
+graph TB
+    subgraph Gateway["Gateway 接入层"]
+        CLI["cli.py<br/>(Typer CLI)"]
+        API["api.py<br/>(FastAPI)"]
+        WIZARD["wizard.py<br/>(交互向导)"]
+    end
+
+    subgraph Service["Service 业务逻辑层"]
+        SM["SyncManager<br/>同步总调度"]
+        TP["TaskPlanner<br/>任务规划器"]
+        MM["MetadataManager<br/>元数据 IO"]
+    end
+
+    subgraph Provider["Provider 数据采集层"]
+        PM["ProviderManager<br/>单例工厂"]
+        BP["BaostockProvider<br/>Baostock 驱动"]
+        DC["DataCleaner<br/>时间标准化"]
+    end
+
+    subgraph Storage["Storage 持久化层"]
+        SF["StorageFactory<br/>格式工厂"]
+        CSV["CSVStorage<br/>按 symbol 分片"]
+        PQ["ParquetStorage<br/>年度大表"]
+        DM["DataMerger<br/>去重/排序"]
+    end
+
+    subgraph External["外部依赖"]
+        BAOSTOCK["Baostock API"]
+    end
+
+    subgraph Disk["磁盘存储"]
+        CSV_FILES[("CSV 文件<br/>year=yyyy/{symbol}.csv")]
+        PQ_FILES[("Parquet 文件<br/>year=yyyy/data.parquet")]
+        META[("metadata.json")]
+    end
+
+    CLI --> SM
+    API --> SM
+    WIZARD --> SM
+
+    SM -->|"① get_provider()"| PM
+    SM -->|"② plan()"| TP
+    SM -->|"③ get_storage()"| SF
+    SM -->|"④ write_series()/write_event()"| CSV
+    SM -->|"④ write_series()/write_event()"| PQ
+    SM -->|"⑤ save()"| MM
+
+    TP -->|"load()"| MM
+
+    PM -->|"实例化+缓存"| BP
+    BP -->|"standardize()"| DC
+    BP -->|"query()"| BAOSTOCK
+
+    SF -->|"format=csv"| CSV
+    SF -->|"format=parquet"| PQ
+
+    CSV -->|"merge()/sort()"| DM
+    PQ -->|"merge()/sort()"| DM
+
+    CSV -->|"原子落盘"| CSV_FILES
+    PQ -->|"原子落盘"| PQ_FILES
+    MM -->|"原子落盘"| META
+    MM -->|"load()"| META
+```
+
+### 3.2 数据流：一次同步的完整链路
 
 ```
 用户请求 (CLI/API/Wizard)

@@ -13,7 +13,7 @@ CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的
 - **现代化多入口支持**：
   - 提供简单直观的 **同步向导 (Wizard)** 供快速交互使用。
   - 健壮的 **命令行工具 (CLI)** 供自动化调度（如 Crontab 等定时任务）无缝集成。
-  - 基于 FastAPI 预留的 **API 网关接口（API Gateway）** 规划（可用于远程调用获取数据服务）。
+  - 基于 FastAPI 的 **REST API 网关**，支持远程触发同步、查询数据与任务状态。
 - **优秀的底层性能**：使用 [Polars](https://pola.rs/) 库进行高性能的数据加工和清洗。
 
 ## 📁 目录结构 (Project Structure)
@@ -32,7 +32,46 @@ CarrotQuant.Data/
 ├── tests/            # 单元测试与集成测试
 ├── config/           # 项目配置文件存放目录
 ├── logs/             # 系统运行日志目录
+├── AGENTS.md         # AI Agent 架构指南（分层架构、数据流、开发约束）
 └── pyproject.toml    # 项目的构建及依赖配置 (uv/pip)
+```
+
+## 🏗️ 系统架构
+
+```mermaid
+graph TB
+    subgraph Gateway["接入层"]
+        CLI["CLI"]
+        API["API"]
+        WIZARD["Wizard"]
+    end
+
+    subgraph Service["业务层"]
+        SM["SyncManager"]
+        TP["TaskPlanner"]
+        MM["MetadataManager"]
+    end
+
+    subgraph Provider["采集层"]
+        PM["ProviderManager"]
+        BP["BaostockProvider"]
+    end
+
+    subgraph Storage["存储层"]
+        SF["StorageFactory"]
+        CSV["CSVStorage"]
+        PQ["ParquetStorage"]
+    end
+
+    Gateway --> SM
+    SM --> TP
+    SM --> PM
+    SM --> SF
+    TP --> MM
+    SM --> MM
+    PM --> BP
+    SF --> CSV
+    SF --> PQ
 ```
 
 ## 🛠️ 安装指南 (Installation)
@@ -85,6 +124,20 @@ uv run python -m app.gateway.cli sync \
 - `--formats` / `-f`: 选填，保存格式，如 `csv,parquet`。
 - `--start` / `-s` & `--end` / `-e`: 选填，同步的时间范围，留空则是自动续接水位线增量同步。
 - `--force`: 选填。加上该标记则强制覆盖全量刷新。
+
+### 方式三：启动 API 服务
+
+```bash
+uv run python -m app.gateway.cli server --port 8000
+```
+
+启动后可通过 REST API 进行远程操作：
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/v1/sync` | POST | 异步触发数据同步 |
+| `/api/v1/tasks` | GET | 查询活跃同步任务 |
+| `/api/v1/data/{table_id}` | GET | 查询已同步的数据 |
 
 ## 📝 许可证 (License)
 
