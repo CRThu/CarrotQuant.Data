@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 import polars as pl
 from app.storage.csv_storage import CSVStorage
@@ -387,3 +388,84 @@ def test_csv_storage_ev_no_symbol(temp_storage_root):
     # 测试 get_all_symbols 方法（应该返回空列表，因为没有 symbol 列）
     symbols = storage.get_all_symbols(table_id)
     assert symbols == [], f"期望返回空列表，实际得到 {symbols}"
+
+
+def test_csv_read_without_metadata_raises(temp_storage_root):
+    """
+    测试 CSV 读取无 metadata.json 时应抛出 RuntimeError
+    """
+    import os
+    storage = CSVStorage(str(temp_storage_root / "csv"))
+    table_id = "test.csv.no_metadata"
+
+    # 手动创建 CSV 文件但不创建 metadata.json
+    year_dir = temp_storage_root / "csv" / table_id / "year=2024"
+    year_dir.mkdir(parents=True, exist_ok=True)
+    csv_file = year_dir / "sh.600000.csv"
+
+    # 写入原始 CSV（不经过 write_series 以绕过 metadata）
+    df = pl.DataFrame({
+        "timestamp": [1704067200000],
+        "datetime": ["2024-01-01T00:00:00.000+08:00"],
+        "symbol": ["sh.600000"],
+        "close": [10.0]
+    })
+    df.write_csv(csv_file)
+
+    # 读取应抛出 RuntimeError（因为没有 metadata.json 提供 schema）
+    with pytest.raises(RuntimeError) as exc_info:
+        storage.read_series(table_id, "sh.600000", 2024)
+    assert "Metadata not found" in str(exc_info.value)
+
+
+def test_csv_read_with_schema_override(temp_storage_root):
+    """
+    测试 CSV 读取支持 schema_override 参数（跳过 metadata 加载）
+    """
+    storage = CSVStorage(str(temp_storage_root / "csv"))
+    table_id = "test.csv.schema_override"
+
+    df = pl.DataFrame({
+        "timestamp": [1704067200000],
+        "datetime": ["2024-01-01T00:00:00.000+08:00"],
+        "symbol": ["sh.600000"],
+        "close": [10.0]
+    })
+    storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
+
+    # 读取时传入 schema_override，应跳过 metadata 加载
+    path = storage._get_series_path(table_id, "sh.600000", 2024)
+    read_df = storage._read_with_schema(table_id, path, schema_override={"timestamp": pl.Int64, "datetime": pl.String, "symbol": pl.String, "close": pl.Float64})
+    assert len(read_df) == 1
+    assert read_df["close"][0] == 10.0
+
+
+def test_csv_write_series_with_schema_cast(temp_storage_root):
+    """
+    测试 CSV 写入后的数据类型一致性
+    """
+    storage = CSVStorage(str(temp_storage_root / "csv"))
+    table_id = "test.csv.schema_cast"
+
+    df = pl.DataFrame({
+        "timestamp": [1704067200000, 1704153600000],
+        "datetime": ["2024-01-01T00:00:00.000+08:00", "2024-01-02T00:00:00.000+08:00"],
+        "symbol": ["sh.600000", "sh.600000"],
+        "open": [10.0, 10.5],
+        "high": [10.5, 11.0],
+        "low": [9.5, 10.0],
+        "close": [10.2, 10.8],
+        "volume": [1000000, 1100000]
+    })
+    storage.write_series(table_id, df)
+    _stamp_metadata(storage, table_id, df)
+
+    # 读取后验证所有数值列的类型（CSV 读取按 metadata schema cast）
+    read_df = storage.read_series(table_id, "sh.600000", 2024)
+    assert read_df["timestamp"].dtype == pl.Int64
+    assert read_df["open"].dtype == pl.Float64
+    assert read_df["high"].dtype == pl.Float64
+    assert read_df["low"].dtype == pl.Float64
+    assert read_df["close"].dtype == pl.Float64
+    assert read_df["symbol"].dtype == pl.String
