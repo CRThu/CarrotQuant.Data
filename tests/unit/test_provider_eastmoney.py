@@ -20,10 +20,23 @@ from app.provider.provider_manager import ProviderManager
 # Fixtures
 # ---------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def _reset_provider_manager():
+    """每个测试前后清理 ProviderManager singleton，防止泄漏。"""
+    ProviderManager._instance = None
+    ProviderManager._providers = {}
+    yield
+    ProviderManager._instance = None
+    ProviderManager._providers = {}
+
+
 @pytest.fixture
 def provider():
-    """创建 EastMoneyProvider 实例。"""
-    return EastMoneyProvider()
+    """创建 EastMoneyProvider 实例，清理 board_name_cache。"""
+    EastMoneyProvider._board_name_cache.clear()
+    p = EastMoneyProvider()
+    yield p
+    EastMoneyProvider._board_name_cache.clear()
 
 
 @pytest.fixture
@@ -41,29 +54,61 @@ def sample_board_cons():
 
 
 @pytest.fixture
-def sample_datacenter_response():
-    """模拟 datacenter 龙虎榜/机构交易响应。"""
-    return {
-        "result": {
-            "count": 2,
-            "data": [
-                {
-                    "SECURITY_CODE": "000001",
-                    "SECURITY_NAME_ABBR": "测试股票A",
-                    "TRADE_DATE": "2026-06-18 00:00:00",
-                    "CLOSE_PRICE": 10.5,
-                    "CHANGE_RATE": 2.5,
-                },
-                {
-                    "SECURITY_CODE": "000002",
-                    "SECURITY_NAME_ABBR": "测试股票B",
-                    "TRADE_DATE": "2026-06-18 00:00:00",
-                    "CLOSE_PRICE": 20.0,
-                    "CHANGE_RATE": -1.2,
-                },
-            ]
-        }
-    }
+def sample_lhb_data():
+    """模拟 datacenter 龙虎榜完整字段响应（包含全部 20 个映射字段）。"""
+    return [
+        {
+            "SECURITY_CODE": "000001",
+            "SECURITY_NAME_ABBR": "测试股票A",
+            "TRADE_DATE": "2026-06-18 00:00:00",
+            "EXPLAIN": "买一主买",
+            "CLOSE_PRICE": 10.5,
+            "CHANGE_RATE": 2.5,
+            "BILLBOARD_NET_AMT": 1000000,
+            "BILLBOARD_BUY_AMT": 2000000,
+            "BILLBOARD_SELL_AMT": 1000000,
+            "BILLBOARD_DEAL_AMT": 3000000,
+            "ACCUM_AMOUNT": 50000000,
+            "DEAL_NET_RATIO": 0.02,
+            "DEAL_AMOUNT_RATIO": 0.06,
+            "TURNOVERRATE": 1.5,
+            "FREE_MARKET_CAP": 30000000000,
+            "EXPLANATION": "日涨幅偏离值达7%的证券",
+            "D1_CLOSE_ADJCHRATE": 1.2,
+            "D2_CLOSE_ADJCHRATE": -0.5,
+            "D5_CLOSE_ADJCHRATE": 3.1,
+            "D10_CLOSE_ADJCHRATE": -1.0,
+        },
+    ]
+
+
+@pytest.fixture
+def sample_inst_data():
+    """模拟 datacenter 机构交易完整字段响应（包含全部 20 个映射字段）。"""
+    return [
+        {
+            "SECURITY_CODE": "000001",
+            "SECURITY_NAME_ABBR": "测试股票A",
+            "TRADE_DATE": "2026-06-18 00:00:00",
+            "CLOSE_PRICE": 10.5,
+            "CHANGE_RATE": 2.5,
+            "BUY_TIMES": 3,
+            "SELL_TIMES": 1,
+            "BUY_AMT": 5000000,
+            "SELL_AMT": 1000000,
+            "NET_BUY_AMT": 4000000,
+            "ACCUM_AMOUNT": 50000000,
+            "RATIO": 0.08,
+            "TURNOVERRATE": 1.5,
+            "FREECAP": 30000000000,
+            "EXPLANATION": "日涨幅偏离值达7%的证券",
+            "D1_CLOSE_ADJCHRATE": 1.2,
+            "D2_CLOSE_ADJCHRATE": -0.5,
+            "D3_CLOSE_ADJCHRATE": 0.8,
+            "D5_CLOSE_ADJCHRATE": 3.1,
+            "D10_CLOSE_ADJCHRATE": -1.0,
+        },
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +142,16 @@ class TestProviderRegistration:
         """不支持的 table_id 应抛出 ValueError。"""
         with pytest.raises(ValueError, match="not supported"):
             provider.get_table_category("ashare.kline.1d.baostock")
+
+    def test_fetch_unsupported_table_raises(self, provider):
+        """fetch 不支持的 table_id 应抛出 ValueError。"""
+        with pytest.raises(ValueError, match="not supported"):
+            provider.fetch("ashare.kline.1d.baostock", "sh.600000", "2024-01-01", "2024-12-31")
+
+    def test_get_all_symbols_unsupported_table_raises(self, provider):
+        """get_all_symbols 不支持的 table_id 应抛出 ValueError。"""
+        with pytest.raises(ValueError, match="not supported"):
+            provider.get_all_symbols("ashare.kline.1d.baostock")
 
 
 # ---------------------------------------------------------------------------
@@ -264,27 +319,33 @@ class TestBoardConsFetch:
 class TestDragonTigerFetch:
     """测试龙虎榜拉取与数据转换。"""
 
-    def test_fetch_dragon_tiger_returns_polars(self, provider, sample_datacenter_response):
+    def test_fetch_dragon_tiger_returns_polars(self, provider, sample_lhb_data):
         """_fetch_dragon_tiger 应返回 Polars DataFrame。"""
-        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_datacenter_response["result"]["data"]):
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_lhb_data):
             df = provider._fetch_dragon_tiger("2026-06-18", "2026-06-18")
             assert isinstance(df, pl.DataFrame)
 
-    def test_fetch_dragon_tiger_has_standard_columns(self, provider, sample_datacenter_response):
+    def test_fetch_dragon_tiger_has_standard_columns(self, provider, sample_lhb_data):
         """龙虎榜 DataFrame 应包含 symbol, datetime, timestamp 标准列。"""
-        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_datacenter_response["result"]["data"]):
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_lhb_data):
             df = provider._fetch_dragon_tiger("2026-06-18", "2026-06-18")
             assert "symbol" in df.columns
             assert "datetime" in df.columns
             assert "timestamp" in df.columns
 
-    def test_fetch_dragon_tiger_renames_columns(self, provider, sample_datacenter_response):
-        """龙虎榜应将东财字段名重命名为标准英文名。"""
-        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_datacenter_response["result"]["data"]):
+    def test_fetch_dragon_tiger_renames_all_fields(self, provider, sample_lhb_data):
+        """龙虎榜应将全部东财字段重命名为 snake_case (trade_date 被 DataCleaner 消费后移除)。"""
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_lhb_data):
             df = provider._fetch_dragon_tiger("2026-06-18", "2026-06-18")
-            assert "stock_name" in df.columns
-            assert "close_price" in df.columns
-            assert "change_pct" in df.columns
+            expected_renames = [
+                "symbol", "stock_name", "explain", "close_price",
+                "change_rate", "net_amount", "buy_amount", "sell_amount", "deal_amount",
+                "market_amount", "deal_net_ratio", "deal_amount_ratio", "turnover_rate",
+                "float_market_cap", "explanation",
+                "day1_change_rate", "day2_change_rate", "day5_change_rate", "day10_change_rate",
+            ]
+            for col in expected_renames:
+                assert col in df.columns, f"缺少字段: {col}"
 
     def test_fetch_dragon_tiger_empty_response(self, provider):
         """空响应应返回空 DataFrame 且包含正确 schema。"""
@@ -292,6 +353,14 @@ class TestDragonTigerFetch:
             df = provider._fetch_dragon_tiger("2026-06-18", "2026-06-18")
             assert df.is_empty()
             assert "symbol" in df.columns
+
+    def test_fetch_dragon_tiger_none_dates_use_defaults(self, provider, sample_lhb_data):
+        """start_date/end_date 为 None 时应使用默认日期。"""
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_lhb_data) as mock:
+            provider._fetch_dragon_tiger(None, None)
+            args = mock.call_args
+            assert args[0][2] == "2020-01-01"
+            assert isinstance(args[0][3], str)
 
 
 # ---------------------------------------------------------------------------
@@ -301,27 +370,42 @@ class TestDragonTigerFetch:
 class TestInstTradeFetch:
     """测试机构交易拉取与数据转换。"""
 
-    def test_fetch_inst_trade_returns_polars(self, provider, sample_datacenter_response):
+    def test_fetch_inst_trade_returns_polars(self, provider, sample_inst_data):
         """_fetch_inst_trade 应返回 Polars DataFrame。"""
-        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_datacenter_response["result"]["data"]):
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_inst_data):
             df = provider._fetch_inst_trade("2026-06-18", "2026-06-18")
             assert isinstance(df, pl.DataFrame)
 
-    def test_fetch_inst_trade_has_standard_columns(self, provider, sample_datacenter_response):
+    def test_fetch_inst_trade_has_standard_columns(self, provider, sample_inst_data):
         """机构交易 DataFrame 应包含 symbol, datetime, timestamp 标准列。"""
-        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_datacenter_response["result"]["data"]):
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_inst_data):
             df = provider._fetch_inst_trade("2026-06-18", "2026-06-18")
             assert "symbol" in df.columns
             assert "datetime" in df.columns
             assert "timestamp" in df.columns
 
-    def test_fetch_inst_trade_renames_columns(self, provider, sample_datacenter_response):
-        """机构交易应将东财字段名重命名为标准英文名。"""
-        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_datacenter_response["result"]["data"]):
+    def test_fetch_inst_trade_renames_all_fields(self, provider, sample_inst_data):
+        """机构交易应将全部东财字段重命名为 snake_case (trade_date 被 DataCleaner 消费后移除)。"""
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_inst_data):
             df = provider._fetch_inst_trade("2026-06-18", "2026-06-18")
-            assert "stock_name" in df.columns
-            assert "close_price" in df.columns
-            assert "change_pct" in df.columns
+            expected_renames = [
+                "symbol", "stock_name", "close_price", "change_rate",
+                "buy_times", "sell_times", "buy_amount", "sell_amount",
+                "net_buy_amount", "market_amount", "ratio", "turnover_rate",
+                "float_market_cap", "explanation",
+                "day1_change_rate", "day2_change_rate", "day3_change_rate",
+                "day5_change_rate", "day10_change_rate",
+            ]
+            for col in expected_renames:
+                assert col in df.columns, f"缺少字段: {col}"
+
+    def test_fetch_inst_trade_none_dates_use_defaults(self, provider, sample_inst_data):
+        """start_date/end_date 为 None 时应使用默认日期。"""
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_inst_data) as mock:
+            provider._fetch_inst_trade(None, None)
+            args = mock.call_args
+            assert args[0][2] == "2020-01-01"
+            assert isinstance(args[0][3], str)
 
 
 # ---------------------------------------------------------------------------
@@ -364,9 +448,35 @@ class TestEmptyDataDefense:
                 assert df.schema["board_name"] == pl.String
 
     def test_empty_datacenter_response(self, provider):
-        """空 datacenter 响应应返回空 DataFrame 且 schema 正确。"""
+        """空 datacenter 响应应返回空 DataFrame 且 schema 正确，时区已归一化。"""
         with patch.object(provider, "_fetch_datacenter_paginated", return_value=[]):
             df = provider._fetch_dragon_tiger("2026-06-18", "2026-06-18")
             assert df.is_empty()
+            # 验证核心列类型
             assert df.schema["symbol"] == pl.String
+            assert df.schema["datetime"] == pl.String
             assert df.schema["timestamp"] == pl.Int64
+            # 验证列顺序：symbol, datetime, timestamp 在最前
+            front_cols = df.columns[:3]
+            assert front_cols == ["symbol", "datetime", "timestamp"]
+            # 验证数值列类型（经过 cast 转换）
+            assert df.schema["close_price"] == pl.Float64
+            assert df.schema["net_amount"] == pl.Float64
+            assert df.schema["turnover_rate"] == pl.Float64
+
+    def test_empty_inst_trade_response(self, provider):
+        """空机构交易响应应返回空 DataFrame 且 schema 正确，时区已归一化。"""
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=[]):
+            df = provider._fetch_inst_trade("2026-06-18", "2026-06-18")
+            assert df.is_empty()
+            # 验证核心列类型
+            assert df.schema["symbol"] == pl.String
+            assert df.schema["datetime"] == pl.String
+            assert df.schema["timestamp"] == pl.Int64
+            # 验证列顺序：symbol, datetime, timestamp 在最前
+            front_cols = df.columns[:3]
+            assert front_cols == ["symbol", "datetime", "timestamp"]
+            # 验证数值列类型（经过 cast 转换）
+            assert df.schema["close_price"] == pl.Float64
+            assert df.schema["buy_amount"] == pl.Float64
+            assert df.schema["net_buy_amount"] == pl.Float64

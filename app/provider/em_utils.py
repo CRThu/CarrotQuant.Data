@@ -148,6 +148,7 @@ def em_datacenter(
         "client": "WEB",
     }
     r = em_get(DATACENTER_URL, params=params, timeout=15)
+    r.raise_for_status()
     d = r.json()
     result = d.get("result") or {}
     return {"data": result.get("data") or [], "count": result.get("count", 0)}

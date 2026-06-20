@@ -1,10 +1,29 @@
 """东财数据源驱动实现。
 
+对接接口:
+  - push2:       https://push2.eastmoney.com (板块列表/成分股)
+  - datacenter:  https://datacenter-web.eastmoney.com/api/data/v1/get (龙虎榜/机构交易)
+
 支持以下 table_id:
   - ashare.concept.eastmoney       (EV) 概念板块成分股
   - ashare.industry.eastmoney      (EV) 行业板块成分股
   - ashare.dragon_tiger.eastmoney  (EV) 龙虎榜
   - ashare.inst_trade.eastmoney    (EV) 机构买卖每日统计
+
+akshare 同款接口:
+  - 板块列表: stock_board_concept_name_em / stock_board_industry_name_em
+  - 板块成分股: stock_board_concept_cons_em / stock_board_industry_cons_em
+  - 龙虎榜: stock_lhb_detail_em
+  - 机构交易: stock_jgdy_tj_em
+
+目标地址:
+  - 板块: https://quote.eastmoney.com/center/boardlist.html#concept_board
+  - 龙虎榜: https://data.eastmoney.com/stock/lhb.html
+  - 机构交易: https://data.eastmoney.com/stock/jgmy.html
+
+浏览器测试:
+  - push2: https://push2.eastmoney.com/webguest/api/qt/clist/get?np=1&fltt=1&invt=2&fs=m:90+t:3+f:!50&fields=f12,f13,f14&fid=f3&pn=1&pz=5&po=1&dect=1&ut=fa5fd1943c7b386f172d6893dbfba10b
+  - datacenter: https://datacenter-web.eastmoney.com/api/data/v1/get?sortColumns=SECURITY_CODE,TRADE_DATE&sortTypes=1,-1&pageSize=50&pageNumber=1&reportName=RPT_DAILYBILLBOARD_DETAILSNEW&columns=SECURITY_CODE,SECUCODE,SECURITY_NAME_ABBR,TRADE_DATE,EXPLAIN,CLOSE_PRICE,CHANGE_RATE,BILLBOARD_NET_AMT,BILLBOARD_BUY_AMT,BILLBOARD_SELL_AMT,BILLBOARD_DEAL_AMT,ACCUM_AMOUNT,DEAL_NET_RATIO,DEAL_AMOUNT_RATIO,TURNOVERRATE,FREE_MARKET_CAP,EXPLANATION,D1_CLOSE_ADJCHRATE,D2_CLOSE_ADJCHRATE,D5_CLOSE_ADJCHRATE,D10_CLOSE_ADJCHRATE,SECURITY_TYPE_CODE&source=WEB&client=WEB&filter=(TRADE_DATE<='2026-06-18')(TRADE_DATE>='2026-01-01')
 """
 
 from __future__ import annotations
@@ -34,32 +53,200 @@ class EastMoneyProvider(BaseProvider):
     }
 
     # push2 板块列表字段
-    _BOARD_FIELDS = "f12,f14"
+    # fs 参数: m:90 t:3 f:!50 = 概念板块; m:90 t:2 f:!50 = 行业板块
+    _BOARD_FIELDS = (
+        "f12,"     # 板块代码
+        "f14"      # 板块名称
+        # "f2,"     # 最新价
+        # "f3,"     # 涨跌幅
+        # "f4,"     # 涨跌额
+        # "f8,"     # 换手率
+        # "f11,"    # 量比
+        # "f15,"    # 最高
+        # "f16,"    # 最低
+        # "f17,"    # 今开
+        # "f18,"    # 昨收
+        # "f20,"    # 总市值
+        # "f21,"    # 流通市值
+        # "f22,"    # 涨速
+        # "f24,"    # 60日涨跌幅
+        # "f25,"    # 年初至今涨跌幅
+        # "f33,"    # 委比
+        # "f62,"    # 主力净流入
+        # "f104,"   # 上涨家数
+        # "f105,"   # 下跌家数
+        # "f107,"   # 板块类型
+        # "f124,"   # 领涨股所属板块
+        # "f128,"   # 领涨股票
+        # "f136"    # 领涨股票-涨跌幅
+    )
     _BOARD_FIELD_MAP = {"f12": "board_code", "f14": "board_name"}
 
     # 板块列表缓存: {board_type: {"board_code": "board_name"}}
     _board_name_cache: dict[str, dict[str, str]] = {}
 
     # push2 成分股字段
-    _CONS_FIELDS = "f12,f14"
+    # fs 参数: b:{board_code} f:!50 = 板块成分股
+    _CONS_FIELDS = (
+        "f12,"     # 股票代码
+        "f14"      # 股票名称
+        # "f2,"     # 最新价
+        # "f3,"     # 涨跌幅
+        # "f4,"     # 涨跌额
+        # "f5,"     # 成交量
+        # "f6,"     # 成交额
+        # "f7,"     # 振幅
+        # "f8,"     # 换手率
+        # "f9,"     # 市盈率-动态
+        # "f10,"    # 量比
+        # "f13,"    # 市场 (0=深圳 1=上海)
+        # "f15,"    # 最高
+        # "f16,"    # 最低
+        # "f17,"    # 今开
+        # "f18,"    # 昨收
+        # "f20,"    # 总市值
+        # "f21,"    # 流通市值
+        # "f22,"    # 涨速
+        # "f23,"    # 市净率
+        # "f24,"    # 60日涨跌幅
+        # "f25,"    # 年初至今涨跌幅
+        # "f33,"    # 委比
+        # "f62,"    # 主力净流入
+        # "f115,"   # 市盈率(TTM)
+        # "f128,"   # 领涨股票
+        # "f136"    # 领涨股票-涨跌幅
+    )
     _CONS_FIELD_MAP = {"f12": "symbol", "f14": "stock_name"}
 
+    # 龙虎榜字段映射
+    _LHB_FIELD_MAP = {
+        "SECURITY_CODE": "symbol",              # 股票代码
+        "SECURITY_NAME_ABBR": "stock_name",     # 股票简称
+        "TRADE_DATE": "trade_date",             # 上榜日期
+        "EXPLAIN": "explain",                   # 解读 (买一主买等)
+        "CLOSE_PRICE": "close_price",           # 收盘价
+        "CHANGE_RATE": "change_rate",           # 涨跌幅
+        "BILLBOARD_NET_AMT": "net_amount",      # 龙虎榜净买额
+        "BILLBOARD_BUY_AMT": "buy_amount",      # 龙虎榜买入额
+        "BILLBOARD_SELL_AMT": "sell_amount",    # 龙虎榜卖出额
+        "BILLBOARD_DEAL_AMT": "deal_amount",    # 龙虎榜成交额
+        "ACCUM_AMOUNT": "market_amount",        # 市场总成交额
+        "DEAL_NET_RATIO": "deal_net_ratio",     # 净买额占总成交比
+        "DEAL_AMOUNT_RATIO": "deal_amount_ratio",  # 成交额占总成交比
+        "TURNOVERRATE": "turnover_rate",        # 换手率
+        "FREE_MARKET_CAP": "float_market_cap",  # 流通市值
+        "EXPLANATION": "explanation",           # 上榜原因
+        "D1_CLOSE_ADJCHRATE": "day1_change_rate",   # 上榜后1日涨跌幅
+        "D2_CLOSE_ADJCHRATE": "day2_change_rate",   # 上榜后2日涨跌幅
+        "D5_CLOSE_ADJCHRATE": "day5_change_rate",   # 上榜后5日涨跌幅
+        "D10_CLOSE_ADJCHRATE": "day10_change_rate", # 上榜后10日涨跌幅
+    }
+
+    # 机构交易字段映射
+    _INST_FIELD_MAP = {
+        "SECURITY_CODE": "symbol",              # 股票代码
+        "SECURITY_NAME_ABBR": "stock_name",     # 股票简称
+        "CLOSE_PRICE": "close_price",           # 收盘价
+        "CHANGE_RATE": "change_rate",           # 涨跌幅
+        "BUY_TIMES": "buy_times",               # 买方机构数
+        "SELL_TIMES": "sell_times",             # 卖方机构数
+        "BUY_AMT": "buy_amount",                # 机构买入总额
+        "SELL_AMT": "sell_amount",              # 机构卖出总额
+        "NET_BUY_AMT": "net_buy_amount",        # 机构买入净额
+        "ACCUM_AMOUNT": "market_amount",        # 市场总成交额
+        "RATIO": "ratio",                       # 机构净买额占总成交额比
+        "TURNOVERRATE": "turnover_rate",        # 换手率
+        "FREECAP": "float_market_cap",          # 流通市值
+        "EXPLANATION": "explanation",           # 上榜原因
+        "TRADE_DATE": "trade_date",             # 上榜日期
+        "D1_CLOSE_ADJCHRATE": "day1_change_rate",   # 上榜后1日涨跌幅
+        "D2_CLOSE_ADJCHRATE": "day2_change_rate",   # 上榜后2日涨跌幅
+        "D3_CLOSE_ADJCHRATE": "day3_change_rate",   # 上榜后3日涨跌幅
+        "D5_CLOSE_ADJCHRATE": "day5_change_rate",   # 上榜后5日涨跌幅
+        "D10_CLOSE_ADJCHRATE": "day10_change_rate", # 上榜后10日涨跌幅
+    }
+
     # datacenter 龙虎榜字段
+    # 报表: RPT_DAILYBILLBOARD_DETAILSNEW
+    # 目标地址: https://data.eastmoney.com/stock/lhb.html
+    # 参考接口: https://datacenter-web.eastmoney.com/api/data/v1/get?sortColumns=SECURITY_CODE,TRADE_DATE&sortTypes=1,-1&pageSize=50&pageNumber=1&reportName=RPT_DAILYBILLBOARD_DETAILSNEW&columns=SECURITY_CODE,SECUCODE,SECURITY_NAME_ABBR,TRADE_DATE,EXPLAIN,CLOSE_PRICE,CHANGE_RATE,BILLBOARD_NET_AMT,BILLBOARD_BUY_AMT,BILLBOARD_SELL_AMT,BILLBOARD_DEAL_AMT,ACCUM_AMOUNT,DEAL_NET_RATIO,DEAL_AMOUNT_RATIO,TURNOVERRATE,FREE_MARKET_CAP,EXPLANATION,D1_CLOSE_ADJCHRATE,D2_CLOSE_ADJCHRATE,D5_CLOSE_ADJCHRATE,D10_CLOSE_ADJCHRATE,SECURITY_TYPE_CODE&source=WEB&client=WEB&filter=(TRADE_DATE<='2026-06-18')(TRADE_DATE>='2026-01-01')
     _LHB_COLUMNS = (
-        "ACCUM_AMOUNT,BILLBOARD_BUY_AMT,BILLBOARD_DEAL_AMT,BILLBOARD_NET_AMT,"
-        "BILLBOARD_SELL_AMT,CHANGE_RATE,CLOSE_PRICE,D1_CLOSE_ADJCHRATE,"
-        "D2_CLOSE_ADJCHRATE,D5_CLOSE_ADJCHRATE,D10_CLOSE_ADJCHRATE,"
-        "DEAL_AMOUNT_RATIO,DEAL_NET_RATIO,EXPLAIN,EXPLANATION,FREE_MARKET_CAP,"
-        "SECURITY_CODE,SECURITY_NAME_ABBR,TRADE_DATE,TURNOVERRATE"
+        "ACCUM_AMOUNT,"        # akshare | 市场总成交额
+        "BILLBOARD_BUY_AMT,"   # akshare | 龙虎榜买入额
+        "BILLBOARD_DEAL_AMT,"  # akshare | 龙虎榜成交额
+        "BILLBOARD_NET_AMT,"   # akshare | 龙虎榜净买额
+        "BILLBOARD_SELL_AMT,"  # akshare | 龙虎榜卖出额
+        "CHANGE_RATE,"         # akshare | 涨跌幅
+        "CLOSE_PRICE,"         # akshare | 收盘价
+        "D1_CLOSE_ADJCHRATE,"  # akshare | 上榜后1日涨跌幅
+        "D2_CLOSE_ADJCHRATE,"  # akshare | 上榜后2日涨跌幅
+        "D5_CLOSE_ADJCHRATE,"  # akshare | 上榜后5日涨跌幅
+        "D10_CLOSE_ADJCHRATE," # akshare | 上榜后10日涨跌幅
+        "DEAL_AMOUNT_RATIO,"   # akshare | 成交额占总成交比
+        "DEAL_NET_RATIO,"      # akshare | 净买额占总成交比
+        "EXPLAIN,"             # akshare | 解读(买一主买等)
+        "EXPLANATION,"         # akshare | 上榜原因
+        "FREE_MARKET_CAP,"     # akshare | 流通市值
+        "SECURITY_CODE,"       # akshare | 股票代码
+        "SECURITY_NAME_ABBR,"  # akshare | 股票简称
+        "TRADE_DATE,"          # akshare | 上榜日期
+        "TURNOVERRATE"         # akshare | 换手率
+        # 以下无用字段已剔除:
+        # SECUCODE,             # 无用 | akshare请求了但rename时丢弃
+        # SECURITY_INNER_CODE,  # 无用 | 内部代码无意义
+        # SECURITY_TYPE_CODE,   # 无用 | 全为同一值 058001001
+        # MARKET,               # 无用 | SH/SZ/BJ，SECURITY_CODE已含此信息
+        # TRADE_MARKET_CODE,    # 无用 | 与TRADE_MARKET重复
+        # TRADE_MARKET,         # 无用 | 深交所主板等，冗余分类
+        # BUY_RATIO,            # 无用 | 无法推算但席位无法翻译，比例无独立分析价值
+        # SELL_RATIO,           # 无用 | 同BUY_RATIO
+        # BUY_SEAT,             # 无用 | 席位编码无法翻译为券商名
+        # BUY_SEAT_NEW,         # 无用 | 与BUY_SEAT相同仅int→str
+        # SELL_SEAT,            # 无用 | 同BUY_SEAT
+        # SELL_SEAT_NEW,        # 无用 | 与SELL_SEAT相同仅int→str
+        # CHANGE_TYPE,          # 无用 | 上榜类型编码无含义
+        # NET_BS_AMT,           # 无用 | = 龙虎榜净买额，重复
+        # SUM_BUY_AMT,          # 无用 | = 龙虎榜买入额，重复
+        # SUM_SELL_AMT,         # 无用 | = 龙虎榜卖出额，重复
+        # TRADE_ID,             # 无用 | 纯标识符
+        # D20_CLOSE_ADJCHRATE,  # 无用 | 上榜后20日，长期参考但数据滞后
+        # D30_CLOSE_ADJCHRATE,  # 无用 | 上榜后30日，同上
     )
 
     # datacenter 机构交易字段
+    # 报表: RPT_ORGANIZATION_TRADE_DETAILSNEW
+    # 目标地址: https://data.eastmoney.com/stock/jgmy.html
+    # 参考接口: https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_ORGANIZATION_TRADE_DETAILSNEW
     _INST_COLUMNS = (
-        "ACCUM_AMOUNT,BUY_AMT,BUY_TIMES,CHANGE_RATE,CLOSE_PRICE,EXPLANATION,"
-        "FREECAP,NET_BUY_AMT,RATIO,SECURITY_CODE,SECURITY_NAME_ABBR,SELL_AMT,"
-        "SELL_TIMES,TRADE_DATE,TURNOVERRATE,D1_CLOSE_ADJCHRATE,"
-        "D2_CLOSE_ADJCHRATE,D3_CLOSE_ADJCHRATE,D5_CLOSE_ADJCHRATE,"
-        "D10_CLOSE_ADJCHRATE"
+        # akshare 同款
+        "ACCUM_AMOUNT,"        # akshare | 市场总成交额
+        "BUY_AMT,"             # akshare | 机构买入总额
+        "BUY_TIMES,"           # akshare | 买方机构数
+        "CHANGE_RATE,"         # akshare | 涨跌幅
+        "CLOSE_PRICE,"         # akshare | 收盘价
+        "EXPLANATION,"         # akshare | 上榜原因
+        "FREECAP,"             # akshare | 流通市值
+        "NET_BUY_AMT,"         # akshare | 机构买入净额
+        "RATIO,"               # akshare | 机构净买额占总成交额比
+        "SECURITY_CODE,"       # akshare | 股票代码
+        "SECURITY_NAME_ABBR,"  # akshare | 股票简称
+        "SELL_AMT,"            # akshare | 机构卖出总额
+        "SELL_TIMES,"          # akshare | 卖方机构数
+        "TRADE_DATE,"          # akshare | 上榜日期
+        "TURNOVERRATE,"        # akshare | 换手率
+        # extra - 天数
+        "D1_CLOSE_ADJCHRATE,"  # extra  | 上榜后1日涨跌幅
+        "D2_CLOSE_ADJCHRATE,"  # extra  | 上榜后2日涨跌幅
+        "D3_CLOSE_ADJCHRATE,"  # extra  | 上榜后3日涨跌幅
+        "D5_CLOSE_ADJCHRATE,"  # extra  | 上榜后5日涨跌幅
+        "D10_CLOSE_ADJCHRATE"  # extra  | 上榜后10日涨跌幅
+        # 以下无用字段已剔除:
+        # SECUCODE,             # 无用 | 代码全称，akshare丢弃
+        # SECURITY_TYPE_CODE,   # 无用 | 全为同一值
+        # MARKET,               # 无用 | 深市/沪市/北交所
+        # TRADE_MARKET_CODE,    # 无用 | 交易市场代码
+        # BUY_COUNT,            # 无用 | 非机构席位数，网页版无此列
+        # SELL_COUNT,           # 无用 | 非机构席位数，网页版无此列
     )
 
     def get_supported_tables(self) -> list[str]:
@@ -130,7 +317,11 @@ class EastMoneyProvider(BaseProvider):
         raise ValueError(f"Unknown board type: {board_type}")
 
     def _fetch_board_list(self, board_type: str) -> dict[str, str]:
-        """从 push2 接口拉取板块列表，返回 {"board_code": "board_name"}。"""
+        """从 push2 接口拉取板块列表，返回 {"board_code": "board_name"}。
+
+        接口: https://push2.eastmoney.com/webguest/api/qt/clist/get
+        akshare 同款: stock_board_concept_name_em / stock_board_industry_name_em
+        """
         if board_type in self._board_name_cache:
             return self._board_name_cache[board_type]
 
@@ -148,7 +339,7 @@ class EastMoneyProvider(BaseProvider):
         diff = data_json["data"]["diff"] or []
         total = data_json["data"]["total"]
         if not diff:
-            return []
+            return {}
 
         per_page = len(diff)
         total_page = math.ceil(total / per_page)
@@ -160,12 +351,17 @@ class EastMoneyProvider(BaseProvider):
             data_json = r.json()
             all_rows.extend(data_json["data"]["diff"] or [])
 
-        result = {row[self._BOARD_FIELD_MAP["f12"]]: row[self._BOARD_FIELD_MAP["f14"]] for row in all_rows}
+        result = {row["f12"]: row["f14"] for row in all_rows}
         self._board_name_cache[board_type] = result
         return result
 
     def _fetch_board_cons(self, board_type: str, board_code: str) -> list[dict]:
-        """从 push2 接口拉取指定板块的成分股。"""
+        """从 push2 接口拉取指定板块的成分股。
+
+        接口: https://push2.eastmoney.com/webguest/api/qt/clist/get
+        akshare 同款: stock_board_concept_cons_em / stock_board_industry_cons_em
+        fs 参数: b:{board_code} f:!50 = 板块成分股
+        """
         fs = f"b:{board_code} f:!50"
         params = {
             "pn": "1", "pz": "100", "po": "1", "np": "1",
@@ -200,10 +396,9 @@ class EastMoneyProvider(BaseProvider):
     def _fetch_board_cons_df(self, board_type: str, board_code: str) -> pl.DataFrame:
         """拉取板块成分股，返回标准化 Polars DataFrame。"""
         cons = self._fetch_board_cons(board_type, board_code)
-        if not cons:
-            return self._empty_cons_df()
-
-        df = pl.DataFrame(cons)
+        # 创建 DataFrame，指定 schema（空数据时也保持列结构）
+        cons_cols = list(self._CONS_FIELD_MAP.values())
+        df = pl.DataFrame(cons, schema={c: pl.String for c in cons_cols})
         # 从缓存查 board_name
         name_map = self._fetch_board_list(board_type)
         board_name = name_map.get(board_code, "")
@@ -226,12 +421,6 @@ class EastMoneyProvider(BaseProvider):
                 cols.insert(0, col)
         return df.select(cols)
 
-    def _empty_cons_df(self) -> pl.DataFrame:
-        return pl.DataFrame(schema={
-            "symbol": pl.String, "stock_name": pl.String, "board_code": pl.String, "board_name": pl.String,
-            "datetime": pl.String, "timestamp": pl.Int64,
-        })
-
     # -----------------------------------------------------------------------
     # 龙虎榜
     # -----------------------------------------------------------------------
@@ -245,7 +434,7 @@ class EastMoneyProvider(BaseProvider):
         if end_date is None:
             end_date = datetime.now().strftime("%Y-%m-%d")
         if start_date is None:
-            start_date = "2000-01-01"
+            start_date = "2020-01-01"
 
         code_filter = ""
         if code:
@@ -256,12 +445,12 @@ class EastMoneyProvider(BaseProvider):
             self._LHB_COLUMNS,
             start_date, end_date, code_filter,
             sort_columns="SECURITY_CODE,TRADE_DATE",
+            sort_types="1,-1",
         )
 
-        if not all_rows:
-            return self._empty_lhb_df()
-
-        df = pl.DataFrame(all_rows)
+        # 创建 DataFrame，指定 schema（空数据时也保持列结构）
+        lhb_cols = [c.strip() for c in self._LHB_COLUMNS.split(",")]
+        df = pl.DataFrame(all_rows, schema={c: pl.String for c in lhb_cols})
 
         # 日期格式化
         if "TRADE_DATE" in df.columns:
@@ -282,29 +471,7 @@ class EastMoneyProvider(BaseProvider):
                 df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
 
         # 重命名
-        rename_map = {
-            "SECURITY_CODE": "symbol",
-            "SECURITY_NAME_ABBR": "stock_name",
-            "TRADE_DATE": "trade_date",
-            "EXPLAIN": "explain",
-            "CLOSE_PRICE": "close_price",
-            "CHANGE_RATE": "change_pct",
-            "BILLBOARD_NET_AMT": "lhb_net_amt",
-            "BILLBOARD_BUY_AMT": "lhb_buy_amt",
-            "BILLBOARD_SELL_AMT": "lhb_sell_amt",
-            "BILLBOARD_DEAL_AMT": "lhb_deal_amt",
-            "ACCUM_AMOUNT": "market_amount",
-            "DEAL_NET_RATIO": "net_ratio",
-            "DEAL_AMOUNT_RATIO": "deal_ratio",
-            "TURNOVERRATE": "turnover_rate",
-            "FREE_MARKET_CAP": "float_mcap",
-            "EXPLANATION": "reason",
-            "D1_CLOSE_ADJCHRATE": "d1_pct",
-            "D2_CLOSE_ADJCHRATE": "d2_pct",
-            "D5_CLOSE_ADJCHRATE": "d5_pct",
-            "D10_CLOSE_ADJCHRATE": "d10_pct",
-        }
-        actual_rename = {k: v for k, v in rename_map.items() if k in df.columns}
+        actual_rename = {k: v for k, v in self._LHB_FIELD_MAP.items() if k in df.columns}
         df = df.rename(actual_rename)
 
         # 标准化时间轴
@@ -316,12 +483,6 @@ class EastMoneyProvider(BaseProvider):
             )
 
         return df
-
-    def _empty_lhb_df(self) -> pl.DataFrame:
-        return pl.DataFrame(schema={
-            "symbol": pl.String, "stock_name": pl.String,
-            "datetime": pl.String, "timestamp": pl.Int64,
-        })
 
     # -----------------------------------------------------------------------
     # 机构交易
@@ -336,7 +497,7 @@ class EastMoneyProvider(BaseProvider):
         if end_date is None:
             end_date = datetime.now().strftime("%Y-%m-%d")
         if start_date is None:
-            start_date = "2000-01-01"
+            start_date = "2020-01-01"
 
         code_filter = ""
         if code:
@@ -347,12 +508,12 @@ class EastMoneyProvider(BaseProvider):
             self._INST_COLUMNS,
             start_date, end_date, code_filter,
             sort_columns="TRADE_DATE,SECURITY_CODE",
+            sort_types="1,1",
         )
 
-        if not all_rows:
-            return self._empty_inst_df()
-
-        df = pl.DataFrame(all_rows)
+        # 创建 DataFrame，指定 schema（空数据时也保持列结构）
+        inst_cols = [c.strip() for c in self._INST_COLUMNS.split(",")]
+        df = pl.DataFrame(all_rows, schema={c: pl.String for c in inst_cols})
 
         # 日期格式化
         if "TRADE_DATE" in df.columns:
@@ -373,29 +534,7 @@ class EastMoneyProvider(BaseProvider):
                 df = df.with_columns(pl.col(col).cast(pl.Float64, strict=False))
 
         # 重命名
-        rename_map = {
-            "SECURITY_CODE": "symbol",
-            "SECURITY_NAME_ABBR": "stock_name",
-            "CLOSE_PRICE": "close_price",
-            "CHANGE_RATE": "change_pct",
-            "BUY_TIMES": "buy_times",
-            "SELL_TIMES": "sell_times",
-            "BUY_AMT": "inst_buy_amt",
-            "SELL_AMT": "inst_sell_amt",
-            "NET_BUY_AMT": "inst_net_amt",
-            "ACCUM_AMOUNT": "market_amount",
-            "RATIO": "inst_net_ratio",
-            "TURNOVERRATE": "turnover_rate",
-            "FREECAP": "float_mcap",
-            "EXPLANATION": "reason",
-            "TRADE_DATE": "trade_date",
-            "D1_CLOSE_ADJCHRATE": "d1_pct",
-            "D2_CLOSE_ADJCHRATE": "d2_pct",
-            "D3_CLOSE_ADJCHRATE": "d3_pct",
-            "D5_CLOSE_ADJCHRATE": "d5_pct",
-            "D10_CLOSE_ADJCHRATE": "d10_pct",
-        }
-        actual_rename = {k: v for k, v in rename_map.items() if k in df.columns}
+        actual_rename = {k: v for k, v in self._INST_FIELD_MAP.items() if k in df.columns}
         df = df.rename(actual_rename)
 
         # 标准化时间轴
@@ -407,12 +546,6 @@ class EastMoneyProvider(BaseProvider):
             )
 
         return df
-
-    def _empty_inst_df(self) -> pl.DataFrame:
-        return pl.DataFrame(schema={
-            "symbol": pl.String, "stock_name": pl.String,
-            "datetime": pl.String, "timestamp": pl.Int64,
-        })
 
     # -----------------------------------------------------------------------
     # datacenter 通用分页拉取
@@ -426,9 +559,14 @@ class EastMoneyProvider(BaseProvider):
         end_date: str,
         code_filter: str,
         sort_columns: str,
+        sort_types: str = "1,-1",
         page_size: int = 500,
     ) -> list[dict]:
-        """按月分批 + 自动分页拉取 datacenter 数据。"""
+        """按月分批 + 自动分页拉取 datacenter 数据。
+
+        接口: https://datacenter-web.eastmoney.com/api/data/v1/get
+        注意: API 硬限制 500 条/页，按月分批避免单次请求数据量过大。
+        """
         from datetime import datetime as dt
         import calendar
 
@@ -453,7 +591,7 @@ class EastMoneyProvider(BaseProvider):
             logger.debug(f"  [{month_start} ~ {month_end}] ", end="")
 
             month_rows = self._fetch_datacenter_all_pages(
-                report_name, columns, filter_str, sort_columns, page_size
+                report_name, columns, filter_str, sort_columns, sort_types, page_size
             )
             all_rows.extend(month_rows)
             logger.debug(f"got {len(month_rows)} rows (cumulative: {len(all_rows)})")
@@ -471,9 +609,13 @@ class EastMoneyProvider(BaseProvider):
         columns: str,
         filter_str: str,
         sort_columns: str,
+        sort_types: str,
         page_size: int,
     ) -> list[dict]:
-        """自动分页拉取，直到拿完所有数据。"""
+        """自动分页拉取，直到拿完所有数据。
+
+        API 硬限制 500 条/页，自动翻页直到数据全部获取。
+        """
         all_rows: list[dict] = []
         page = 1
 
@@ -485,7 +627,7 @@ class EastMoneyProvider(BaseProvider):
                 page_number=page,
                 page_size=page_size,
                 sort_columns=sort_columns,
-                sort_types="1,-1",
+                sort_types=sort_types,
             )
             data = resp["data"]
             total = resp["count"]

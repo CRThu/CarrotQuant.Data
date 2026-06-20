@@ -247,7 +247,8 @@ SyncManager.sync()
     - 调用 `bs.query_adjust_factor()`
     - 保留: `backAdjustFactor` → `back_adj_factor`
     - 剔除: `foreAdjustFactor`, `adjustFactor`
-- 空数据防御: fetch 返回空 DataFrame 时仍通过 DataCleaner 生成含 timestamp/datetime/symbol 列的标准空表
+- 日期默认值: `start_date=None` → `"2020-01-01"`, `end_date=None` → `datetime.now()`（与 EastMoneyProvider 统一）
+- 空数据防御: 空数据时仍执行 cast 和时间标准化，与有数据时保持单一代码路径
 - 异常分发: API 报错 (error_code != '0') 抛 RuntimeError；无数据返回标准化空表
 
 **`app/provider/eastmoney_provider.py` — `EastMoneyProvider(BaseProvider)`**
@@ -264,6 +265,8 @@ SyncManager.sync()
   - `_fetch_board_cons_df()`: push2 板块成分股，返回 symbol + stock_name + board_code + board_name
   - `_fetch_dragon_tiger()`: datacenter 龙虎榜，按月分批 + 自动分页
   - `_fetch_inst_trade()`: datacenter 机构交易，按月分批 + 自动分页
+- 日期默认值: `start_date=None` → `"2020-01-01"`, `end_date=None` → `datetime.now()`
+- 空数据防御: 创建 DataFrame 时指定 schema（所有列 String），空数据时也执行 cast 和时间标准化，与有数据时保持单一代码路径
 - 防封策略: curl_cffi TLS 指纹模拟 + 全局节流 + tenacity 自动重试
 
 **`app/provider/em_utils.py` — 东财 HTTP 工具**
@@ -489,7 +492,7 @@ SyncManager.sync()
 | category | 数据类别 | kline (K 线), adj_factor (复权因子), lhb (龙虎榜) |
 | freq | 频率 (可选) | 1d (日线), 5m (5 分钟线) |
 | adj | 复权方式 (可选) | adj (后复权), raw (不复权) |
-| source | 数据源 (末段，路由依据) | baostock, akshare, eastmoney |
+| source | 数据源 (末段，路由依据) | baostock, eastmoney |
 
 **已注册的 table_id**:
 - `ashare.kline.1d.adj.baostock` (TS) — A 股日线后复权

@@ -3,11 +3,11 @@
 ![Python Version](https://img.shields.io/badge/python-%3E%3D3.12-blue)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 
-CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的本地数据同步与管理工具。它致力于从各类免费数据源（如 Baostock、Akshare 等）获取金融数据，并将数据清洗、转换为统一格式（支持 CSV, Parquet 等），持久化到本地存储中以供各类量化研究和回测使用。
+CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的本地数据同步与管理工具。它致力于从各类免费数据源（如 Baostock、东方财富等）获取金融数据，并将数据清洗、转换为统一格式（支持 CSV, Parquet 等），持久化到本地存储中以供各类量化研究和回测使用。
 
 ## 🌟 核心特性 (Features)
 
-- **多数据源支持**：内置 [Baostock](http://baostock.com/) 等金融数据源引擎机制，易于弹性拓展更多的数据源提供商（如 Akshare）。
+- **多数据源支持**：内置 [Baostock](http://baostock.com/) 和东方财富等金融数据源引擎，易于弹性拓展更多的数据源提供商。
 - **灵活的存储格式**：原生支持 `csv` 和基于列式存储的高效 `parquet` 格式，以满足不同体量的数据读写需求。
 - **增量与全量同步**：基于时间戳水位线的同步机制，支持从断点智能续接（增量拉取），以及强制全量覆盖更新刷新数据。
 - **现代化多入口支持**：
@@ -23,7 +23,7 @@ CarrotQuant.Data/
 ├── app/
 │   ├── config/       # 配置管理模块
 │   ├── gateway/      # 接入层（CLI命令行与HTTP API 网关 API.py）
-│   ├── provider/     # 数据源驱动（BaostockProvider等）
+│   ├── provider/     # 数据源驱动（BaostockProvider, EastMoneyProvider）
 │   ├── service/      # 核心业务逻辑实现（SyncManager, TaskPlanner等）
 │   ├── storage/      # 本地持久化与格式处理模块
 │   └── utils/        # 通用工具箱（如日志记录 Logger 等）

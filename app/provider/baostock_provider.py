@@ -1,5 +1,6 @@
 import baostock as bs
 import polars as pl
+from datetime import datetime
 from typing import Any
 from loguru import logger
 from app.provider.base import BaseProvider
@@ -123,7 +124,13 @@ class BaostockProvider(BaseProvider):
         if isinstance(end_date, int):
             end_date = ts_to_str(end_date)
 
-        # 2. 路由逻辑：解析 table_id 中间的部分 (如 kline, adj_factor)
+        # 2. None 日期默认值
+        if start_date is None:
+            start_date = "2020-01-01"
+        if end_date is None:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        # 3. 路由逻辑：解析 table_id 中间的部分 (如 kline, adj_factor)
         parts = table_id.split('.')
         if 'kline' in parts:
             return self._fetch_kline(table_id, symbol, start_date, end_date, **kwargs)
@@ -213,19 +220,6 @@ class BaostockProvider(BaseProvider):
         actual_rename = {k: v for k, v in rename_map.items() if k in df.columns}
         df = df.rename(actual_rename)
         
-        # 如果是空数据，直接返回标准化的空表
-        if df.is_empty():
-            if is_day:
-                return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
-                                             source_tz="Asia/Shanghai", display_tz="Asia/Shanghai", time_shift_hours=15)
-            else:
-                # Baostock 分钟线 time 格式: YYYYMMDDHHMMSSsss (无小数点)
-                # 此时 date 列是多余的，一并删除
-                if "date" in df.columns:
-                    df = df.drop("date")
-                return DataCleaner.standardize(df, "time", time_fmt="%Y%m%d%H%M%S%3f", 
-                                             source_tz="Asia/Shanghai", display_tz="Asia/Shanghai")
-        
         
         # 处理 adjustflag 映射 (1:adj, 2:qfq, 3:raw)
         if "adjustflag" in df.columns:
@@ -307,11 +301,6 @@ class BaostockProvider(BaseProvider):
         }
         df = df.rename(rename_map)
         
-        # 如果是空数据，直接返回标准化的空表
-        if df.is_empty():
-            return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 
-                                           source_tz="Asia/Shanghai", display_tz="Asia/Shanghai", time_shift_hours=15)
-        
         # 转换为数值类型（复权因子必须是浮点数）
         # 处理可能的空值
         if "back_adj_factor" in df.columns:
@@ -320,7 +309,6 @@ class BaostockProvider(BaseProvider):
                 .cast(pl.Float64, strict=False)
             )
         
-        # 数据清洗与标准化
         # 数据清洗与标准化
         # Event 数据的 timestamp 必须是 date 的 15:00:00 (收盘时间) UTC+8 对应的毫秒戳
         return DataCleaner.standardize(df, "date", time_fmt="%Y-%m-%d", 

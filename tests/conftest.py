@@ -40,4 +40,10 @@ def mock_baostock():
         mock_rs_k.next.return_value = False # 默认空数据
         mock_bs.query_history_k_data_plus.return_value = mock_rs_k
         
+        # 默认模拟 query_adjust_factor
+        mock_rs_adj = MagicMock()
+        mock_rs_adj.error_code = "0"
+        mock_rs_adj.next.return_value = False # 默认空数据
+        mock_bs.query_adjust_factor.return_value = mock_rs_adj
+        
         yield mock_bs
