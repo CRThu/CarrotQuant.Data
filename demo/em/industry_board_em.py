@@ -1,25 +1,25 @@
-"""概念板块 Demo
+"""行业板块 Demo
 
-从东财 push2 接口拉取沪深京所有概念板块 + 板块成分股数据。
+从东财 push2 接口拉取沪深京所有行业板块 + 板块成分股数据。
 公共模块: em_utils.py (em_push2)
 
-接口: stock_board_concept_name_em / stock_board_concept_cons_em (akshare同款)
-目标地址: https://quote.eastmoney.com/center/boardlist.html#concept_board
-浏览器测试: https://push2.eastmoney.com/webguest/api/qt/clist/get?np=1&fltt=1&invt=2&fs=m:90+t:3+f:!50&fields=f12,f13,f14&fid=f3&pn=1&pz=5&po=1&dect=1&ut=fa5fd1943c7b386f172d6893dbfba10b
+接口: stock_board_industry_name_em / stock_board_industry_cons_em (akshare同款)
+目标地址: https://quote.eastmoney.com/center/boardlist.html#industry_board
+浏览器测试: https://push2.eastmoney.com/webguest/api/qt/clist/get?np=1&fltt=1&invt=2&fs=m:90+t:2+f:!50&fields=f12,f14&fid=f3&pn=1&pz=5&po=1&dect=1&ut=fa5fd1943c7b386f172d6893dbfba10b
 
 Usage:
-    # 获取全部概念板块
-    uv run concept_board_em.py
+    # 获取全部行业板块
+    uv run industry_board_em.py
 
     # 某个板块的成分股
-    uv run concept_board_em.py --cons BK0815
+    uv run industry_board_em.py --cons BK0733
 
     # 按板块名称查成分股
-    uv run concept_board_em.py --cons "可燃冰"
+    uv run industry_board_em.py --cons "汽车整车"
 
     # 导出CSV
-    uv run concept_board_em.py --csv concept_board.csv
-    uv run concept_board_em.py --cons BK0815 --csv cons.csv
+    uv run industry_board_em.py --csv industry_board.csv
+    uv run industry_board_em.py --cons BK0733 --csv cons.csv
 """
 
 from __future__ import annotations
@@ -31,16 +31,17 @@ from datetime import datetime
 
 import pandas as pd
 
-from em_utils import em_push2
+from demo.em.em_utils import em_push2
 
 # ---------------------------------------------------------------------------
 # 常量 — 与 akshare 完全一致
 # ---------------------------------------------------------------------------
 
-# 板块列表字段 (fs=m:90 t:3 f:!50 = 概念板块)
+# 板块列表字段 (fs=m:90 t:2 f:!50 = 行业板块)
 _BOARD_FIELDS = (
     "f12,"     # 板块代码
     "f14"      # 板块名称
+    # "f13,"    # 市场 (0=深圳 1=上海)
     # "f2,"     # 最新价
     # "f3,"     # 涨跌幅
     # "f4,"     # 涨跌额
@@ -63,6 +64,12 @@ _BOARD_FIELDS = (
     # "f124,"   # 领涨股所属板块
     # "f128,"   # 领涨股票
     # "f136"    # 领涨股票-涨跌幅
+    # "f140,"   # 领涨股票代码
+    # "f141"    # 领涨股票所属板块
+    # "f207,"   # 领涨股-涨跌幅
+    # "f208,"   # 领涨股-涨速
+    # "f209,"   # 领涨股-60日涨跌幅
+    # "f222"    # 领涨股-年初至今涨跌幅
 )
 
 _BOARD_FIELD_MAP = {
@@ -111,16 +118,16 @@ _CONS_FIELD_MAP = {
 # 板块列表
 # ---------------------------------------------------------------------------
 
-def fetch_concept_boards() -> pd.DataFrame:
-    """拉取所有概念板块（akshare stock_board_concept_name_em 同款）。
+def fetch_industry_boards() -> pd.DataFrame:
+    """拉取所有行业板块（akshare stock_board_industry_name_em 同款）。
 
-    fs=m:90 t:3 f:!50 = 概念板块。
+    fs=m:90 t:2 f:!50 = 行业板块。
     """
     params = {
         "pn": "1", "pz": "100", "po": "1", "np": "1",
         "ut": "bd1d9ddb04089700cf9c27f6f7426281",
         "fltt": "2", "invt": "2", "fid": "f12",
-        "fs": "m:90 t:3 f:!50",
+        "fs": "m:90 t:2 f:!50",
         "fields": _BOARD_FIELDS,
     }
 
@@ -165,7 +172,7 @@ def _resolve_board_code(boards_df: pd.DataFrame, symbol: str) -> str:
 
 
 def fetch_board_cons(board_code: str) -> pd.DataFrame:
-    """拉取指定板块的成分股（akshare stock_board_concept_cons_em 同款）。
+    """拉取指定板块的成分股（akshare stock_board_industry_cons_em 同款）。
 
     fs=b:{board_code} f:!50 = 板块成分股。
     """
@@ -210,10 +217,10 @@ def fetch_board_cons(board_code: str) -> pd.DataFrame:
 
 def format_board_output(df: pd.DataFrame) -> str:
     if df.empty:
-        return "未查询到概念板块数据。"
+        return "未查询到行业板块数据。"
 
     lines = [
-        "# 概念板块",
+        "# 行业板块",
         f"# 数量: {len(df)} 个板块",
         f"# 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "",
@@ -257,14 +264,14 @@ def format_cons_output(df: pd.DataFrame, board_name: str, board_code: str) -> st
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="概念板块 Demo")
+    parser = argparse.ArgumentParser(description="行业板块 Demo")
     parser.add_argument("--cons", default=None,
-                        help="查询板块成分股，传入板块代码(BK0815)或名称(可燃冰)")
+                        help="查询板块成分股，传入板块代码(BK0733)或名称(汽车整车)")
     parser.add_argument("--csv", default=None, help="导出 CSV 路径")
     args = parser.parse_args()
 
-    print("拉取概念板块列表...")
-    boards_df = fetch_concept_boards()
+    print("拉取行业板块列表...")
+    boards_df = fetch_industry_boards()
     print()
 
     if boards_df.empty:

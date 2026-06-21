@@ -2,6 +2,9 @@ from typing import Dict
 from app.provider.base import BaseProvider
 from app.provider.baostock_provider import BaostockProvider
 from app.provider.eastmoney_provider import EastMoneyProvider
+from app.provider.tdx_provider import TDXProvider
+from app.config.settings import settings
+
 
 class ProviderManager:
     """
@@ -30,6 +33,12 @@ class ProviderManager:
                 self._providers[source] = BaostockProvider()
             elif source == 'eastmoney':
                 self._providers[source] = EastMoneyProvider()
+            elif source == 'tdx':
+                self._providers[source] = TDXProvider(
+                    data_dir=settings.TDX_DATA_DIR,
+                    mode=settings.TDX_MODE,
+                    vipdoc_dir=settings.TDX_VIPDOC_DIR or None,
+                )
             else:
                 raise ValueError(f"Unsupported data source: {source}")
                 

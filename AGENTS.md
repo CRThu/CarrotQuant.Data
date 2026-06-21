@@ -6,16 +6,17 @@
 
 ## 1. 项目概述
 
-CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管理工具。它从免费数据源（Baostock、东方财富）获取 A 股/指数数据，清洗后持久化到本地 CSV/Parquet 文件，供量化研究和回测使用。
+CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管理工具。它从免费数据源（Baostock、东方财富、通达信）获取 A 股/指数数据，清洗后持久化到本地 CSV/Parquet 文件，供量化研究和回测使用。
 
 **核心能力**：
 - 从 Baostock 下载 K 线（日线/5 分钟线）、复权因子等数据
 - 从东方财富下载概念/行业板块、龙虎榜、机构交易等数据
+- 从通达信下载 K 线数据（日线/5 分钟线），支持离线 ZIP 解析
 - 支持 CSV 和 Parquet 两种存储格式
 - 基于时间戳水位线的增量同步，支持断点续接
 - 三种入口：交互向导 (Wizard)、CLI 命令行、FastAPI REST API
 
-**技术栈**：Python >= 3.12, Polars (数据处理), Baostock (数据源), curl_cffi (东财防封), FastAPI (API), Typer (CLI), Loguru (日志), Pydantic-Settings (配置)
+**技术栈**：Python >= 3.12, Polars (数据处理), Baostock (数据源), curl_cffi (东财防封), tdxpy (通达信TCP), FastAPI (API), Typer (CLI), Loguru (日志), Pydantic-Settings (配置)
 
 ---
 
@@ -34,7 +35,9 @@ CarrotQuant.Data/
 │   │   ├── base.py       # BaseProvider 抽象基类
 │   │   ├── baostock_provider.py  # BaostockProvider 实现
 │   │   ├── eastmoney_provider.py # EastMoneyProvider 实现
+│   │   ├── tdx_provider.py       # TDXProvider 通达信驱动实现
 │   │   ├── em_utils.py          # 东财 HTTP 工具 (防封/节流/重试)
+│   │   ├── tdx_utils.py         # 通达信 ZIP 下载与二进制解析工具
 │   │   ├── provider_manager.py   # ProviderManager 单例工厂
 │   │   └── data_cleaner.py       # DataCleaner 时间标准化工具
 │   ├── service/          # 业务逻辑层
@@ -51,7 +54,8 @@ CarrotQuant.Data/
 │       ├── logger_utils.py       # setup_logger + SuppressOutput
 │       └── time_utils.py         # 时间戳/ISO/日期转换工具
 ├── scripts/
-│   └── wizard.py         # 交互式同步向导
+│   ├── wizard.py         # 交互式同步向导
+│   └── download_tdx.py   # TDX数据导入 (zip/local/online三种模式)
 ├── tests/
 │   ├── conftest.py       # pytest fixtures (temp_storage_root, mock_baostock)
 │   ├── unit/             # 单元测试
@@ -84,6 +88,7 @@ graph TB
         PM["ProviderManager<br/>单例工厂"]
         BP["BaostockProvider<br/>Baostock 驱动"]
         EP["EastMoneyProvider<br/>东财驱动"]
+        TP["TDXProvider<br/>通达信驱动"]
         DC["DataCleaner<br/>时间标准化"]
     end
 
@@ -272,6 +277,33 @@ SyncManager.sync()
 - symbol 标准化: `_to_standard_symbol()` 将纯数字代码转为 `sh./sz./bj.` 前缀格式（6→sh, 8/4→bj, 其余→sz），三处调用：板块成分股、龙虎榜、机构交易
 - 防封策略: curl_cffi TLS 指纹模拟 + 全局节流 + tenacity 自动重试
 
+**`app/provider/tdx_provider.py` — `TDXProvider(BaseProvider)`**
+- `_SUPPORTED_TABLE_MAP`: 类级字典，映射 table_id → category
+  - `ashare.kline.1d.tdx` → `"timeseries"` — A股日线
+  - `ashare.kline.5m.tdx` → `"timeseries"` — A股5分钟线
+  - `aindex.kline.1d.tdx` → `"timeseries"` — 指数日线
+- `__init__(data_dir, mode, vipdoc_dir)`: 支持三种导入模式
+  - `mode="zip"`: 下载 hsjday.zip / hsmin5.zip 并解析
+  - `mode="local"`: 读取本地通达信安装目录的 vipdoc 文件夹
+  - `mode="online"`: 通过 mootdx TCP 在线获取
+- 在线接口能力 (已验证):
+  - 日线: 全部历史 (通过offset，600000可回溯到1999年IPO)
+  - 5分钟线: 约2年 (offset ~24000)
+  - 1分钟线: 约5个月 (offset ~23000)
+- 仅支持 raw (不复权) 数据，复权需求请使用 Baostock
+
+**`app/provider/tdx_utils.py` — 通达信数据工具**
+- `download_tdx_file(url, dest_dir)`: 下载 TDX ZIP 数据文件
+- `parse_tdx_day_data(data)`: 解析日线二进制数据 (32字节/条)
+- `parse_tdx_min_data(data, freq)`: 解析分钟线二进制数据
+- `discover_tdx_symbols(zip_path, market)`: 从 ZIP 中发现所有代码
+- `read_tdx_file_from_zip(zip_path, tdx_code, freq)`: 从 ZIP 读取指定证券数据
+- `discover_tdx_symbols_from_local(vipdoc_dir, market)`: 从本地 vipdoc 目录发现代码
+- `read_tdx_file_from_local(vipdoc_dir, tdx_code, freq)`: 从本地 vipdoc 读取数据
+- `fetch_bars_online(symbol, freq, start_date, end_date)`: mootdx TCP 在线获取 (支持offset回溯)
+- `fetch_stock_list_online(market)`: mootdx TCP 获取股票列表
+- `tdx_code_to_standard()` / `standard_to_tdx_code()`: 代码格式转换
+
 **`app/provider/em_utils.py` — 东财 HTTP 工具**
 - `em_get()`: 统一请求入口，自动节流 + 重试 + TLS 指纹模拟
 - `em_push2()`: push2 行情接口，自动回退多个 URL 应对封禁
@@ -290,7 +322,7 @@ SyncManager.sync()
 **`app/provider/provider_manager.py` — `ProviderManager`**
 - 单例模式 (`__new__`)
 - `get_provider(table_id)` → BaseProvider
-  - 解析 table_id 末段 → 实例化对应 Provider (baostock / eastmoney)
+  - 解析 table_id 末段 → 实例化对应 Provider (baostock / eastmoney / tdx)
 
 ### 4.4 Service 层（业务逻辑）
 
@@ -500,7 +532,7 @@ SyncManager.sync()
 | category | 数据类别 | kline (K 线), adj_factor (复权因子), lhb (龙虎榜) |
 | freq | 频率 (可选) | 1d (日线), 5m (5 分钟线) |
 | adj | 复权方式 (可选) | adj (后复权), raw (不复权) |
-| source | 数据源 (末段，路由依据) | baostock, eastmoney |
+| source | 数据源 (末段，路由依据) | baostock, eastmoney, tdx |
 
 **已注册的 table_id**:
 - `ashare.kline.1d.adj.baostock` (TS) — A 股日线后复权
@@ -513,6 +545,12 @@ SyncManager.sync()
 - `ashare.industry.eastmoney` (EV) — 行业板块成分股
 - `ashare.dragon_tiger.eastmoney` (EV) — 龙虎榜
 - `ashare.inst_trade.eastmoney` (EV) — 机构买卖每日统计
+- `ashare.kline.1d.tdx` (TS) — A 股日线 (通达信离线)
+- `ashare.kline.5m.tdx` (TS) — A 股 5 分钟线 (通达信离线)
+- `ashare.kline.1m.tdx` (TS) — A 股 1 分钟线 (通达信离线)
+- `aindex.kline.1d.tdx` (TS) — 指数日线 (通达信离线)
+- `aindex.kline.5m.tdx` (TS) — 指数 5 分钟线 (通达信离线)
+- `aindex.kline.1m.tdx` (TS) — 指数 1 分钟线 (通达信离线)
 
 ---
 
@@ -768,7 +806,8 @@ tests/
 │   ├── test_update_metadata.py    # _update_metadata 单元测试
 │   ├── test_metadata_manager.py   # MetadataManager 单元测试
 │   ├── test_provider_baostock.py  # BaostockProvider 单元测试 (mock)
-│   └── test_provider_eastmoney.py # EastMoneyProvider 单元测试 (mock)
+│   ├── test_provider_eastmoney.py # EastMoneyProvider 单元测试 (mock)
+│   └── test_provider_tdx.py       # TDXProvider 单元测试 (mock)
 ├── integration/
 │   ├── test_provider_baostock.py  # Baostock 真实 API 测试 (需网络)
 │   ├── test_provider_eastmoney.py # EastMoneyProvider 东财驱动测试 (需网络)

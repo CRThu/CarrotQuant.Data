@@ -8,5 +8,6 @@ __pycache__/
 storage_root/
 test_*_root/
 logs/
+tdx_data/
 
 config/config.yaml

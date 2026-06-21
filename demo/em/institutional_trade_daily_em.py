@@ -31,7 +31,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from em_utils import em_get, DATACENTER_URL
+from demo.em.em_utils import em_get, DATACENTER_URL
 
 # ---------------------------------------------------------------------------
 # 常量
