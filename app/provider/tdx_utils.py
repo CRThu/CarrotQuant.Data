@@ -5,16 +5,12 @@
   2. online: 通过 tdxpy TCP 在线获取 (日线全历史, 5m~2年, 1m~5月)
 """
 
-import struct
 from pathlib import Path
 
 import polars as pl
 from loguru import logger
 from tdxpy.hq import TdxHq_API
-
-# TDX 二进制记录大小
-_DAY_RECORD_SIZE = 32
-_MIN_RECORD_SIZE = 32
+from tdxpy.reader import TdxDailyBarReader, TdxLCMinBarReader
 
 # tdxpy category 映射
 _CATEGORY_MAP = {
@@ -47,12 +43,26 @@ _TDX_SERVERS = [
 # vipdoc 频率子目录映射
 _FREQ_TO_SUBDIR = {
     "1d": "lday",
-    "5m": "min5",
-    "1m": "min1",
-    "15m": "min15",
-    "30m": "min30",
-    "60m": "min60",
+    "5m": "minline",
+    "1m": "minline",
+    "15m": "minline",
+    "30m": "minline",
+    "60m": "minline",
 }
+
+# vipdoc 分钟线文件后缀映射
+_FREQ_TO_EXT = {
+    "1d": ".day",
+    "5m": ".lc5",
+    "1m": ".lc1",
+    "15m": ".lc1",
+    "30m": ".lc1",
+    "60m": ".lc1",
+}
+
+# tdxpy reader 实例 (全局单例)
+_daily_reader = TdxDailyBarReader()
+_lc_min_reader = TdxLCMinBarReader()
 
 
 def _connect_tdx_api() -> TdxHq_API:
@@ -65,86 +75,6 @@ def _connect_tdx_api() -> TdxHq_API:
         except Exception:
             continue
     raise RuntimeError("TDX 服务器连接失败，请检查网络或稍后重试")
-
-
-# -----------------------------------------------------------------------
-# 二进制解析 (供 vipdoc 本地读取使用)
-# -----------------------------------------------------------------------
-
-def parse_tdx_day_data(data: bytes) -> list[dict]:
-    """解析通达信日线二进制数据 (32字节/条)。"""
-    records = []
-    num_records = len(data) // _DAY_RECORD_SIZE
-
-    for i in range(num_records):
-        offset = i * _DAY_RECORD_SIZE
-        record = data[offset:offset + _DAY_RECORD_SIZE]
-
-        date_int = struct.unpack('<I', record[0:4])[0]
-        year = date_int // 10000
-        month = (date_int % 10000) // 100
-        day = date_int % 100
-
-        open_price = struct.unpack('<I', record[4:8])[0] / 100.0
-        high_price = struct.unpack('<I', record[8:12])[0] / 100.0
-        low_price = struct.unpack('<I', record[12:16])[0] / 100.0
-        close_price = struct.unpack('<I', record[16:20])[0] / 100.0
-        amount = struct.unpack('<f', record[20:24])[0]
-        volume = struct.unpack('<I', record[24:28])[0]
-
-        records.append({
-            'date': f"{year:04d}-{month:02d}-{day:02d}",
-            'open': round(open_price, 4),
-            'high': round(high_price, 4),
-            'low': round(low_price, 4),
-            'close': round(close_price, 4),
-            'volume': volume,
-            'amount': round(amount, 2),
-        })
-
-    return records
-
-
-def parse_tdx_min_data(data: bytes, freq: int = 1) -> list[dict]:
-    """解析通达信分钟线二进制数据 (32字节/条)。"""
-    records = []
-    num_records = len(data) // _MIN_RECORD_SIZE
-
-    for i in range(num_records):
-        offset = i * _MIN_RECORD_SIZE
-        record = data[offset:offset + _MIN_RECORD_SIZE]
-
-        date_int = struct.unpack('<I', record[0:4])[0]
-        time_int = struct.unpack('<I', record[4:8])[0]
-
-        year = date_int // 10000
-        month = (date_int % 10000) // 100
-        day = date_int % 100
-
-        hour = time_int // 10000
-        minute = (time_int % 10000) // 100
-        second = time_int % 100
-
-        open_price = struct.unpack('<I', record[8:12])[0] / 100.0
-        high_price = struct.unpack('<I', record[12:16])[0] / 100.0
-        low_price = struct.unpack('<I', record[16:20])[0] / 100.0
-        close_price = struct.unpack('<I', record[20:24])[0] / 100.0
-        amount = struct.unpack('<f', record[24:28])[0]
-        volume = struct.unpack('<I', record[28:32])[0]
-
-        records.append({
-            'datetime': f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}",
-            'date': f"{year:04d}-{month:02d}-{day:02d}",
-            'time': f"{hour:02d}:{minute:02d}:{second:02d}",
-            'open': round(open_price, 4),
-            'high': round(high_price, 4),
-            'low': round(low_price, 4),
-            'close': round(close_price, 4),
-            'volume': volume,
-            'amount': round(amount, 2),
-        })
-
-    return records
 
 
 # -----------------------------------------------------------------------
@@ -168,7 +98,7 @@ def standard_to_tdx_code(standard_code: str) -> str:
 # -----------------------------------------------------------------------
 
 def discover_tdx_symbols_from_local(vipdoc_dir: Path, market: str = "all") -> list[str]:
-    """从本地 vipdoc 目录发现所有证券代码。"""
+    """从本地 vipdoc lday 目录发现所有证券代码。"""
     symbols = set()
     lday_dir = vipdoc_dir / "lday"
 
@@ -196,25 +126,64 @@ def discover_tdx_symbols_from_local(vipdoc_dir: Path, market: str = "all") -> li
 def read_tdx_file_from_local(
     vipdoc_dir: Path, tdx_code: str, freq: str = "1d"
 ) -> list[dict]:
-    """从本地 vipdoc 目录读取指定证券的数据。"""
+    """从本地 vipdoc 目录读取指定证券的数据。
+
+    使用 tdxpy reader 解析二进制文件，返回标准记录列表。
+    """
     subdir = _FREQ_TO_SUBDIR.get(freq)
-    if not subdir:
+    ext = _FREQ_TO_EXT.get(freq)
+    if not subdir or not ext:
         raise ValueError(f"不支持的频率: {freq}")
 
     market = tdx_code[:2]
-    file_path = vipdoc_dir / market / subdir / f"{tdx_code}.day"
+    file_path = vipdoc_dir / market / subdir / f"{tdx_code}{ext}"
 
     if not file_path.exists():
         logger.warning(f"文件不存在: {file_path}")
         return []
 
-    data = file_path.read_bytes()
+    try:
+        if freq == "1d":
+            pdf = _daily_reader.get_df(str(file_path))
+        else:
+            pdf = _lc_min_reader.get_df(str(file_path))
 
-    if freq == "1d":
-        return parse_tdx_day_data(data)
-    else:
-        freq_num = int(freq.replace('m', ''))
-        return parse_tdx_min_data(data, freq=freq_num)
+        if pdf.empty:
+            return []
+
+        records = []
+        for idx, row in pdf.iterrows():
+            if freq == "1d":
+                dt_str = idx.strftime("%Y-%m-%d")
+                records.append({
+                    "date": dt_str,
+                    "open": round(float(row["open"]), 4),
+                    "high": round(float(row["high"]), 4),
+                    "low": round(float(row["low"]), 4),
+                    "close": round(float(row["close"]), 4),
+                    "volume": float(row["volume"]),
+                    "amount": round(float(row["amount"]), 2),
+                })
+            else:
+                dt_str = idx.strftime("%Y-%m-%d %H:%M:%S")
+                date_part = idx.strftime("%Y-%m-%d")
+                records.append({
+                    "datetime": dt_str,
+                    "date": date_part,
+                    "time": idx.strftime("%H:%M:%S"),
+                    "open": round(float(row["open"]), 4),
+                    "high": round(float(row["high"]), 4),
+                    "low": round(float(row["low"]), 4),
+                    "close": round(float(row["close"]), 4),
+                    "volume": float(row["volume"]),
+                    "amount": round(float(row["amount"]), 2),
+                })
+
+        return records
+
+    except Exception as e:
+        logger.warning(f"解析失败: {file_path}, {e}")
+        return []
 
 
 # -----------------------------------------------------------------------
@@ -240,7 +209,8 @@ def fetch_bars_online(
     if category is None:
         raise ValueError(f"不支持的频率: {freq}")
 
-    is_index = table_id.startswith("aindex")
+    is_index = table_id.startswith("aindex") or pure_code.startswith(("000", "399"))
+    fetch_market = 1 if pure_code.startswith("000") else market
 
     api = _connect_tdx_api()
     try:
@@ -249,9 +219,9 @@ def fetch_bars_online(
 
         while True:
             if is_index:
-                data = api.get_index_bars(category, market, pure_code, offset, _MAX_BARS_PER_REQUEST)
+                data = api.get_index_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST)
             else:
-                data = api.get_security_bars(category, market, pure_code, offset, _MAX_BARS_PER_REQUEST)
+                data = api.get_security_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST)
 
             if not data:
                 break

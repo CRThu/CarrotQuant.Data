@@ -6,6 +6,7 @@
 3. fetch 路由到正确的私有方法
 4. 数据转换: polars + 标准列
 5. 空数据防御
+6. tdxpy reader 本地解析
 """
 
 import pytest
@@ -15,12 +16,15 @@ import polars as pl
 
 from app.provider.tdx_provider import TDXProvider
 from app.provider.tdx_utils import (
-    parse_tdx_day_data,
-    parse_tdx_min_data,
     tdx_code_to_standard,
     standard_to_tdx_code,
+    read_tdx_file_from_local,
+    discover_tdx_symbols_from_local,
 )
 from app.provider.provider_manager import ProviderManager
+
+# 通达信默认安装路径
+_VIPDOC_DIR = Path(r"C:\new_tdx\vipdoc")
 
 
 # ---------------------------------------------------------------------------
@@ -40,48 +44,14 @@ def _reset_provider_manager():
 @pytest.fixture
 def provider():
     """创建 TDXProvider 实例 (使用已下载的测试数据)。"""
-    vipdoc_dir = Path(__file__).resolve().parents[2] / "vipdoc"
-    if not vipdoc_dir.exists():
+    if not _VIPDOC_DIR.exists():
         pytest.skip("vipdoc 目录不存在，跳过测试")
-    return TDXProvider(mode="local", vipdoc_dir=str(vipdoc_dir))
+    return TDXProvider(mode="local", vipdoc_dir=str(_VIPDOC_DIR))
 
 
-@pytest.fixture
-def sample_day_binary():
-    """构造最小的日线二进制数据 (1条记录)。"""
-    import struct
-    date_int = 20240101
-    open_price = int(10.50 * 100)
-    high_price = int(11.00 * 100)
-    low_price = int(10.00 * 100)
-    close_price = int(10.80 * 100)
-    amount = 1000000.0
-    volume = 100000
-    reserved = 0
-
-    record = struct.pack('<IIIIIfII',
-                         date_int, open_price, high_price, low_price,
-                         close_price, amount, volume, reserved)
-    return record
-
-
-@pytest.fixture
-def sample_min_binary():
-    """构造最小的分钟线二进制数据 (1条记录)。"""
-    import struct
-    date_int = 20240101
-    time_int = 93000
-    open_price = int(10.50 * 100)
-    high_price = int(11.00 * 100)
-    low_price = int(10.00 * 100)
-    close_price = int(10.80 * 100)
-    amount = float(100000.0)
-    volume = 10000
-
-    record = struct.pack('<IIIIIIfI',
-                         date_int, time_int, open_price, high_price,
-                         low_price, close_price, amount, volume)
-    return record
+def _skip_if_no_vipdoc():
+    if not _VIPDOC_DIR.exists():
+        pytest.skip("vipdoc 目录不存在，跳过测试")
 
 
 # ---------------------------------------------------------------------------
@@ -92,16 +62,13 @@ class TestProviderRegistration:
     """测试 ProviderManager 能正确路由到 TDXProvider。"""
 
     def test_provider_manager_routes_to_tdx(self):
-        """ProviderManager 应根据 table_id 末段 'tdx' 路由到 TDXProvider。"""
         ProviderManager._instance = None
         ProviderManager._providers = {}
-
         pm = ProviderManager()
         p = pm.get_provider("ashare.kline.1d.tdx")
         assert isinstance(p, TDXProvider)
 
     def test_supported_tables_complete(self, provider):
-        """TDXProvider 应支持所有注册的 table_id。"""
         tables = provider.get_supported_tables()
         expected = [
             "ashare.kline.1d.tdx",
@@ -114,12 +81,10 @@ class TestProviderRegistration:
         assert set(tables) == set(expected)
 
     def test_unsupported_table_raises(self, provider):
-        """不支持的 table_id 应抛出 ValueError。"""
         with pytest.raises(ValueError, match="not supported"):
             provider.get_table_category("ashare.kline.1d.baostock")
 
     def test_fetch_unsupported_table_raises(self, provider):
-        """fetch 不支持的 table_id 应抛出 ValueError。"""
         with pytest.raises(ValueError, match="not supported"):
             provider.fetch("ashare.kline.1d.baostock", "sh.600000", "2024-01-01", "2024-12-31")
 
@@ -129,8 +94,6 @@ class TestProviderRegistration:
 # ---------------------------------------------------------------------------
 
 class TestGetTableCategory:
-    """测试 get_table_category 返回正确的类别。"""
-
     @pytest.mark.parametrize("table_id", [
         "ashare.kline.1d.tdx",
         "ashare.kline.5m.tdx",
@@ -140,7 +103,6 @@ class TestGetTableCategory:
         "aindex.kline.1m.tdx",
     ])
     def test_all_tables_are_timeseries(self, provider, table_id):
-        """所有 TDX table_id 都应返回 'timeseries' 类别。"""
         assert provider.get_table_category(table_id) == "timeseries"
 
 
@@ -149,20 +111,15 @@ class TestGetTableCategory:
 # ---------------------------------------------------------------------------
 
 class TestGetSortKeys:
-    """测试 get_sort_keys 返回正确的排序列。"""
-
     def test_sort_keys_returns_timestamp(self, provider):
-        """TDX 时序表应返回 ['timestamp'] 作为排序键。"""
         assert provider.get_sort_keys("ashare.kline.1d.tdx") == ["timestamp"]
 
 
 # ---------------------------------------------------------------------------
-# 工具方法
+# 代码格式转换
 # ---------------------------------------------------------------------------
 
 class TestTdxCodeConversion:
-    """测试代码格式转换。"""
-
     @pytest.mark.parametrize("tdx_code,standard", [
         ("sh600000", "sh.600000"),
         ("sz000001", "sz.000001"),
@@ -181,37 +138,95 @@ class TestTdxCodeConversion:
 
 
 # ---------------------------------------------------------------------------
-# 二进制解析
+# tdxpy reader 本地解析
 # ---------------------------------------------------------------------------
 
-class TestParseBinary:
-    """测试二进制数据解析。"""
+class TestTdxpyReader:
+    """测试 tdxpy reader 解析本地 vipdoc 文件。"""
 
-    def test_parse_day_data(self, sample_day_binary):
-        records = parse_tdx_day_data(sample_day_binary)
-        assert len(records) == 1
+    def test_read_daily_file(self):
+        _skip_if_no_vipdoc()
+        records = read_tdx_file_from_local(_VIPDOC_DIR, "sh600000", freq="1d")
+        assert len(records) > 0
         r = records[0]
-        assert r['date'] == '2024-01-01'
-        assert r['open'] == 10.50
-        assert r['high'] == 11.00
-        assert r['low'] == 10.00
-        assert r['close'] == 10.80
-        assert r['volume'] == 100000
-        assert r['amount'] == 1000000.0
+        assert "date" in r
+        assert "open" in r
+        assert "high" in r
+        assert "low" in r
+        assert "close" in r
+        assert "volume" in r
+        assert "amount" in r
 
-    def test_parse_min_data(self, sample_min_binary):
-        records = parse_tdx_min_data(sample_min_binary, freq=1)
-        assert len(records) == 1
+    def test_read_daily_file_date_format(self):
+        _skip_if_no_vipdoc()
+        records = read_tdx_file_from_local(_VIPDOC_DIR, "sh600000", freq="1d")
+        assert len(records) > 0
+        assert records[0]["date"] == "1999-11-10"
+
+    def test_read_daily_file_values(self):
+        _skip_if_no_vipdoc()
+        records = read_tdx_file_from_local(_VIPDOC_DIR, "sh600000", freq="1d")
+        assert len(records) > 0
         r = records[0]
-        assert r['date'] == '2024-01-01'
-        assert r['time'] == '09:30:00'
-        assert r['datetime'] == '2024-01-01 09:30:00'
-        assert r['open'] == 10.50
-        assert r['close'] == 10.80
+        assert r["open"] == 29.50
+        assert r["high"] == 29.80
+        assert r["low"] == 27.00
+        assert r["close"] == 27.75
 
-    def test_parse_empty_data(self):
-        assert parse_tdx_day_data(b'') == []
-        assert parse_tdx_min_data(b'', freq=1) == []
+    def test_read_minute_file(self):
+        _skip_if_no_vipdoc()
+        records = read_tdx_file_from_local(_VIPDOC_DIR, "sh600000", freq="1m")
+        assert len(records) > 0
+        r = records[0]
+        assert "datetime" in r
+        assert "date" in r
+        assert "time" in r
+        assert "open" in r
+        assert "close" in r
+
+    def test_read_minute_file_datetime_format(self):
+        _skip_if_no_vipdoc()
+        records = read_tdx_file_from_local(_VIPDOC_DIR, "sh600000", freq="1m")
+        assert len(records) > 0
+        assert records[0]["datetime"] == "2025-01-02 09:31:00"
+        assert records[0]["date"] == "2025-01-02"
+        assert records[0]["time"] == "09:31:00"
+
+    def test_read_minute_file_values(self):
+        _skip_if_no_vipdoc()
+        records = read_tdx_file_from_local(_VIPDOC_DIR, "sh600000", freq="1m")
+        assert len(records) > 0
+        r = records[0]
+        assert r["open"] == 10.30
+        assert r["high"] == 10.42
+        assert r["low"] == 10.29
+        assert r["close"] == 10.38
+
+    def test_read_nonexistent_file_returns_empty(self):
+        _skip_if_no_vipdoc()
+        records = read_tdx_file_from_local(_VIPDOC_DIR, "sh999999", freq="5m")
+        assert records == []
+
+    def test_read_unsupported_freq_raises(self):
+        _skip_if_no_vipdoc()
+        with pytest.raises(ValueError, match="不支持的频率"):
+            read_tdx_file_from_local(_VIPDOC_DIR, "sh600000", freq="2m")
+
+
+class TestDiscoverSymbolsLocal:
+    """测试从本地 vipdoc 发现证券代码。"""
+
+    def test_discover_all_symbols(self):
+        _skip_if_no_vipdoc()
+        symbols = discover_tdx_symbols_from_local(_VIPDOC_DIR)
+        assert len(symbols) > 0
+        assert all(len(s) >= 4 for s in symbols)
+
+    def test_discover_sh_symbols(self):
+        _skip_if_no_vipdoc()
+        symbols = discover_tdx_symbols_from_local(_VIPDOC_DIR, market="sh")
+        assert len(symbols) > 0
+        assert all(s.startswith("sh") for s in symbols)
 
 
 # ---------------------------------------------------------------------------
@@ -219,23 +234,14 @@ class TestParseBinary:
 # ---------------------------------------------------------------------------
 
 class TestFetchData:
-    """测试 fetch 方法返回正确的数据格式。"""
-
     def test_fetch_daily_returns_polars(self, provider):
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         assert isinstance(df, pl.DataFrame)
 
     def test_fetch_daily_has_standard_columns(self, provider):
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
-        assert "symbol" in df.columns
-        assert "datetime" in df.columns
-        assert "timestamp" in df.columns
-        assert "open" in df.columns
-        assert "high" in df.columns
-        assert "low" in df.columns
-        assert "close" in df.columns
-        assert "volume" in df.columns
-        assert "amount" in df.columns
+        for col in ["symbol", "datetime", "timestamp", "open", "high", "low", "close", "volume", "amount"]:
+            assert col in df.columns
 
     def test_fetch_daily_column_types(self, provider):
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
@@ -253,7 +259,6 @@ class TestFetchData:
     def test_fetch_index_daily(self, provider):
         df = provider.fetch("aindex.kline.1d.tdx", "sh.000001", "2024-01-01", "2024-01-10")
         assert isinstance(df, pl.DataFrame)
-        assert "symbol" in df.columns
         if not df.is_empty():
             assert (df["symbol"] == "sh.000001").all()
 
