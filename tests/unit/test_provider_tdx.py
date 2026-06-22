@@ -19,7 +19,6 @@ from app.provider.tdx_utils import (
     parse_tdx_min_data,
     tdx_code_to_standard,
     standard_to_tdx_code,
-    discover_tdx_symbols,
 )
 from app.provider.provider_manager import ProviderManager
 
@@ -41,22 +40,21 @@ def _reset_provider_manager():
 @pytest.fixture
 def provider():
     """创建 TDXProvider 实例 (使用已下载的测试数据)。"""
-    data_dir = Path(__file__).resolve().parents[2] / "tdx_data"
-    if not (data_dir / "hsjday.zip").exists():
-        pytest.skip("TDX 数据文件不存在，跳过测试")
-    return TDXProvider(data_dir=str(data_dir))
+    vipdoc_dir = Path(__file__).resolve().parents[2] / "vipdoc"
+    if not vipdoc_dir.exists():
+        pytest.skip("vipdoc 目录不存在，跳过测试")
+    return TDXProvider(mode="local", vipdoc_dir=str(vipdoc_dir))
 
 
 @pytest.fixture
 def sample_day_binary():
     """构造最小的日线二进制数据 (1条记录)。"""
     import struct
-    # 日期: 2024-01-01 = 20240101
     date_int = 20240101
-    open_price = int(10.50 * 100)   # 1050
-    high_price = int(11.00 * 100)   # 1100
-    low_price = int(10.00 * 100)    # 1000
-    close_price = int(10.80 * 100)  # 1080
+    open_price = int(10.50 * 100)
+    high_price = int(11.00 * 100)
+    low_price = int(10.00 * 100)
+    close_price = int(10.80 * 100)
     amount = 1000000.0
     volume = 100000
     reserved = 0
@@ -71,9 +69,7 @@ def sample_day_binary():
 def sample_min_binary():
     """构造最小的分钟线二进制数据 (1条记录)。"""
     import struct
-    # 日期: 2024-01-01 = 20240101
     date_int = 20240101
-    # 时间: 09:30:00 = 93000
     time_int = 93000
     open_price = int(10.50 * 100)
     high_price = int(11.00 * 100)
@@ -173,7 +169,6 @@ class TestTdxCodeConversion:
         ("bj832000", "bj.832000"),
     ])
     def test_tdx_code_to_standard(self, tdx_code, standard):
-        """tdx_code_to_standard 应正确转换。"""
         assert tdx_code_to_standard(tdx_code) == standard
 
     @pytest.mark.parametrize("standard,tdx_code", [
@@ -182,7 +177,6 @@ class TestTdxCodeConversion:
         ("bj.832000", "bj832000"),
     ])
     def test_standard_to_tdx_code(self, standard, tdx_code):
-        """standard_to_tdx_code 应正确转换。"""
         assert standard_to_tdx_code(standard) == tdx_code
 
 
@@ -194,7 +188,6 @@ class TestParseBinary:
     """测试二进制数据解析。"""
 
     def test_parse_day_data(self, sample_day_binary):
-        """parse_tdx_day_data 应正确解析日线二进制数据。"""
         records = parse_tdx_day_data(sample_day_binary)
         assert len(records) == 1
         r = records[0]
@@ -207,7 +200,6 @@ class TestParseBinary:
         assert r['amount'] == 1000000.0
 
     def test_parse_min_data(self, sample_min_binary):
-        """parse_tdx_min_data 应正确解析分钟线二进制数据。"""
         records = parse_tdx_min_data(sample_min_binary, freq=1)
         assert len(records) == 1
         r = records[0]
@@ -218,7 +210,6 @@ class TestParseBinary:
         assert r['close'] == 10.80
 
     def test_parse_empty_data(self):
-        """空数据应返回空列表。"""
         assert parse_tdx_day_data(b'') == []
         assert parse_tdx_min_data(b'', freq=1) == []
 
@@ -231,12 +222,10 @@ class TestFetchData:
     """测试 fetch 方法返回正确的数据格式。"""
 
     def test_fetch_daily_returns_polars(self, provider):
-        """fetch 日线应返回 Polars DataFrame。"""
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         assert isinstance(df, pl.DataFrame)
 
     def test_fetch_daily_has_standard_columns(self, provider):
-        """fetch 日线应包含 symbol, datetime, timestamp 标准列。"""
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         assert "symbol" in df.columns
         assert "datetime" in df.columns
@@ -249,7 +238,6 @@ class TestFetchData:
         assert "amount" in df.columns
 
     def test_fetch_daily_column_types(self, provider):
-        """fetch 日线列类型应正确。"""
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         assert df.schema["symbol"] == pl.String
         assert df.schema["datetime"] == pl.String
@@ -258,13 +246,11 @@ class TestFetchData:
         assert df.schema["close"] == pl.Float64
 
     def test_fetch_daily_symbol_column(self, provider):
-        """fetch 日线 symbol 列应与请求的 symbol 一致。"""
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         if not df.is_empty():
             assert (df["symbol"] == "sh.600000").all()
 
     def test_fetch_index_daily(self, provider):
-        """fetch 指数日线应返回正确数据。"""
         df = provider.fetch("aindex.kline.1d.tdx", "sh.000001", "2024-01-01", "2024-01-10")
         assert isinstance(df, pl.DataFrame)
         assert "symbol" in df.columns
@@ -272,19 +258,14 @@ class TestFetchData:
             assert (df["symbol"] == "sh.000001").all()
 
     def test_fetch_empty_date_range(self, provider):
-        """fetch 不存在的日期范围应返回空 DataFrame 且 schema 保持完整。"""
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2000-01-01", "2000-01-01")
         assert df.is_empty()
         assert list(df.columns) == ["symbol", "datetime", "timestamp", "open", "high", "low", "close", "volume", "amount"]
 
     def test_fetch_none_dates_use_defaults(self, provider):
-        """start_date/end_date 为 None 时应使用默认值。"""
-        # 不应抛出异常
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", None, None)
         assert isinstance(df, pl.DataFrame)
 
     def test_fetch_int_timestamp_converted(self, provider):
-        """整数时间戳应被转换为日期字符串。"""
-        # 2024-01-01 00:00:00 UTC+8 = 1704038400000 ms
         df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", 1704038400000, 1704211200000)
         assert isinstance(df, pl.DataFrame)

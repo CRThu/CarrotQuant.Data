@@ -7,7 +7,7 @@ CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的
 
 ## 🌟 核心特性 (Features)
 
-- **多数据源支持**：内置 [Baostock](http://baostock.com/) 和东方财富等金融数据源引擎，易于弹性拓展更多的数据源提供商。
+- **多数据源支持**：内置 [Baostock](http://baostock.com/)、东方财富、[通达信 (tdxpy)](https://github.com/rainx/tdxPy) 等金融数据源引擎，易于弹性拓展更多的数据源提供商。
 - **灵活的存储格式**：原生支持 `csv` 和基于列式存储的高效 `parquet` 格式，以满足不同体量的数据读写需求。
 - **增量与全量同步**：基于时间戳水位线的同步机制，支持从断点智能续接（增量拉取），以及强制全量覆盖更新刷新数据。
 - **现代化多入口支持**：
@@ -23,12 +23,13 @@ CarrotQuant.Data/
 ├── app/
 │   ├── config/       # 配置管理模块
 │   ├── gateway/      # 接入层（CLI命令行与HTTP API 网关 API.py）
-│   ├── provider/     # 数据源驱动（BaostockProvider, EastMoneyProvider）
+│   ├── provider/     # 数据源驱动（BaostockProvider, EastMoneyProvider, TDXProvider）
 │   ├── service/      # 核心业务逻辑实现（SyncManager, TaskPlanner等）
 │   ├── storage/      # 本地持久化与格式处理模块
 │   └── utils/        # 通用工具箱（如日志记录 Logger 等）
 ├── scripts/
-│   └── wizard.py     # 开箱即用的终端交互向导 
+│   ├── wizard.py         # 开箱即用的终端交互向导
+│   └── download_tdx.py   # 通达信日线数据下载脚本
 ├── tests/            # 单元测试与集成测试
 ├── config/           # 项目配置文件存放目录
 ├── logs/             # 系统运行日志目录
@@ -56,6 +57,7 @@ graph TB
         PM["ProviderManager"]
         BP["BaostockProvider"]
         EP["EastMoneyProvider"]
+        TP["TDXProvider"]
     end
 
     subgraph Storage["存储层"]
@@ -75,6 +77,7 @@ graph TB
     SM --> MM
     PM --> BP
     PM --> EP
+    PM --> TP
     SF --> CSV
     SF --> PQ
 ```
@@ -93,6 +96,12 @@ graph TB
 | `ashare.industry.eastmoney` | EV | 行业板块成分股 |
 | `ashare.dragon_tiger.eastmoney` | EV | 龙虎榜 |
 | `ashare.inst_trade.eastmoney` | EV | 机构买卖每日统计 |
+| `ashare.kline.1d.tdx` | TS | A 股日线 (通达信) |
+| `ashare.kline.5m.tdx` | TS | A 股 5 分钟线 (通达信) |
+| `ashare.kline.1m.tdx` | TS | A 股 1 分钟线 (通达信) |
+| `aindex.kline.1d.tdx` | TS | 指数日线 (通达信) |
+| `aindex.kline.5m.tdx` | TS | 指数 5 分钟线 (通达信) |
+| `aindex.kline.1m.tdx` | TS | 指数 1 分钟线 (通达信) |
 
 ## 🛠️ 安装指南 (Installation)
 
@@ -132,23 +141,34 @@ uv run scripts/wizard.py
 如果您需要把同步流程集成到自动化脚本或是定时任务系统里，可直接调用 CLI 入口：
 
 ```bash
-uv run python -m app.gateway.cli sync \
+# Baostock 日线 + 复权因子同步
+uv run -m app.gateway.cli sync \
   --tables "ashare.kline.1d.adj.baostock,ashare.adj_factor.baostock" \
   --formats "csv,parquet" \
   --start "2023-01-01" \
-  --end "2023-12-31" \
-  --batch 100
+  --end "2023-12-31"
+
+# 通达信在线同步 (默认)
+uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx
+
+# 通达信本地同步 (使用 vipdoc 目录)
+uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx --local
+
+# 下载通达信日线数据到 vipdoc (不覆盖分钟线)
+uv run -m app.gateway.cli tdx download
 ```
 **关键参数说明：**
 - `--tables` / `-t`: 必须项。要同步的表 ID，多表间用英文逗号分隔。
 - `--formats` / `-f`: 选填，保存格式，如 `csv,parquet`。
 - `--start` / `-s` & `--end` / `-e`: 选填，同步的时间范围，留空则是自动续接水位线增量同步。
 - `--force`: 选填。加上该标记则强制覆盖全量刷新。
+- `--local`: 选填。使用本地 vipdoc 目录模式 (通达信数据源)。
+- `--tdx-vipdoc`: 选填。通达信 vipdoc 目录路径 (默认 `C:\new_tdx\vipdoc`)。
 
 ### 方式三：启动 API 服务
 
 ```bash
-uv run python -m app.gateway.cli server --port 8000
+uv run -m app.gateway.cli server --port 8000
 ```
 
 启动后可通过 REST API 进行远程操作：

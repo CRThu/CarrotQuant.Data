@@ -23,7 +23,7 @@ def test_provider():
 
     # 1. 初始化
     print("\n1. 初始化 TDXProvider")
-    provider = TDXProvider(data_dir="./tdx_data")
+    provider = TDXProvider(mode="local", vipdoc_dir="./vipdoc")
     print(f"   支持的表: {provider.get_supported_tables()}")
 
     # 2. 发现个股代码

@@ -37,7 +37,7 @@ CarrotQuant.Data/
 │   │   ├── eastmoney_provider.py # EastMoneyProvider 实现
 │   │   ├── tdx_provider.py       # TDXProvider 通达信驱动实现
 │   │   ├── em_utils.py          # 东财 HTTP 工具 (防封/节流/重试)
-│   │   ├── tdx_utils.py         # 通达信 ZIP 下载与二进制解析工具
+│   │   ├── tdx_utils.py         # 通达信二进制解析与在线获取工具
 │   │   ├── provider_manager.py   # ProviderManager 单例工厂
 │   │   └── data_cleaner.py       # DataCleaner 时间标准化工具
 │   ├── service/          # 业务逻辑层
@@ -55,7 +55,7 @@ CarrotQuant.Data/
 │       └── time_utils.py         # 时间戳/ISO/日期转换工具
 ├── scripts/
 │   ├── wizard.py         # 交互式同步向导
-│   └── download_tdx.py   # TDX数据导入 (zip/local/online三种模式)
+│   └── download_tdx.py   # TDX日线ZIP下载脚本 (独立使用，或通过 CLI tdx download 替代)
 ├── tests/
 │   ├── conftest.py       # pytest fixtures (temp_storage_root, mock_baostock)
 │   ├── unit/             # 单元测试
@@ -281,11 +281,13 @@ SyncManager.sync()
 - `_SUPPORTED_TABLE_MAP`: 类级字典，映射 table_id → category
   - `ashare.kline.1d.tdx` → `"timeseries"` — A股日线
   - `ashare.kline.5m.tdx` → `"timeseries"` — A股5分钟线
+  - `ashare.kline.1m.tdx` → `"timeseries"` — A股1分钟线
   - `aindex.kline.1d.tdx` → `"timeseries"` — 指数日线
-- `__init__(data_dir, mode, vipdoc_dir)`: 支持三种导入模式
-  - `mode="zip"`: 下载 hsjday.zip / hsmin5.zip 并解析
-  - `mode="local"`: 读取本地通达信安装目录的 vipdoc 文件夹
-  - `mode="online"`: 通过 mootdx TCP 在线获取
+  - `aindex.kline.5m.tdx` → `"timeseries"` — 指数5分钟线
+  - `aindex.kline.1m.tdx` → `"timeseries"` — 指数1分钟线
+- `__init__(mode, vipdoc_dir)`: 支持两种导入模式
+  - `mode="online"` (默认): 通过 tdxpy TCP 在线获取
+  - `mode="local"`: 读取本地 vipdoc 目录 (默认 `C:\new_tdx\vipdoc`)
 - 在线接口能力 (已验证):
   - 日线: 全部历史 (通过offset，600000可回溯到1999年IPO)
   - 5分钟线: 约2年 (offset ~24000)
@@ -293,15 +295,12 @@ SyncManager.sync()
 - 仅支持 raw (不复权) 数据，复权需求请使用 Baostock
 
 **`app/provider/tdx_utils.py` — 通达信数据工具**
-- `download_tdx_file(url, dest_dir)`: 下载 TDX ZIP 数据文件
 - `parse_tdx_day_data(data)`: 解析日线二进制数据 (32字节/条)
 - `parse_tdx_min_data(data, freq)`: 解析分钟线二进制数据
-- `discover_tdx_symbols(zip_path, market)`: 从 ZIP 中发现所有代码
-- `read_tdx_file_from_zip(zip_path, tdx_code, freq)`: 从 ZIP 读取指定证券数据
 - `discover_tdx_symbols_from_local(vipdoc_dir, market)`: 从本地 vipdoc 目录发现代码
 - `read_tdx_file_from_local(vipdoc_dir, tdx_code, freq)`: 从本地 vipdoc 读取数据
-- `fetch_bars_online(symbol, freq, start_date, end_date)`: mootdx TCP 在线获取 (支持offset回溯)
-- `fetch_stock_list_online(market)`: mootdx TCP 获取股票列表
+- `fetch_bars_online(symbol, freq, start_date, end_date, table_id)`: tdxpy TCP 在线获取 (支持offset回溯)
+- `fetch_stock_list_online(market)`: tdxpy TCP 获取股票列表
 - `tdx_code_to_standard()` / `standard_to_tdx_code()`: 代码格式转换
 
 **`app/provider/em_utils.py` — 东财 HTTP 工具**
@@ -459,11 +458,29 @@ SyncManager.sync()
 - `--batch` (默认 100): 批量聚合长度
 - `--limit` (可选): 限制同步的证券数量
 - `--output` / `-o` (可选): 自定义存储根目录
+- `--local` (默认 False): 使用本地 vipdoc 模式 (默认 online)
+- `--tdx-vipdoc` (默认 `C:\new_tdx\vipdoc`): TDX vipdoc 目录路径
 
 命令 `server`:
 - `--host` / `-h` (默认 `"0.0.0.0"`): 监听地址
 - `--port` / `-p` (默认 8000): 监听端口
 - `--reload` (默认 True): 是否开启热重载
+
+命令 `tdx`:
+- `action` (必填): `download` — 下载日线 ZIP 并解压 lday 到 vipdoc
+- `--vipdoc` / `-v` (默认 `C:\new_tdx\vipdoc`): vipdoc 目录路径
+
+CLI 用法示例:
+```bash
+# 在线同步 (默认)
+uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx
+
+# 本地同步
+uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx --local
+
+# 下载日线到 vipdoc (不覆盖分钟线)
+uv run -m app.gateway.cli tdx download
+```
 
 **`app/gateway/api.py` — FastAPI REST API**
 
@@ -545,12 +562,12 @@ SyncManager.sync()
 - `ashare.industry.eastmoney` (EV) — 行业板块成分股
 - `ashare.dragon_tiger.eastmoney` (EV) — 龙虎榜
 - `ashare.inst_trade.eastmoney` (EV) — 机构买卖每日统计
-- `ashare.kline.1d.tdx` (TS) — A 股日线 (通达信离线)
-- `ashare.kline.5m.tdx` (TS) — A 股 5 分钟线 (通达信离线)
-- `ashare.kline.1m.tdx` (TS) — A 股 1 分钟线 (通达信离线)
-- `aindex.kline.1d.tdx` (TS) — 指数日线 (通达信离线)
-- `aindex.kline.5m.tdx` (TS) — 指数 5 分钟线 (通达信离线)
-- `aindex.kline.1m.tdx` (TS) — 指数 1 分钟线 (通达信离线)
+- `ashare.kline.1d.tdx` (TS) — A 股日线 (通达信)
+- `ashare.kline.5m.tdx` (TS) — A 股 5 分钟线 (通达信)
+- `ashare.kline.1m.tdx` (TS) — A 股 1 分钟线 (通达信)
+- `aindex.kline.1d.tdx` (TS) — 指数日线 (通达信)
+- `aindex.kline.5m.tdx` (TS) — 指数 5 分钟线 (通达信)
+- `aindex.kline.1m.tdx` (TS) — 指数 1 分钟线 (通达信)
 
 ---
 

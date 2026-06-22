@@ -22,7 +22,7 @@ class SyncManager:
         self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()
 
-    def sync(self, table_ids: list[str] | str, formats: list[str] | str, start_date: str = None, end_date: str = None, force_refresh: bool = False, batch_size: int = 100, symbol_limit: int = None):
+    def sync(self, table_ids: list[str] | str, formats: list[str] | str, start_date: str = None, end_date: str = None, force_refresh: bool = False, batch_size: int = 100, symbol_limit: int = None, provider_kwargs: dict = None):
         """
         执行全自动化同步闭环。
         支持多表、多格式列表传入。
@@ -35,6 +35,7 @@ class SyncManager:
             force_refresh: 是否强制刷新水位线
             batch_size: 批处理大小
             symbol_limit: 限制同步的证券数量 (常用于生成测试数据)
+            provider_kwargs: 传递给 Provider 构造函数的额外参数 (如 TDXProvider 的 mode, vipdoc_dir)
         """
         if isinstance(table_ids, str):
             table_ids = [table_ids]
@@ -44,9 +45,9 @@ class SyncManager:
         logger.info(f"[*] Starting orchestrated sync for {table_ids} into {formats} (batch_size={batch_size}, force_refresh={force_refresh}, symbol_limit={symbol_limit})...")
 
         for table_id in table_ids:
-            self._sync_single_table(table_id, formats, start_date, end_date, force_refresh, batch_size, symbol_limit)
+            self._sync_single_table(table_id, formats, start_date, end_date, force_refresh, batch_size, symbol_limit, provider_kwargs)
 
-    def _sync_single_table(self, table_id: str, formats: list[str], start_date: str, end_date: str, force_refresh: bool, batch_size: int, symbol_limit: int = None):
+    def _sync_single_table(self, table_id: str, formats: list[str], start_date: str, end_date: str, force_refresh: bool, batch_size: int, symbol_limit: int = None, provider_kwargs: dict = None):
         """
         单表同步逻辑：一次拉取，多处落地。
 
@@ -60,7 +61,7 @@ class SyncManager:
             symbol_limit: 限制同步的证券数量 (常用于生成测试数据)
         """
         # 1. 获取驱动
-        provider = self.provider_mgr.get_provider(table_id)
+        provider = self.provider_mgr.get_provider(table_id, **(provider_kwargs or {}))
         # 获取类别
         category = provider.get_table_category(table_id)
         

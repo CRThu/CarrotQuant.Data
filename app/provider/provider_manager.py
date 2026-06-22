@@ -19,12 +19,14 @@ class ProviderManager:
             cls._instance = super(ProviderManager, cls).__new__(cls)
         return cls._instance
 
-    def get_provider(self, table_id: str) -> BaseProvider:
+    def get_provider(self, table_id: str, **kwargs) -> BaseProvider:
         """
         根据 table_id 获取对应的 Provider
-        
+
         table_id 格式: {market}.{category}.{freq}.{adj}.{source}
         例如: ashare.kline.1d.adj.baostock
+
+        kwargs: 传递给 Provider 构造函数的额外参数 (如 TDXProvider 的 mode, vipdoc_dir)
         """
         source = table_id.split('.')[-1]
         
@@ -34,11 +36,7 @@ class ProviderManager:
             elif source == 'eastmoney':
                 self._providers[source] = EastMoneyProvider()
             elif source == 'tdx':
-                self._providers[source] = TDXProvider(
-                    data_dir=settings.TDX_DATA_DIR,
-                    mode=settings.TDX_MODE,
-                    vipdoc_dir=settings.TDX_VIPDOC_DIR or None,
-                )
+                self._providers[source] = TDXProvider(**kwargs)
             else:
                 raise ValueError(f"Unsupported data source: {source}")
                 
