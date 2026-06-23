@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 from .metadata_manager import MetadataManager
-from ..utils.time_utils import parse_date_to_ts
+from ..utils.time_utils import parse_date_to_ts, align_to_day_start, align_to_day_end
 
 class TaskPlanner:
     """
@@ -24,7 +24,7 @@ class TaskPlanner:
             force_refresh: 是否强制全量刷新 (忽略本地水位线)
             
         Returns:
-            List[Dict]: 补丁任务列表，每项含 symbol, start, end。每个 symbol 最多 1 个任务。
+            List[Dict]: 补丁任务列表，每项含 symbol, start, end。每个 symbol 最多 2 个任务（双向穿透时各一个）。
         """
         # 空格式列表直接返回空任务
         if not formats:
@@ -72,34 +72,38 @@ class TaskPlanner:
         loc_end = loc_end or 0
 
         for symbol in symbols:
-            # 1. 强制刷新或本地无数据：直接覆盖全量
+            # 强制刷新或本地无数据：直接覆盖全量
             if force_refresh or loc_start == 0 or loc_end == 0:
-                task_start, task_end = req_start, req_end
-            
-            # 2. 前向补全 (req_start < loc_start)
-            elif req_start < loc_start:
-                # 任务终点取 req_end 和 loc_start 的最大值，确保至少覆盖之前缺失部分并衔接旧数据
+                if req_start <= req_end:
+                    planned_tasks.append({
+                        "symbol": symbol,
+                        "start": req_start,
+                        "end": req_end
+                    })
+                continue
+
+            # 前向补全与后向拓展独立判断，支持双向穿透同时生成两个精准任务
+            # 前向补全：填补 [req_start, loc_start) 的缺口，不与后向任务重叠
+            if req_start < loc_start:
                 task_start = req_start
-                task_end = max(req_end, loc_start)
-            
-            # 3. 后向拓展 (req_end > loc_end)
-            elif req_end > loc_end:
-                # 任务起点取 loc_end，确保从最短水位的终点开始延伸（木桶原理）
-                task_start = loc_end
-                task_end = req_end
-                
-            # 4. 请求范围已被本地覆盖且非强制刷新：跳过
-            else:
-                continue
-                
-            # 安全检查：如果计算出的任务区间无效（起点 > 终点），跳过
-            if task_start > task_end:
-                continue
-                
-            planned_tasks.append({
-                "symbol": symbol,
-                "start": task_start,
-                "end": task_end
-            })
+                task_end = min(req_end, loc_start)
+                if task_start <= task_end:
+                    planned_tasks.append({
+                        "symbol": symbol,
+                        "start": task_start,
+                        "end": align_to_day_end(task_end)
+                    })
+
+            # 后向拓展：从 loc_end 开始补齐未来数据
+            # 对齐到整天：start 向下取整，end 向上取整，确保 Provider 按天拉取时不会丢数据
+            if req_end >= loc_end:
+                task_start = align_to_day_start(loc_end)
+                task_end = align_to_day_end(req_end)
+                if task_start < task_end:
+                    planned_tasks.append({
+                        "symbol": symbol,
+                        "start": task_start,
+                        "end": task_end
+                    })
             
         return planned_tasks

@@ -333,9 +333,10 @@ SyncManager.sync()
     - 无本地数据 → 必须提供 start_date
   - 为每个 symbol 计算一个补丁任务:
     - force_refresh / 无本地数据: 全量覆盖
-    - 前向补全 (req_start < loc_start): task_start=req_start, task_end=max(req_end, loc_start)
-    - 后向拓展 (req_end > loc_end): task_start=loc_end, task_end=req_end
+    - 前向补全 (req_start < loc_start): task_start=req_start, task_end=align_to_day_end(min(req_end, loc_start))
+    - 后向拓展 (req_end >= loc_end): task_start=align_to_day_start(loc_end), task_end=align_to_day_end(req_end)
     - 已覆盖: 跳过
+  - 后向拓展使用 `>=` 判定，确保本地数据结束当天被纳入刷新范围（防止分钟线等场景当天数据不完备）
   - 过滤无效区间 (start >= end)
 
 **`app/service/metadata_manager.py` — `MetadataManager`**

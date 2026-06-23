@@ -45,6 +45,36 @@ def ts_to_iso(ts_ms: int, display_tz: str = "Asia/Shanghai") -> str:
     except (ValueError, OSError, OverflowError):
         return ""
 
+def align_to_day_start(ts_ms: int, display_tz: str = "Asia/Shanghai") -> int:
+    """
+    将时间戳向下对齐到当天 00:00:00.000。
+    确保 Provider 无论是否按天截断，都能拿到完整的一天数据。
+    """
+    if not ts_ms:
+        return 0
+    try:
+        dt = datetime.fromtimestamp(ts_ms / 1000, tz=ZoneInfo(display_tz))
+        day_start = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        return int(day_start.timestamp() * 1000)
+    except (ValueError, OSError, OverflowError):
+        return ts_ms
+
+
+def align_to_day_end(ts_ms: int, display_tz: str = "Asia/Shanghai") -> int:
+    """
+    将时间戳向上对齐到当天 23:59:59.999。
+    确保 Provider 无论是否按天截断，都能拿到完整的一天数据。
+    """
+    if not ts_ms:
+        return 0
+    try:
+        dt = datetime.fromtimestamp(ts_ms / 1000, tz=ZoneInfo(display_tz))
+        day_end = dt.replace(hour=23, minute=59, second=59, microsecond=999000)
+        return int(day_end.timestamp() * 1000)
+    except (ValueError, OSError, OverflowError):
+        return ts_ms
+
+
 def parse_date_to_ts(date_val: Any, source_tz: str = "Asia/Shanghai") -> int:
     """
     通用日期解析：支持 yyyy-mm-dd 字符串或毫秒级整数。

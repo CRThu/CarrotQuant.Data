@@ -10,8 +10,8 @@ uv run -m app.gateway.cli sync `
     --limit 10 `
     --output "./test_data_root"
 
-# 2. 下载 K 线数据，起始日期设置为 2021-01-01
-Write-Host ">>> 正在下载 K 线数据 (2021-01-01 至今)..." -ForegroundColor Yellow
+# 2. 下载日线 K 线数据，起始日期设置为 2021-01-01
+Write-Host ">>> 正在下载日线 K 线数据 (2021-01-01 至今)..." -ForegroundColor Yellow
 uv run -m app.gateway.cli sync `
     --tables "ashare.kline.1d.adj.baostock,ashare.kline.1d.raw.baostock" `
     --formats "csv,parquet" `
@@ -20,7 +20,17 @@ uv run -m app.gateway.cli sync `
     --limit 10 `
     --output "./test_data_root"
 
-# 3. 下载通达信日线数据 (与 baostock 区间一致)
+# 3. 下载 5 分钟线 K 线数据 (区间缩小，防止数据量爆炸)
+Write-Host ">>> 正在下载 5 分钟线 K 线数据 (2025-06-01 ~ 2025-06-30)..." -ForegroundColor Yellow
+uv run -m app.gateway.cli sync `
+    --tables "ashare.kline.5m.raw.baostock" `
+    --formats "csv,parquet" `
+    --start "2025-06-01" `
+    --end "2025-06-30" `
+    --limit 10 `
+    --output "./test_data_root"
+
+# 4. 下载通达信日线数据 (与 baostock 区间一致)
 Write-Host ">>> 正在下载通达信日线数据 (2021-01-01 至今, online)..." -ForegroundColor Yellow
 uv run -m app.gateway.cli sync `
     --tables "ashare.kline.1d.raw.tdx" `
@@ -30,7 +40,7 @@ uv run -m app.gateway.cli sync `
     --limit 10 `
     --output "./test_data_root"
 
-# 4. 下载通达信分钟线数据 (区间缩小，防止数据量爆炸)
+# 5. 下载通达信分钟线数据 (区间缩小，防止数据量爆炸)
 Write-Host ">>> 正在下载通达信分钟线数据 (5m/1m, online)..." -ForegroundColor Yellow
 uv run -m app.gateway.cli sync `
     --tables "ashare.kline.5m.raw.tdx,ashare.kline.1m.raw.tdx" `
@@ -40,7 +50,7 @@ uv run -m app.gateway.cli sync `
     --limit 10 `
     --output "./test_data_root"
 
-# 5. 下载东方财富板块成分股数据
+# 6. 下载东方财富板块成分股数据
 Write-Host ">>> 正在下载东方财富板块成分股数据 (概念/行业)..." -ForegroundColor Yellow
 uv run -m app.gateway.cli sync `
     --tables "ashare.concept.eastmoney,ashare.industry.eastmoney" `
@@ -50,7 +60,7 @@ uv run -m app.gateway.cli sync `
     --limit 5 `
     --output "./test_data_root"
 
-# 6. 下载东方财富龙虎榜和机构交易数据
+# 7. 下载东方财富龙虎榜和机构交易数据
 Write-Host ">>> 正在下载东方财富龙虎榜和机构交易数据..." -ForegroundColor Yellow
 uv run -m app.gateway.cli sync `
     --tables "ashare.dragon_tiger.eastmoney,ashare.inst_trade.eastmoney" `

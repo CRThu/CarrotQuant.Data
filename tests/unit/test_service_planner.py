@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from app.service.task_planner import TaskPlanner
 from app.service.metadata_manager import MetadataManager
-from app.utils.time_utils import parse_date_to_ts
+from app.utils.time_utils import parse_date_to_ts, align_to_day_end, align_to_day_start
 
 def test_plan_no_local_data_no_start_date():
     """
@@ -235,13 +235,12 @@ def test_plan_prepend_scenario():
     
     tasks = planner.plan("test.table", ["csv"], ["sh.600000"], start_date, end_date)
     
-    # 应该生成一个任务，从 2010-01-01 到 2015-01-01（前向补全）
+    # 应该生成一个任务，从 2010-01-01 到 2012-12-31（仅下载请求范围，不超前补全）
     assert len(tasks) == 1
     task = tasks[0]
     assert task["symbol"] == "sh.600000"
     assert task["start"] == parse_date_to_ts("2010-01-01")
-    # 任务应该补全到本地数据的起点
-    assert task["end"] == parse_date_to_ts("2015-01-01")
+    assert task["end"] == align_to_day_end(parse_date_to_ts("2012-12-31"))
 
 
 def test_plan_append_scenario():
@@ -271,9 +270,9 @@ def test_plan_append_scenario():
     assert len(tasks) == 1
     task = tasks[0]
     assert task["symbol"] == "sh.600000"
-    # 任务应该从本地数据的结束时间开始
-    assert task["start"] == parse_date_to_ts("2023-12-31")
-    assert task["end"] == parse_date_to_ts("2025-12-31")
+    # 任务应该从本地数据的结束时间开始（对齐到天起始）
+    assert task["start"] == align_to_day_start(parse_date_to_ts("2023-12-31"))
+    assert task["end"] == align_to_day_end(parse_date_to_ts("2025-12-31"))
 
 
 def test_plan_full_patch_scenario():
@@ -300,7 +299,7 @@ def test_plan_full_patch_scenario():
     tasks = planner.plan("test.table", ["csv"], ["sh.600000"], start_date, end_date)
     
     # 应该生成两个任务：前向补全和后向拓展
-    assert len(tasks) >= 1, "应该至少生成一个任务"
+    assert len(tasks) == 2, "应该生成两个任务"
     
     # 验证任务覆盖了缺失的区间
     total_start = min(task["start"] for task in tasks)
@@ -311,6 +310,14 @@ def test_plan_full_patch_scenario():
         "任务起始时间应该早于或等于请求开始时间"
     assert total_end >= parse_date_to_ts("2025-12-31"), \
         "任务结束时间应该晚于或等于请求结束时间"
+    
+    # 验证两个任务不重叠且精准覆盖缺口
+    prepend_task = [t for t in tasks if t["start"] == parse_date_to_ts("2015-01-01")][0]
+    append_task = [t for t in tasks if t["end"] == align_to_day_end(parse_date_to_ts("2025-12-31"))][0]
+    assert prepend_task["end"] == align_to_day_end(parse_date_to_ts("2018-01-01")), \
+        "前向补全应精确到本地数据起点（对齐到天末尾）"
+    assert append_task["start"] == align_to_day_start(parse_date_to_ts("2020-12-31")), \
+        "后向拓展应精确从本地数据终点开始（对齐到天起始）"
 
 
 def test_plan_edge_case_same_start_end():
@@ -366,12 +373,12 @@ def test_plan_partial_overlap_front():
     # 请求 2019-06-01 到 2020-06-01（部分在本地数据之前）
     tasks = planner.plan("test.table", ["csv"], ["sh.600000"], "2019-06-01", "2020-06-01")
     
-    # TaskPlanner 的逻辑是 task_end = max(req_end, loc_start)
-    # 所以 task_end = max(2020-06-01, 2020-01-01) = 2020-06-01
+    # TaskPlanner 的逻辑是 task_end = min(req_end, loc_start) + align_to_day_end
+    # 所以 task_end = align_to_day_end(min(2020-06-01, 2020-01-01)) = align_to_day_end(2020-01-01)
     assert len(tasks) == 1
     task = tasks[0]
     assert task["start"] == parse_date_to_ts("2019-06-01")
-    assert task["end"] == parse_date_to_ts("2020-06-01")
+    assert task["end"] == align_to_day_end(parse_date_to_ts("2020-01-01"))
 
 
 def test_plan_partial_overlap_back():
@@ -393,11 +400,11 @@ def test_plan_partial_overlap_back():
     # 请求 2020-06-01 到 2021-06-01（部分在本地数据之后）
     tasks = planner.plan("test.table", ["csv"], ["sh.600000"], "2020-06-01", "2021-06-01")
     
-    # 应该生成任务拓展 2020-12-31 到 2021-06-01 的部分
+    # 应该生成任务拓展 2020-12-31 到 2021-06-01 的部分（对齐到天边界）
     assert len(tasks) == 1
     task = tasks[0]
-    assert task["start"] == parse_date_to_ts("2020-12-31")
-    assert task["end"] == parse_date_to_ts("2021-06-01")
+    assert task["start"] == align_to_day_start(parse_date_to_ts("2020-12-31"))
+    assert task["end"] == align_to_day_end(parse_date_to_ts("2021-06-01"))
 
 
 def test_plan_multiple_symbols_prepend():
@@ -429,4 +436,35 @@ def test_plan_multiple_symbols_prepend():
     for task in tasks:
         assert task["symbol"] in symbols
         assert task["start"] == parse_date_to_ts("2015-01-01")
-        assert task["end"] == parse_date_to_ts("2020-01-01")
+        # 仅下载请求范围 [2015, 2018]，end 对齐到天末尾
+        assert task["end"] == align_to_day_end(parse_date_to_ts("2018-12-31"))
+
+
+def test_plan_same_day_incremental_refresh():
+    """
+    测试同一天增量刷新：本地数据结束于 2024-01-15T15:00，请求结束于 2024-01-15T10:00
+    验证 req_end == loc_end 同一天时仍生成任务，确保当天数据被刷新
+    """
+    metadata_mgr = MagicMock()
+    
+    # 本地已有数据，结束于 2024-01-15
+    metadata_mgr.load.return_value = {
+        "statistics": {
+            "start_timestamp": parse_date_to_ts("2024-01-01"),
+            "end_timestamp": parse_date_to_ts("2024-01-15")
+        }
+    }
+    
+    planner = TaskPlanner(metadata_mgr)
+    
+    # 请求结束时间与本地结束同一天
+    tasks = planner.plan("test.table", ["csv"], ["sh.600000"], "2024-01-01", "2024-01-15")
+    
+    # 应生成任务，后向拓展覆盖 2024-01-15 当天
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task["symbol"] == "sh.600000"
+    # task_start = align_to_day_start(loc_end) = 2024-01-15T00:00
+    assert task["start"] == align_to_day_start(parse_date_to_ts("2024-01-15"))
+    # task_end = align_to_day_end(req_end) = 2024-01-15T23:59:59.999
+    assert task["end"] == align_to_day_end(parse_date_to_ts("2024-01-15"))
