@@ -5,12 +5,12 @@
   2. online: 通过 tdxpy TCP 在线获取
 
 支持的 table_id:
-  - ashare.kline.1d.tdx   (TS) A股个股日线
-  - ashare.kline.5m.tdx   (TS) A股个股5分钟线
-  - ashare.kline.1m.tdx   (TS) A股个股1分钟线
-  - aindex.kline.1d.tdx   (TS) 指数日线
-  - aindex.kline.5m.tdx   (TS) 指数5分钟线
-  - aindex.kline.1m.tdx   (TS) 指数1分钟线
+  - ashare.kline.1d.raw.tdx   (TS) A股个股日线
+  - ashare.kline.5m.raw.tdx   (TS) A股个股5分钟线
+  - ashare.kline.1m.raw.tdx   (TS) A股个股1分钟线
+  - aindex.kline.1d.raw.tdx   (TS) 指数日线
+  - aindex.kline.5m.raw.tdx   (TS) 指数5分钟线
+  - aindex.kline.1m.raw.tdx   (TS) 指数1分钟线
 
 仅支持 raw (不复权) 数据，复权需求请使用 Baostock。
 """
@@ -42,12 +42,12 @@ class TDXProvider(BaseProvider):
     """通达信数据源驱动，支持 local (vipdoc) 和 online (tdxpy TCP) 两种模式。"""
 
     _SUPPORTED_TABLE_MAP: dict[str, str] = {
-        "ashare.kline.1d.tdx": "timeseries",
-        "ashare.kline.5m.tdx": "timeseries",
-        "ashare.kline.1m.tdx": "timeseries",
-        "aindex.kline.1d.tdx": "timeseries",
-        "aindex.kline.5m.tdx": "timeseries",
-        "aindex.kline.1m.tdx": "timeseries",
+        "ashare.kline.1d.raw.tdx": "timeseries",
+        "ashare.kline.5m.raw.tdx": "timeseries",
+        "ashare.kline.1m.raw.tdx": "timeseries",
+        "aindex.kline.1d.raw.tdx": "timeseries",
+        "aindex.kline.5m.raw.tdx": "timeseries",
+        "aindex.kline.1m.raw.tdx": "timeseries",
     }
 
     def __init__(

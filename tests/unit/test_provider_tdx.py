@@ -65,18 +65,18 @@ class TestProviderRegistration:
         ProviderManager._instance = None
         ProviderManager._providers = {}
         pm = ProviderManager()
-        p = pm.get_provider("ashare.kline.1d.tdx")
+        p = pm.get_provider("ashare.kline.1d.raw.tdx")
         assert isinstance(p, TDXProvider)
 
     def test_supported_tables_complete(self, provider):
         tables = provider.get_supported_tables()
         expected = [
-            "ashare.kline.1d.tdx",
-            "ashare.kline.5m.tdx",
-            "ashare.kline.1m.tdx",
-            "aindex.kline.1d.tdx",
-            "aindex.kline.5m.tdx",
-            "aindex.kline.1m.tdx",
+            "ashare.kline.1d.raw.tdx",
+            "ashare.kline.5m.raw.tdx",
+            "ashare.kline.1m.raw.tdx",
+            "aindex.kline.1d.raw.tdx",
+            "aindex.kline.5m.raw.tdx",
+            "aindex.kline.1m.raw.tdx",
         ]
         assert set(tables) == set(expected)
 
@@ -95,12 +95,12 @@ class TestProviderRegistration:
 
 class TestGetTableCategory:
     @pytest.mark.parametrize("table_id", [
-        "ashare.kline.1d.tdx",
-        "ashare.kline.5m.tdx",
-        "ashare.kline.1m.tdx",
-        "aindex.kline.1d.tdx",
-        "aindex.kline.5m.tdx",
-        "aindex.kline.1m.tdx",
+        "ashare.kline.1d.raw.tdx",
+        "ashare.kline.5m.raw.tdx",
+        "ashare.kline.1m.raw.tdx",
+        "aindex.kline.1d.raw.tdx",
+        "aindex.kline.5m.raw.tdx",
+        "aindex.kline.1m.raw.tdx",
     ])
     def test_all_tables_are_timeseries(self, provider, table_id):
         assert provider.get_table_category(table_id) == "timeseries"
@@ -112,7 +112,7 @@ class TestGetTableCategory:
 
 class TestGetSortKeys:
     def test_sort_keys_returns_timestamp(self, provider):
-        assert provider.get_sort_keys("ashare.kline.1d.tdx") == ["timestamp"]
+        assert provider.get_sort_keys("ashare.kline.1d.raw.tdx") == ["timestamp"]
 
 
 # ---------------------------------------------------------------------------
@@ -235,16 +235,16 @@ class TestDiscoverSymbolsLocal:
 
 class TestFetchData:
     def test_fetch_daily_returns_polars(self, provider):
-        df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
+        df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         assert isinstance(df, pl.DataFrame)
 
     def test_fetch_daily_has_standard_columns(self, provider):
-        df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
+        df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         for col in ["symbol", "datetime", "timestamp", "open", "high", "low", "close", "volume", "amount"]:
             assert col in df.columns
 
     def test_fetch_daily_column_types(self, provider):
-        df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
+        df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         assert df.schema["symbol"] == pl.String
         assert df.schema["datetime"] == pl.String
         assert df.schema["timestamp"] == pl.Int64
@@ -252,25 +252,25 @@ class TestFetchData:
         assert df.schema["close"] == pl.Float64
 
     def test_fetch_daily_symbol_column(self, provider):
-        df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2024-01-01", "2024-01-10")
+        df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", "2024-01-01", "2024-01-10")
         if not df.is_empty():
             assert (df["symbol"] == "sh.600000").all()
 
     def test_fetch_index_daily(self, provider):
-        df = provider.fetch("aindex.kline.1d.tdx", "sh.000001", "2024-01-01", "2024-01-10")
+        df = provider.fetch("aindex.kline.1d.raw.tdx", "sh.000001", "2024-01-01", "2024-01-10")
         assert isinstance(df, pl.DataFrame)
         if not df.is_empty():
             assert (df["symbol"] == "sh.000001").all()
 
     def test_fetch_empty_date_range(self, provider):
-        df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", "2000-01-01", "2000-01-01")
+        df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", "2000-01-01", "2000-01-01")
         assert df.is_empty()
         assert list(df.columns) == ["symbol", "datetime", "timestamp", "open", "high", "low", "close", "volume", "amount"]
 
     def test_fetch_none_dates_use_defaults(self, provider):
-        df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", None, None)
+        df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", None, None)
         assert isinstance(df, pl.DataFrame)
 
     def test_fetch_int_timestamp_converted(self, provider):
-        df = provider.fetch("ashare.kline.1d.tdx", "sh.600000", 1704038400000, 1704211200000)
+        df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", 1704038400000, 1704211200000)
         assert isinstance(df, pl.DataFrame)

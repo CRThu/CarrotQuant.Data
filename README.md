@@ -96,12 +96,12 @@ graph TB
 | `ashare.industry.eastmoney` | EV | 行业板块成分股 |
 | `ashare.dragon_tiger.eastmoney` | EV | 龙虎榜 |
 | `ashare.inst_trade.eastmoney` | EV | 机构买卖每日统计 |
-| `ashare.kline.1d.tdx` | TS | A 股日线 (通达信) |
-| `ashare.kline.5m.tdx` | TS | A 股 5 分钟线 (通达信) |
-| `ashare.kline.1m.tdx` | TS | A 股 1 分钟线 (通达信) |
-| `aindex.kline.1d.tdx` | TS | 指数日线 (通达信) |
-| `aindex.kline.5m.tdx` | TS | 指数 5 分钟线 (通达信) |
-| `aindex.kline.1m.tdx` | TS | 指数 1 分钟线 (通达信) |
+| `ashare.kline.1d.raw.tdx` | TS | A 股日线 (通达信) |
+| `ashare.kline.5m.raw.tdx` | TS | A 股 5 分钟线 (通达信) |
+| `ashare.kline.1m.raw.tdx` | TS | A 股 1 分钟线 (通达信) |
+| `aindex.kline.1d.raw.tdx` | TS | 指数日线 (通达信) |
+| `aindex.kline.5m.raw.tdx` | TS | 指数 5 分钟线 (通达信) |
+| `aindex.kline.1m.raw.tdx` | TS | 指数 1 分钟线 (通达信) |
 
 ## 🛠️ 安装指南 (Installation)
 
@@ -149,10 +149,10 @@ uv run -m app.gateway.cli sync \
   --end "2023-12-31"
 
 # 通达信在线同步 (默认)
-uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx
+uv run -m app.gateway.cli sync -t ashare.kline.1d.raw.tdx
 
-# 通达信本地同步 (使用 vipdoc 目录)
-uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx --local
+# 本地同步
+uv run -m app.gateway.cli sync -t ashare.kline.1d.raw.tdx --local
 
 # 下载通达信日线数据到 vipdoc (不覆盖分钟线)
 uv run -m app.gateway.cli tdx download

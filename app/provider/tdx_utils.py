@@ -17,9 +17,6 @@ _CATEGORY_MAP = {
     "1d": 4,
     "5m": 0,
     "1m": 7,
-    "15m": 1,
-    "30m": 2,
-    "60m": 3,
 }
 
 # tdxpy 市场映射
@@ -45,9 +42,6 @@ _FREQ_TO_SUBDIR = {
     "1d": "lday",
     "5m": "minline",
     "1m": "minline",
-    "15m": "minline",
-    "30m": "minline",
-    "60m": "minline",
 }
 
 # vipdoc 分钟线文件后缀映射
@@ -55,9 +49,6 @@ _FREQ_TO_EXT = {
     "1d": ".day",
     "5m": ".lc5",
     "1m": ".lc1",
-    "15m": ".lc1",
-    "30m": ".lc1",
-    "60m": ".lc1",
 }
 
 # tdxpy reader 实例 (全局单例)

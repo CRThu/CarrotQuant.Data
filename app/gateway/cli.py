@@ -117,7 +117,7 @@ def tdx_download(vipdoc_dir: str):
     logger.info("  沪市日线: %d, 深市日线: %d, 北交所日线: %d", sh, sz, bj)
 
     logger.info("完成! 使用方式:")
-    logger.info("  uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx --local --tdx-vipdoc '%s'", vipdoc_dir)
+    logger.info("  uv run -m app.gateway.cli sync -t ashare.kline.1d.raw.tdx --local --tdx-vipdoc '%s'", vipdoc_dir)
 
 
 if __name__ == "__main__":

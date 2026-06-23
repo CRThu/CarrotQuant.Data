@@ -279,12 +279,12 @@ SyncManager.sync()
 
 **`app/provider/tdx_provider.py` — `TDXProvider(BaseProvider)`**
 - `_SUPPORTED_TABLE_MAP`: 类级字典，映射 table_id → category
-  - `ashare.kline.1d.tdx` → `"timeseries"` — A股日线
-  - `ashare.kline.5m.tdx` → `"timeseries"` — A股5分钟线
-  - `ashare.kline.1m.tdx` → `"timeseries"` — A股1分钟线
-  - `aindex.kline.1d.tdx` → `"timeseries"` — 指数日线
-  - `aindex.kline.5m.tdx` → `"timeseries"` — 指数5分钟线
-  - `aindex.kline.1m.tdx` → `"timeseries"` — 指数1分钟线
+  - `ashare.kline.1d.raw.tdx` → `"timeseries"` — A股日线
+  - `ashare.kline.5m.raw.tdx` → `"timeseries"` — A股5分钟线
+  - `ashare.kline.1m.raw.tdx` → `"timeseries"` — A股1分钟线
+  - `aindex.kline.1d.raw.tdx` → `"timeseries"` — 指数日线
+  - `aindex.kline.5m.raw.tdx` → `"timeseries"` — 指数5分钟线
+  - `aindex.kline.1m.raw.tdx` → `"timeseries"` — 指数1分钟线
 - `__init__(mode, vipdoc_dir)`: 支持两种导入模式
   - `mode="online"` (默认): 通过 tdxpy TCP 在线获取
   - `mode="local"`: 读取本地 vipdoc 目录 (默认 `C:\new_tdx\vipdoc`)
@@ -295,10 +295,8 @@ SyncManager.sync()
 - 仅支持 raw (不复权) 数据，复权需求请使用 Baostock
 
 **`app/provider/tdx_utils.py` — 通达信数据工具**
-- `parse_tdx_day_data(data)`: 解析日线二进制数据 (32字节/条)
-- `parse_tdx_min_data(data, freq)`: 解析分钟线二进制数据
-- `discover_tdx_symbols_from_local(vipdoc_dir, market)`: 从本地 vipdoc 目录发现代码
-- `read_tdx_file_from_local(vipdoc_dir, tdx_code, freq)`: 从本地 vipdoc 读取数据
+- `discover_tdx_symbols_from_local(vipdoc_dir, market)`: 从本地 vipdoc lday 目录发现代码
+- `read_tdx_file_from_local(vipdoc_dir, tdx_code, freq)`: 使用 tdxpy reader (TdxDailyBarReader/TdxLCMinBarReader) 从本地 vipdoc 读取数据
 - `fetch_bars_online(symbol, freq, start_date, end_date, table_id)`: tdxpy TCP 在线获取 (支持offset回溯)
 - `fetch_stock_list_online(market)`: tdxpy TCP 获取股票列表
 - `tdx_code_to_standard()` / `standard_to_tdx_code()`: 代码格式转换
@@ -473,10 +471,10 @@ SyncManager.sync()
 CLI 用法示例:
 ```bash
 # 在线同步 (默认)
-uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx
+uv run -m app.gateway.cli sync -t ashare.kline.1d.raw.tdx
 
 # 本地同步
-uv run -m app.gateway.cli sync -t ashare.kline.1d.tdx --local
+uv run -m app.gateway.cli sync -t ashare.kline.1d.raw.tdx --local
 
 # 下载日线到 vipdoc (不覆盖分钟线)
 uv run -m app.gateway.cli tdx download
@@ -562,12 +560,12 @@ uv run -m app.gateway.cli tdx download
 - `ashare.industry.eastmoney` (EV) — 行业板块成分股
 - `ashare.dragon_tiger.eastmoney` (EV) — 龙虎榜
 - `ashare.inst_trade.eastmoney` (EV) — 机构买卖每日统计
-- `ashare.kline.1d.tdx` (TS) — A 股日线 (通达信)
-- `ashare.kline.5m.tdx` (TS) — A 股 5 分钟线 (通达信)
-- `ashare.kline.1m.tdx` (TS) — A 股 1 分钟线 (通达信)
-- `aindex.kline.1d.tdx` (TS) — 指数日线 (通达信)
-- `aindex.kline.5m.tdx` (TS) — 指数 5 分钟线 (通达信)
-- `aindex.kline.1m.tdx` (TS) — 指数 1 分钟线 (通达信)
+- `ashare.kline.1d.raw.tdx` (TS) — A 股日线 (通达信)
+- `ashare.kline.5m.raw.tdx` (TS) — A 股 5 分钟线 (通达信)
+- `ashare.kline.1m.raw.tdx` (TS) — A 股 1 分钟线 (通达信)
+- `aindex.kline.1d.raw.tdx` (TS) — 指数日线 (通达信)
+- `aindex.kline.5m.raw.tdx` (TS) — 指数 5 分钟线 (通达信)
+- `aindex.kline.1m.raw.tdx` (TS) — 指数 1 分钟线 (通达信)
 
 ---
 
