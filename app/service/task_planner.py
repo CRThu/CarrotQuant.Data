@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 from .metadata_manager import MetadataManager
-from ..utils.time_utils import parse_date_to_ts, align_to_day_start, align_to_day_end
+from ..utils.time_utils import parse_date_to_ts, align_to_day_start, align_to_day_end, ts_to_str
 
 class TaskPlanner:
     """
@@ -31,7 +31,7 @@ class TaskPlanner:
             return []
         
         # 1. 聚合多个格式的水位线。
-        # 起始取 max, 结束取 min：这是为了找到所有格式共同拥有的“最窄”水位区间。
+        # 起始取 max, 结束取 min：这是为了找到所有格式共同拥有的"最窄"水位区间。
         # 只要有一路格式缺失，我们就需要通过任务补齐。
         loc_start = None
         loc_end = None
@@ -58,7 +58,6 @@ class TaskPlanner:
             req_start = parse_date_to_ts(start_date)
 
         # 3. 结束日期处理 (默认为 None，由 Provider 处理或此处设为极其遥远的未来/现在)
-        # 如果 end_date 为空，通常意味着同步到最新，暂设为一个极大值或由具体处理逻辑转换
         if end_date is None:
             import time
             req_end = int(time.time() * 1000)
@@ -78,16 +77,18 @@ class TaskPlanner:
                     planned_tasks.append({
                         "symbol": symbol,
                         "start": req_start,
-                        "end": req_end
+                        "end": align_to_day_end(req_end)
                     })
                 continue
 
-            # 前向补全与后向拓展独立判断，支持双向穿透同时生成两个精准任务
-            # 前向补全：填补 [req_start, loc_start) 的缺口，不与后向任务重叠
+            # 将 req_end 对齐到当天结束时间，确保与 loc_end (因 time_shift 偏移到 15:00) 可比
+            req_end_day_end = align_to_day_end(req_end)
+
+            # 前向补全：填补 [req_start, loc_start) 的缺口
             if req_start < loc_start:
                 task_start = req_start
-                task_end = min(req_end, loc_start)
-                if task_start <= task_end:
+                task_end = min(req_end_day_end, align_to_day_start(loc_start))
+                if task_start < task_end:
                     planned_tasks.append({
                         "symbol": symbol,
                         "start": task_start,
@@ -95,7 +96,9 @@ class TaskPlanner:
                     })
 
             # 后向拓展：从 loc_end 开始补齐未来数据
-            # 对齐到整天：start 向下取整，end 向上取整，确保 Provider 按天拉取时不会丢数据
+            # 使用 req_end (原始午夜) 与 loc_end (偏移到15:00) 直接比较：
+            # 若 req_end < loc_end，说明本地数据已覆盖请求范围，无需后向拓展
+            # 使用 >= 确保最后一天数据不完整时仍被刷新
             if req_end >= loc_end:
                 task_start = align_to_day_start(loc_end)
                 task_end = align_to_day_end(req_end)

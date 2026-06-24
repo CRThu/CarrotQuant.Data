@@ -110,11 +110,11 @@ def test_plan_force_refresh():
     
     tasks = planner.plan("test.table", ["csv"], ["sh.600000"], start_date, end_date, force_refresh=True)
     
-    # 强制刷新应该直接使用请求的时间范围
+    # 强制刷新应该直接使用请求的时间范围 (end 对齐到当天结束)
     assert len(tasks) == 1
     task = tasks[0]
     assert task["start"] == parse_date_to_ts(start_date)
-    assert task["end"] == parse_date_to_ts(end_date)
+    assert task["end"] == align_to_day_end(parse_date_to_ts(end_date))
 
 def test_plan_no_task_needed():
     """
@@ -442,8 +442,8 @@ def test_plan_multiple_symbols_prepend():
 
 def test_plan_same_day_incremental_refresh():
     """
-    测试同一天增量刷新：本地数据结束于 2024-01-15T15:00，请求结束于 2024-01-15T10:00
-    验证 req_end == loc_end 同一天时仍生成任务，确保当天数据被刷新
+    测试同一天增量刷新：本地数据结束于 2024-01-15，请求结束于 2024-01-15
+    验证 req_end == loc_end 同一天时仍生成任务，确保当天不完整数据被刷新
     """
     metadata_mgr = MagicMock()
     

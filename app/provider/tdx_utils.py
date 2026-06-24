@@ -29,14 +29,6 @@ _MARKET_MAP = {
 # 单次最大获取量
 _MAX_BARS_PER_REQUEST = 800
 
-# TDX 服务器列表
-_TDX_SERVERS = [
-    ("218.75.126.9", 7709),
-    ("119.147.212.81", 7709),
-    ("115.238.56.198", 7709),
-    ("124.160.88.183", 7709),
-]
-
 # vipdoc 频率子目录映射
 _FREQ_TO_SUBDIR = {
     "1d": "lday",
@@ -55,17 +47,58 @@ _FREQ_TO_EXT = {
 _daily_reader = TdxDailyBarReader()
 _lc_min_reader = TdxLCMinBarReader()
 
+# TDX 服务器候选池
+_TDX_SERVERS = [
+    ("180.153.18.170", 7709),
+    ("115.238.56.198", 7709),
+    ("218.75.126.9", 7709),
+    ("60.12.136.250", 7709),
+    ("119.147.212.81", 7709),
+    ("124.160.88.183", 7709),
+    ("202.108.253.130", 7709),
+    ("218.108.47.69", 7709),
+]
 
-def _connect_tdx_api() -> TdxHq_API:
-    """连接 TDX 服务器，失败时抛出 RuntimeError。"""
+# 模块级 TCP 连接缓存，同进程复用同一服务器
+_cached_api: TdxHq_API | None = None
+
+
+def _probe_best_server() -> tuple[str, int, float]:
+    """从候选池探测延迟最低的可用服务器，返回 (ip, port, latency_ms)。"""
+    import time as _time
     api = TdxHq_API()
+    best_ip, best_port, best_latency = None, None, float("inf")
     for ip, port in _TDX_SERVERS:
+        t0 = _time.monotonic()
         try:
             if api.connect(ip, port):
-                return api
+                latency = (_time.monotonic() - t0) * 1000
+                api.disconnect()
+                if latency < best_latency:
+                    best_ip, best_port, best_latency = ip, port, latency
         except Exception:
             continue
-    raise RuntimeError("TDX 服务器连接失败，请检查网络或稍后重试")
+    if best_ip is None:
+        raise RuntimeError("TDX 服务器全部不可用，请检查网络")
+    return best_ip, best_port, best_latency
+
+
+def _connect_tdx_api() -> TdxHq_API:
+    """连接 TDX 服务器。复用已有连接，断线时从候选池重新探测。"""
+    global _cached_api
+    if _cached_api is not None:
+        try:
+            _cached_api.get_version()
+            return _cached_api
+        except Exception:
+            _cached_api = None
+
+    best_ip, best_port, best_latency = _probe_best_server()
+    api = TdxHq_API()
+    api.connect(best_ip, best_port)
+    _cached_api = api
+    logger.debug(f"TDX connected: {best_ip}:{best_port} ({best_latency:.0f}ms)")
+    return api
 
 
 # -----------------------------------------------------------------------
@@ -203,58 +236,73 @@ def fetch_bars_online(
     is_index = table_id.startswith("aindex") or pure_code.startswith(("000", "399"))
     fetch_market = 1 if pure_code.startswith("000") else market
 
+    is_minute = freq in ("5m", "1m")
+
     api = _connect_tdx_api()
-    try:
-        all_records = []
-        offset = 0
+    all_records = []
+    offset = 0
 
-        while True:
-            if is_index:
-                data = api.get_index_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST)
+    while True:
+        if is_index:
+            data = api.get_index_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST)
+        else:
+            data = api.get_security_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST)
+
+        if not data:
+            break
+
+        for row in data:
+            dt_str = row["datetime"]
+            date_part = dt_str[:10]
+            rec = {
+                "open": round(float(row["open"]), 4),
+                "high": round(float(row["high"]), 4),
+                "low": round(float(row["low"]), 4),
+                "close": round(float(row["close"]), 4),
+                "volume": int(row["vol"]),
+                "amount": round(float(row["amount"]), 2),
+            }
+            if is_minute:
+                rec["datetime"] = dt_str
+                rec["date"] = date_part
             else:
-                data = api.get_security_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST)
+                rec["date"] = date_part
+            all_records.append(rec)
 
-            if not data:
+        if start_date and len(data) > 0:
+            earliest = data[0]["datetime"][:10]
+            if earliest <= start_date:
                 break
 
-            for row in data:
-                dt_str = row["datetime"]
-                date_part = dt_str[:10]
-                all_records.append({
-                    "date": date_part,
-                    "open": round(float(row["open"]), 4),
-                    "high": round(float(row["high"]), 4),
-                    "low": round(float(row["low"]), 4),
-                    "close": round(float(row["close"]), 4),
-                    "volume": int(row["vol"]),
-                    "amount": round(float(row["amount"]), 2),
-                })
+        if len(data) < _MAX_BARS_PER_REQUEST:
+            break
 
-            if start_date and len(data) > 0:
-                earliest = data[0]["datetime"][:10]
-                if earliest <= start_date:
-                    break
-
-            if len(data) < _MAX_BARS_PER_REQUEST:
-                break
-
-            offset += _MAX_BARS_PER_REQUEST
-
-    finally:
-        api.disconnect()
+        offset += _MAX_BARS_PER_REQUEST
 
     if not all_records:
         return _empty_kline_df()
 
-    df = pl.DataFrame(all_records, schema={
-        "date": pl.String,
-        "open": pl.Float64,
-        "high": pl.Float64,
-        "low": pl.Float64,
-        "close": pl.Float64,
-        "volume": pl.Int64,
-        "amount": pl.Float64,
-    })
+    if is_minute:
+        df = pl.DataFrame(all_records, schema={
+            "datetime": pl.String,
+            "date": pl.String,
+            "open": pl.Float64,
+            "high": pl.Float64,
+            "low": pl.Float64,
+            "close": pl.Float64,
+            "volume": pl.Int64,
+            "amount": pl.Float64,
+        })
+    else:
+        df = pl.DataFrame(all_records, schema={
+            "date": pl.String,
+            "open": pl.Float64,
+            "high": pl.Float64,
+            "low": pl.Float64,
+            "close": pl.Float64,
+            "volume": pl.Int64,
+            "amount": pl.Float64,
+        })
 
     df = df.with_columns(pl.lit(symbol).alias("symbol"))
 
@@ -273,21 +321,18 @@ def fetch_stock_list_online(market: str = "sh") -> list[str]:
         raise ValueError(f"未知市场: {market}")
 
     api = _connect_tdx_api()
-    try:
-        all_codes = []
-        offset = 0
-        while True:
-            stocks = api.get_security_list(market_code, offset)
-            if not stocks:
-                break
-            for row in stocks:
-                code = str(row["code"]).strip()
-                all_codes.append(f"{market}{code}")
-            if len(stocks) < 1000:
-                break
-            offset += 1000
-    finally:
-        api.disconnect()
+    all_codes = []
+    offset = 0
+    while True:
+        stocks = api.get_security_list(market_code, offset)
+        if not stocks:
+            break
+        for row in stocks:
+            code = str(row["code"]).strip()
+            all_codes.append(f"{market}{code}")
+        if len(stocks) < 1000:
+            break
+        offset += 1000
 
     return sorted(set(all_codes))
 

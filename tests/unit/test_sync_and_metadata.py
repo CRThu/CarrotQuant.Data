@@ -7,7 +7,7 @@ from app.service.metadata_manager import MetadataManager
 from app.storage.csv_storage import CSVStorage
 from app.storage.parquet_storage import ParquetStorage
 from app.provider.base import BaseProvider
-from app.utils.time_utils import parse_date_to_ts
+from app.utils.time_utils import parse_date_to_ts, align_to_day_end
 
 
 class FakeProvider(BaseProvider):
@@ -209,8 +209,8 @@ def test_metadata_time_range_accuracy(temp_storage_root):
 
             assert stats["start_timestamp"] == start_ts, \
                 f"元数据 start_timestamp 应为 {start_ts}，实际 {stats['start_timestamp']}"
-            assert stats["end_timestamp"] == end_ts, \
-                f"元数据 end_timestamp 应为 {end_ts}，实际 {stats['end_timestamp']}"
+            assert stats["end_timestamp"] == align_to_day_end(end_ts), \
+                f"元数据 end_timestamp 应为 {align_to_day_end(end_ts)}，实际 {stats['end_timestamp']}"
 
 
 def test_metadata_empty_storage(temp_storage_root):

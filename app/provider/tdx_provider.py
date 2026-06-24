@@ -99,10 +99,10 @@ class TDXProvider(BaseProvider):
         if prefix == "aindex":
             sh = fetch_stock_list_online(market="sh")
             sz = fetch_stock_list_online(market="sz")
-            return [tdx_code_to_standard(c) for c in sh + sz if c[2:].startswith(('000', '399'))]
+            return sorted([tdx_code_to_standard(c) for c in sh + sz if c[2:].startswith(('000', '399'))])
         sh = fetch_stock_list_online(market="sh")
         sz = fetch_stock_list_online(market="sz")
-        symbols = [tdx_code_to_standard(c) for c in sh + sz if c[2:].startswith(('6', '0', '3'))]
+        symbols = sorted([tdx_code_to_standard(c) for c in sh + sz if c[2:].startswith(('6', '0', '3'))])
         logger.info(f"Discovered {len(symbols)} symbols (online, sh+sz)")
         return symbols
 
@@ -134,11 +134,18 @@ class TDXProvider(BaseProvider):
         df = fetch_bars_online(symbol, freq=freq, start_date=start_date, end_date=end_date, table_id=table_id)
         if df.is_empty():
             return _empty_kline_df()
-        result = DataCleaner.standardize(
-            df, "date", time_fmt="%Y-%m-%d",
-            source_tz="Asia/Shanghai", display_tz="Asia/Shanghai",
-            time_shift_hours=15,
-        )
+        is_minute = freq in ("5m", "1m")
+        if is_minute:
+            result = DataCleaner.standardize(
+                df, "datetime", time_fmt="%Y-%m-%d %H:%M",
+                source_tz="Asia/Shanghai", display_tz="Asia/Shanghai",
+            )
+        else:
+            result = DataCleaner.standardize(
+                df, "date", time_fmt="%Y-%m-%d",
+                source_tz="Asia/Shanghai", display_tz="Asia/Shanghai",
+                time_shift_hours=15,
+            )
         if "volume" in result.columns and result.schema["volume"] == pl.Int64:
             result = result.with_columns(pl.col("volume").cast(pl.Float64))
         return result

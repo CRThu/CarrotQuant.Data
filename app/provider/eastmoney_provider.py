@@ -278,7 +278,7 @@ class EastMoneyProvider(BaseProvider):
         # 板块成分股表：逐板块拉取，返回板块代码列表
         board_type = self._detect_board_type(table_id)
         name_map = self._fetch_board_list(board_type)
-        symbols = list(name_map.keys())
+        symbols = sorted(name_map.keys())
         logger.info(f"Discovered {len(symbols)} boards for {table_id}")
         return symbols
 
