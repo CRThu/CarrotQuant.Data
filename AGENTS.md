@@ -239,6 +239,8 @@ SyncManager.sync()
   - `ashare.adj_factor.baostock` → `"event"`
 - `__init__()`: 登录 Baostock (SuppressOutput 包裹)
 - `__del__()`: 登出 Baostock
+- `_relogin()`: 断线重连 (logout → login)
+- `_safe_bs_call(func, *args, **kwargs)`: tenacity 装饰器封装，网络异常时 re-login + 指数退避重试 (最多 `MAX_RETRIES` 次)
 - `get_all_symbols()`:
   - 调用 `bs.query_stock_basic()`
   - 根据 table_id 前缀过滤: `ashare` → type=1 (个股), `aindex` → type=2 (指数)
@@ -300,12 +302,17 @@ SyncManager.sync()
 - `fetch_bars_online(symbol, freq, start_date, end_date, table_id)`: tdxpy TCP 在线获取 (支持offset回溯)
 - `fetch_stock_list_online(market)`: tdxpy TCP 获取股票列表
 - `tdx_code_to_standard()` / `standard_to_tdx_code()`: 代码格式转换
+- `_TDX_SERVERS`: 43 个候选服务器 IP (来源: `C:\new_tdx\connect.cfg` HQHOST)
+- `_probe_best_server()`: 并发探测 (ThreadPoolExecutor, 12 线程, 3s 超时)，返回延迟最低的可用服务器
+- `_connect_tdx_api()`: 连接 TDX 服务器，复用已有连接，断线时才重新探测
+- `_reconnect_tdx_api()`: 断线重连：清除缓存并重新探测
+- `_safe_tcp_call(callable_fn)`: tenacity 装饰器封装，网络异常时重连换 IP + 指数退避重试 (最多 `MAX_RETRIES` 次)
 
 **`app/provider/em_utils.py` — 东财 HTTP 工具**
 - `em_get()`: 统一请求入口，自动节流 + 重试 + TLS 指纹模拟
 - `em_push2()`: push2 行情接口，自动回退多个 URL 应对封禁
 - `em_datacenter()`: 东财数据中心单次查询（龙虎榜/解禁/融资融券等共用），返回 `{"data": [...], "count": N}`
-- 防封策略: curl_cffi impersonate="chrome" + EM_MIN_INTERVAL 节流 + EM_MAX_RETRIES 重试
+- 防封策略: curl_cffi impersonate="chrome" + EM_MIN_INTERVAL 节流 + MAX_RETRIES 重试
 
 **`app/provider/data_cleaner.py` — `DataCleaner`**
 - `standardize(df, time_col, time_fmt, source_tz, display_tz, time_shift_hours)` → pl.DataFrame

@@ -50,7 +50,7 @@ PUSH2_URLS = [
 # ---------------------------------------------------------------------------
 
 _MIN_INTERVAL = float(os.environ.get("EM_MIN_INTERVAL", "1.0"))
-_MAX_RETRIES = int(os.environ.get("EM_MAX_RETRIES", "3"))
+_MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
 _last_call = [0.0]
 
 # curl_cffi session — impersonate 自动处理 TLS 指纹 + sec-ch-ua 头

@@ -1,13 +1,24 @@
+import os
+import socket
+
 import baostock as bs
 import polars as pl
 from datetime import datetime
 from typing import Any
 from loguru import logger
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 from app.provider.base import BaseProvider
 from app.provider.data_cleaner import DataCleaner
 from app.utils.time_utils import ts_to_str
 
 from app.utils.logger_utils import SuppressOutput
+
+_BS_MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
 
 class BaostockProvider(BaseProvider):
     """
@@ -46,6 +57,36 @@ class BaostockProvider(BaseProvider):
             logger.info("Baostock logout success")
         except Exception as e:
             logger.warning(f"Baostock logout error: {e}")
+
+    def _relogin(self) -> None:
+        """重新登录 Baostock (连接断开时调用)。"""
+        try:
+            with SuppressOutput():
+                bs.logout()
+        except Exception:
+            pass
+        with SuppressOutput():
+            result = bs.login()
+        if result.error_code != '0':
+            logger.error(f"Baostock re-login failed: {result.error_msg}")
+            raise RuntimeError(f"Baostock re-login failed: {result.error_msg}")
+        logger.info("Baostock re-login success")
+
+    def _safe_bs_call(self, func, *args, **kwargs):
+        """Baostock 调用封装：网络异常时 re-login 重试 (tenacity 指数退避)。"""
+        @retry(
+            stop=stop_after_attempt(_BS_MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=0.5, max=5),
+            retry=retry_if_exception_type((socket.error, ConnectionError, OSError)),
+            reraise=True,
+        )
+        def _call():
+            try:
+                return func(*args, **kwargs)
+            except (socket.error, ConnectionError, OSError):
+                self._relogin()
+                raise
+        return _call()
 
     def get_supported_tables(self) -> list[str]:
         """
@@ -93,7 +134,7 @@ class BaostockProvider(BaseProvider):
         prefix = table_id.split('.')[0]
         
         with SuppressOutput():
-            rs = bs.query_stock_basic()
+            rs = self._safe_bs_call(bs.query_stock_basic)
         
         if rs.error_code != '0':
             raise ValueError(f"Baostock discovery (basic) failed: {rs.error_msg}")
@@ -197,7 +238,8 @@ class BaostockProvider(BaseProvider):
         logger.debug(f"Fetching {symbol} ({prefix}) kline from Baostock: {start_date} to {end_date} (freq={freq}, adj={adj})")
         
         with SuppressOutput():
-            rs = bs.query_history_k_data_plus(
+            rs = self._safe_bs_call(
+                bs.query_history_k_data_plus,
                 symbol, fields,
                 start_date=start_date, end_date=end_date,
                 frequency=freq, adjustflag=adj
@@ -285,7 +327,10 @@ class BaostockProvider(BaseProvider):
         
         # 调用 Baostock 复权因子查询接口
         with SuppressOutput():
-            rs = bs.query_adjust_factor(code=symbol, start_date=start_date, end_date=end_date)
+            rs = self._safe_bs_call(
+                bs.query_adjust_factor,
+                code=symbol, start_date=start_date, end_date=end_date
+            )
         
         if rs.error_code != '0':
             raise RuntimeError(f"Baostock API Error: {rs.error_msg} (code={rs.error_code})")

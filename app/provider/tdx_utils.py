@@ -7,8 +7,16 @@
 
 from pathlib import Path
 
+import os
+
 import polars as pl
 from loguru import logger
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 from tdxpy.hq import TdxHq_API
 from tdxpy.reader import TdxDailyBarReader, TdxLCMinBarReader
 
@@ -47,51 +55,112 @@ _FREQ_TO_EXT = {
 _daily_reader = TdxDailyBarReader()
 _lc_min_reader = TdxLCMinBarReader()
 
-# TDX 服务器候选池
+# TDX 服务器候选池 (来源: C:\new_tdx\connect.cfg HQHOST)
 _TDX_SERVERS = [
-    ("180.153.18.170", 7709),
-    ("115.238.56.198", 7709),
-    ("218.75.126.9", 7709),
-    ("60.12.136.250", 7709),
-    ("119.147.212.81", 7709),
-    ("124.160.88.183", 7709),
-    ("202.108.253.130", 7709),
-    ("218.108.47.69", 7709),
+    ("110.41.147.114", 7709),
+    ("110.41.2.72", 7709),
+    ("101.33.225.16", 7709),
+    ("175.178.112.197", 7709),
+    ("175.178.128.227", 7709),
+    ("43.139.95.83", 7709),
+    ("124.223.163.242", 7709),
+    ("122.51.120.217", 7709),
+    ("150.158.160.2", 7709),
+    ("123.60.164.122", 7709),
+    ("111.229.247.189", 7709),
+    ("124.70.199.56", 7709),
+    ("62.234.50.143", 7709),
+    ("81.70.151.186", 7709),
+    ("82.156.214.79", 7709),
+    ("159.75.29.111", 7709),
+    ("43.139.18.171", 7709),
+    ("81.71.32.47", 7709),
+    ("122.51.232.182", 7709),
+    ("118.25.98.114", 7709),
+    ("121.36.225.169", 7709),
+    ("123.60.70.228", 7709),
+    ("123.60.73.44", 7709),
+    ("124.70.133.119", 7709),
+    ("124.71.187.72", 7709),
+    ("124.71.187.122", 7709),
+    ("119.97.185.59", 7709),
+    ("129.204.230.128", 7709),
+    ("101.42.240.54", 7709),
+    ("124.71.9.153", 7709),
+    ("123.60.84.66", 7709),
+    ("111.230.186.52", 7709),
+    ("101.43.159.194", 7709),
+    ("120.53.8.251", 7709),
+    ("152.136.191.169", 7709),
+    ("116.205.163.254", 7709),
+    ("116.205.171.132", 7709),
+    ("116.205.183.150", 7709),
+    ("49.232.15.141", 7709),
+    ("82.156.174.84", 7709),
+    ("101.42.164.241", 7709),
+    ("101.35.121.35", 7709),
+    ("111.231.113.208", 7709),
 ]
 
 # 模块级 TCP 连接缓存，同进程复用同一服务器
 _cached_api: TdxHq_API | None = None
 
+_PROBE_TIMEOUT = 3.0
+_PROBE_MAX_WORKERS = 12
+
+
+def _probe_one_server(ip: str, port: int) -> tuple[str, int, float] | None:
+    """探测单个服务器延迟，返回 (ip, port, latency_ms) 或 None。"""
+    import time as _time
+
+    api = TdxHq_API()
+    t0 = _time.monotonic()
+    try:
+        if api.connect(ip, port):
+            latency = (_time.monotonic() - t0) * 1000
+            api.disconnect()
+            return (ip, port, latency)
+    except Exception:
+        pass
+    return None
+
 
 def _probe_best_server() -> tuple[str, int, float]:
-    """从候选池探测延迟最低的可用服务器，返回 (ip, port, latency_ms)。"""
-    import time as _time
-    api = TdxHq_API()
+    """并发探测延迟最低的可用服务器，返回 (ip, port, latency_ms)。"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    logger.debug(f"开始探测 TDX 服务器 ({len(_TDX_SERVERS)} 个候选)")
     best_ip, best_port, best_latency = None, None, float("inf")
-    for ip, port in _TDX_SERVERS:
-        t0 = _time.monotonic()
+    reachable = 0
+    with ThreadPoolExecutor(max_workers=_PROBE_MAX_WORKERS) as pool:
+        futures = {
+            pool.submit(_probe_one_server, ip, port): (ip, port)
+            for ip, port in _TDX_SERVERS
+        }
         try:
-            if api.connect(ip, port):
-                latency = (_time.monotonic() - t0) * 1000
-                api.disconnect()
-                if latency < best_latency:
-                    best_ip, best_port, best_latency = ip, port, latency
-        except Exception:
-            continue
+            for f in as_completed(futures, timeout=_PROBE_TIMEOUT):
+                try:
+                    result = f.result()
+                    if result:
+                        reachable += 1
+                        if result[2] < best_latency:
+                            best_ip, best_port, best_latency = result
+                            logger.debug(f"  新最快: {best_ip}:{best_port} ({best_latency:.0f}ms)")
+                except Exception:
+                    continue
+        except TimeoutError:
+            pass
     if best_ip is None:
         raise RuntimeError("TDX 服务器全部不可用，请检查网络")
+    logger.info(f"TDX 服务器选定: {best_ip}:{best_port} ({best_latency:.0f}ms), 可达 {reachable}/{len(_TDX_SERVERS)}")
     return best_ip, best_port, best_latency
 
 
 def _connect_tdx_api() -> TdxHq_API:
-    """连接 TDX 服务器。复用已有连接，断线时从候选池重新探测。"""
+    """连接 TDX 服务器。复用已有连接，断线时才重新探测。"""
     global _cached_api
     if _cached_api is not None:
-        try:
-            _cached_api.get_version()
-            return _cached_api
-        except Exception:
-            _cached_api = None
+        return _cached_api
 
     best_ip, best_port, best_latency = _probe_best_server()
     api = TdxHq_API()
@@ -99,6 +168,13 @@ def _connect_tdx_api() -> TdxHq_API:
     _cached_api = api
     logger.debug(f"TDX connected: {best_ip}:{best_port} ({best_latency:.0f}ms)")
     return api
+
+
+def _reconnect_tdx_api() -> TdxHq_API:
+    """断线重连：清除缓存并重新探测。"""
+    global _cached_api
+    _cached_api = None
+    return _connect_tdx_api()
 
 
 # -----------------------------------------------------------------------
@@ -214,6 +290,26 @@ def read_tdx_file_from_local(
 # 在线获取 (tdxpy TCP)
 # -----------------------------------------------------------------------
 
+_MAX_NETWORK_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
+
+
+@retry(
+    stop=stop_after_attempt(_MAX_NETWORK_RETRIES),
+    wait=wait_exponential(multiplier=1, min=0.5, max=5),
+    retry=retry_if_exception_type((ConnectionError, OSError, TimeoutError)),
+    reraise=True,
+)
+def _safe_tcp_call(callable_fn) -> list[dict] | None:
+    """TCP 调用封装：连接/网络异常时自动重连换 IP 重试 (tenacity 指数退避)。"""
+    global _cached_api
+    try:
+        return callable_fn()
+    except (ConnectionError, OSError, TimeoutError):
+        _cached_api = None
+        _connect_tdx_api()
+        raise
+
+
 def fetch_bars_online(
     symbol: str,
     freq: str = "1d",
@@ -238,15 +334,15 @@ def fetch_bars_online(
 
     is_minute = freq in ("5m", "1m")
 
-    api = _connect_tdx_api()
+    _connect_tdx_api()
     all_records = []
     offset = 0
 
     while True:
         if is_index:
-            data = api.get_index_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST)
+            data = _safe_tcp_call(lambda: _cached_api.get_index_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST))
         else:
-            data = api.get_security_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST)
+            data = _safe_tcp_call(lambda: _cached_api.get_security_bars(category, fetch_market, pure_code, offset, _MAX_BARS_PER_REQUEST))
 
         if not data:
             break
@@ -320,11 +416,11 @@ def fetch_stock_list_online(market: str = "sh") -> list[str]:
     if market_code is None:
         raise ValueError(f"未知市场: {market}")
 
-    api = _connect_tdx_api()
+    _connect_tdx_api()
     all_codes = []
     offset = 0
     while True:
-        stocks = api.get_security_list(market_code, offset)
+        stocks = _safe_tcp_call(lambda: _cached_api.get_security_list(market_code, offset))
         if not stocks:
             break
         for row in stocks:

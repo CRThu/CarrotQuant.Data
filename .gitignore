@@ -6,7 +6,7 @@ __pycache__/
 
 # Project specific
 storage_root/
-test_*_root/
+test_*_root*/
 logs/
 tdx_data/
 
