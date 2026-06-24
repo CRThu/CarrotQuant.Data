@@ -89,9 +89,10 @@ class TDXProvider(BaseProvider):
 
         if prefix == "aindex":
             return [tdx_code_to_standard(c) for c in raw if c[2:].startswith(('000', '399'))]
-        symbols = [tdx_code_to_standard(c) for c in raw if c[2:].startswith(('6', '0', '3'))]
+        sh_symbols = [c for c in raw if c[:2] == 'sh' and c[2:].startswith('6')]
+        sz_symbols = [c for c in raw if c[:2] == 'sz' and c[2:].startswith(('0', '3'))]
         bj_symbols = [tdx_code_to_standard(c) for c in raw if c[2:].startswith(('920', '83', '87', '43'))]
-        symbols.extend(bj_symbols)
+        symbols = sorted([tdx_code_to_standard(c) for c in sh_symbols + sz_symbols] + bj_symbols)
         logger.info(f"Discovered {len(symbols)} symbols (local)")
         return symbols
 
@@ -102,7 +103,9 @@ class TDXProvider(BaseProvider):
             return sorted([tdx_code_to_standard(c) for c in sh + sz if c[2:].startswith(('000', '399'))])
         sh = fetch_stock_list_online(market="sh")
         sz = fetch_stock_list_online(market="sz")
-        symbols = sorted([tdx_code_to_standard(c) for c in sh + sz if c[2:].startswith(('6', '0', '3'))])
+        sh_symbols = [c for c in sh if c[2:].startswith('6')]
+        sz_symbols = [c for c in sz if c[2:].startswith(('0', '3'))]
+        symbols = sorted([tdx_code_to_standard(c) for c in sh_symbols + sz_symbols])
         logger.info(f"Discovered {len(symbols)} symbols (online, sh+sz)")
         return symbols
 

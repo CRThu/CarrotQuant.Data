@@ -6,9 +6,10 @@ from app.service.sync_manager import SyncManager
 from app.provider.base import BaseProvider
 from app.storage.csv_storage import CSVStorage
 from app.storage.parquet_storage import ParquetStorage
+from app.utils.time_utils import parse_date_to_ts
 
 class FakeProvider(BaseProvider):
-    """模拟数据源驱动"""
+    """模拟数据源驱动，直接将 start/end 作为 timestamp 值存储。"""
     def get_supported_tables(self):
         return ["ashare.kline.1d.adj.baostock"]
 
@@ -120,9 +121,9 @@ def test_sync_multi_storage_incremental(temp_storage_root):
             csv_total = csv_storage.get_total_bars(table_id)
             parquet_total = parquet_storage.get_total_bars(table_id)
             
-            # 每个 symbol 有 3 条记录（去重后），共 1 个 symbol
-            assert csv_total == 3
-            assert parquet_total == 3
+            # 每个 symbol: 首次 fetch 返回 [start, end] 2 条，增量 fetch 同理 2 条，去重后 4 条
+            assert csv_total == 4
+            assert parquet_total == 4
             assert csv_total == parquet_total
 
 def test_sync_multi_storage_symbol_consistency(temp_storage_root):
