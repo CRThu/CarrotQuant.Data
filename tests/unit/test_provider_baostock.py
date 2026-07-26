@@ -9,13 +9,13 @@
 import pytest
 import polars as pl
 from unittest.mock import MagicMock
-from app.provider.baostock_provider import BaostockProvider
+from cqdata.provider.baostock_provider import BaostockProvider
 
 
 @pytest.fixture(autouse=True)
 def _reset_provider_manager():
     """每个测试前后清理 ProviderManager singleton，防止泄漏。"""
-    from app.provider.provider_manager import ProviderManager
+    from cqdata.provider.provider_manager import ProviderManager
     ProviderManager._instance = None
     ProviderManager._providers = {}
     yield

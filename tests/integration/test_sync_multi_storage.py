@@ -2,11 +2,11 @@ import pytest
 import polars as pl
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from app.service.sync_manager import SyncManager
-from app.provider.base import BaseProvider
-from app.storage.csv_storage import CSVStorage
-from app.storage.parquet_storage import ParquetStorage
-from app.utils.time_utils import parse_date_to_ts
+from cqdata.service.sync_manager import SyncManager
+from cqdata.provider.base import BaseProvider
+from cqdata.storage.csv_storage import CSVStorage
+from cqdata.storage.parquet_storage import ParquetStorage
+from cqdata.utils.time_utils import parse_date_to_ts
 
 class FakeProvider(BaseProvider):
     """模拟数据源驱动，直接将 start/end 作为 timestamp 值存储。"""
@@ -39,7 +39,7 @@ def test_sync_multi_storage_consistency(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -71,7 +71,7 @@ def test_sync_multi_storage_watermark(temp_storage_root):
     from datetime import datetime, timezone, timedelta
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -83,7 +83,7 @@ def test_sync_multi_storage_watermark(temp_storage_root):
             sync_mgr.sync(table_id, "parquet", "2024-01-01", "2024-01-03")
             
             # 验证 TaskPlanner 计算的水位是 Parquet 的结束时间（木桶原理）
-            from app.service.task_planner import TaskPlanner
+            from cqdata.service.task_planner import TaskPlanner
             planner = TaskPlanner(sync_mgr.metadata_mgr)
             
             # 请求从 2024-01-01 到 2024-01-10
@@ -101,7 +101,7 @@ def test_sync_multi_storage_incremental(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -157,7 +157,7 @@ def test_sync_multi_storage_symbol_consistency(temp_storage_root):
                 return pl.DataFrame(data)
             return pl.DataFrame()
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         multi_provider = MultiSymbolProvider()
         
@@ -182,7 +182,7 @@ def test_sync_multi_storage_timestamp_alignment(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -208,7 +208,7 @@ def test_sync_multi_storage_atomic_fetch(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         
         # 创建带有 fetch 计数的 Provider
@@ -259,7 +259,7 @@ def test_sync_multi_storage_file_generation(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -327,7 +327,7 @@ def test_sync_multi_storage_concurrent_formats(temp_storage_root):
                 return pl.DataFrame(data)
             return pl.DataFrame()
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         multi_provider = MultiSymbolProvider()
         

@@ -2,12 +2,12 @@ import pytest
 import polars as pl
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from app.service.sync_manager import SyncManager
-from app.service.metadata_manager import MetadataManager
-from app.storage.csv_storage import CSVStorage
-from app.storage.parquet_storage import ParquetStorage
-from app.provider.base import BaseProvider
-from app.utils.time_utils import parse_date_to_ts, align_to_day_end
+from cqdata.service.sync_manager import SyncManager
+from cqdata.service.metadata_manager import MetadataManager
+from cqdata.storage.csv_storage import CSVStorage
+from cqdata.storage.parquet_storage import ParquetStorage
+from cqdata.provider.base import BaseProvider
+from cqdata.utils.time_utils import parse_date_to_ts, align_to_day_end
 
 
 class FakeProvider(BaseProvider):
@@ -78,7 +78,7 @@ def test_metadata_and_sync_flow_csv(temp_storage_root):
     """
     table_id = "test.metadata.sync.csv"
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -111,7 +111,7 @@ def test_metadata_and_sync_flow_parquet(temp_storage_root):
     """
     table_id = "test.metadata.sync.parquet"
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider(symbols=["sh.600000", "sz.000001", "sz.000002"])
 
@@ -140,7 +140,7 @@ def test_metadata_physical_stats_consistency(temp_storage_root):
     """
     table_id = "test.metadata.consistency"
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -167,7 +167,7 @@ def test_metadata_schema_validation(temp_storage_root):
     """
     table_id = "test.metadata.schema"
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -197,7 +197,7 @@ def test_metadata_time_range_accuracy(temp_storage_root):
     start_ts = parse_date_to_ts("2024-01-01")
     end_ts = parse_date_to_ts("2024-01-02")
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -232,7 +232,7 @@ def test_metadata_multiple_formats_consistency(temp_storage_root):
     """
     table_id = "test.metadata.multi_format"
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 

@@ -1,9 +1,9 @@
 from typing import Dict
-from app.provider.base import BaseProvider
-from app.provider.baostock_provider import BaostockProvider
-from app.provider.eastmoney_provider import EastMoneyProvider
-from app.provider.tdx_provider import TDXProvider
-from app.config.settings import settings
+from cqdata.provider.base import BaseProvider
+from cqdata.provider.baostock_provider import BaostockProvider
+from cqdata.provider.eastmoney_provider import EastMoneyProvider
+from cqdata.provider.tdx_provider import TDXProvider
+from cqdata.config.settings import settings
 
 
 class ProviderManager:

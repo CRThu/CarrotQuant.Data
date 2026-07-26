@@ -105,7 +105,7 @@ wheels = [
 [[package]]
 name = "carrotquant-data"
 version = "0.1.1"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "akshare" },
     { name = "baostock" },

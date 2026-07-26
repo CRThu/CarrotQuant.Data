@@ -14,14 +14,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 import polars as pl
 
-from app.provider.tdx_provider import TDXProvider
-from app.provider.tdx_utils import (
+from cqdata.provider.tdx_provider import TDXProvider
+from cqdata.provider.tdx_utils import (
     tdx_code_to_standard,
     standard_to_tdx_code,
     read_tdx_file_from_local,
     discover_tdx_symbols_from_local,
 )
-from app.provider.provider_manager import ProviderManager
+from cqdata.provider.provider_manager import ProviderManager
 
 # 通达信默认安装路径
 _VIPDOC_DIR = Path(r"C:\new_tdx\vipdoc")

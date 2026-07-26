@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 # 将当前根目录加入系统路径
 sys.path.append(os.getcwd())
 
-from app.config.settings import settings
+from cqdata.config.settings import settings
 
 @pytest.fixture
 def temp_storage_root(tmp_path):
@@ -25,7 +25,7 @@ def mock_baostock():
     """
     Mock Baostock 核心驱动，避免网络 IO。
     """
-    with patch("app.provider.baostock_provider.bs") as mock_bs:
+    with patch("cqdata.provider.baostock_provider.bs") as mock_bs:
         mock_bs.login.return_value = MagicMock(error_code="0")
         # 默认模拟 query_stock_basic
         mock_rs_basic = MagicMock()

@@ -26,12 +26,18 @@ dependencies = [
     "typer>=0.24.1",
     "uvicorn>=0.41.0",
 ]
+[project.scripts]
+cqdata = "cqdata.entrypoints.cli:app"
+
 [tool.uv]
-package = false
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["cqdata"]
 
 [tool.pytest.ini_options]
 addopts = "--ignore=demo"
 
 [build-system]
-requires = ["uv_build>=0.9.28,<0.10.0"]
-build-backend = "uv_build"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

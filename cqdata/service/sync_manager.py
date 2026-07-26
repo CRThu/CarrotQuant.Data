@@ -236,3 +236,41 @@ class SyncManager:
         # 6. 原子化保存元数据
         self.metadata_mgr.save(table_id, format, metadata)
         logger.info(f"[+] Metadata updated for {table_id} | {format}")
+
+
+def sync(
+    table_ids: list[str] | str,
+    formats: list[str] | str = "parquet",
+    start_date: str = None,
+    end_date: str = None,
+    force_refresh: bool = False,
+    batch_size: int = 100,
+    symbol_limit: int = None,
+    storage_root: str = None,
+    provider_kwargs: dict = None
+):
+    """
+    触发全自动化同步闭环的快捷函数
+    
+    Args:
+        table_ids: 表 ID 或表 ID 列表
+        formats: 落地格式 ('parquet', 'csv', 或 ['parquet', 'csv'])
+        start_date: 起始日期 ('YYYY-MM-DD')
+        end_date: 结束日期 ('YYYY-MM-DD')
+        force_refresh: 是否强制全量覆盖刷新
+        batch_size: 批处理数量
+        symbol_limit: 限制处理的证券数
+        storage_root: 自定义存储根目录
+        provider_kwargs: 传递给 Provider 的选项字典
+    """
+    sm = SyncManager(storage_root=storage_root)
+    return sm.sync(
+        table_ids=table_ids,
+        formats=formats,
+        start_date=start_date,
+        end_date=end_date,
+        force_refresh=force_refresh,
+        batch_size=batch_size,
+        symbol_limit=symbol_limit,
+        provider_kwargs=provider_kwargs
+    )

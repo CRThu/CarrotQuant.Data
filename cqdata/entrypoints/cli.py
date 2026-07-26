@@ -1,0 +1,162 @@
+"""
+cqdata/entrypoints/cli.py
+
+cqdata 终端命令行控制台主入口 (Typer CLI)。
+集成数据同步 (sync)、服务启动 (serve)、交互向导 (wizard)、表探索 (tables) 与信息探查 (info)。
+"""
+
+import typer
+import sys
+import uvicorn
+from typing import List, Optional
+from pathlib import Path
+
+from cqdata.entrypoints.python_api import (
+    sync as api_sync,
+    list_series_tables,
+    list_event_tables,
+    list_symbols,
+    get_time_range,
+    get_schema,
+    get_row_count
+)
+from scripts.download_tdx import download_and_extract as tdx_download_and_extract
+
+app = typer.Typer(
+    help="CarrotQuant.Data (cqdata) - 本地金融数据同步与管理工具 CLI",
+    add_completion=False
+)
+
+tdx_app = typer.Typer(help="通达信数据源专属操作命令")
+app.add_typer(tdx_app, name="tdx")
+
+
+@app.command(name="sync")
+def sync_cmd(
+    tables: str = typer.Option(..., "--tables", "-t", help="需要同步的表 ID，多表用逗号分隔 (如 ashare.kline.1d.raw.baostock)"),
+    formats: str = typer.Option("parquet,csv", "--formats", "-f", help="落地方式，逗号分隔 (如 parquet,csv)"),
+    start: Optional[str] = typer.Option(None, "--start", "-s", help="起始日期 (YYYY-MM-DD)"),
+    end: Optional[str] = typer.Option(None, "--end", "-e", help="结束日期 (YYYY-MM-DD)"),
+    force: bool = typer.Option(False, "--force", help="是否强制全量覆盖刷新水位线"),
+    batch: int = typer.Option(100, "--batch", help="批处理聚合长度"),
+    limit: Optional[int] = typer.Option(None, "--limit", help="限制同步的证券数量 (常用于测试)"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="自定义存储根目录"),
+    local: bool = typer.Option(False, "--local", help="TDX 驱动专用：是否使用本地 vipdoc 模式"),
+    tdx_vipdoc: str = typer.Option(r"C:\new_tdx\vipdoc", "--tdx-vipdoc", help="TDX vipdoc 目录路径")
+):
+    """
+    触发全自动数据同步流程
+    """
+    table_list = [t.strip() for t in tables.split(",") if t.strip()]
+    format_list = [f.strip() for f in formats.split(",") if f.strip()]
+    
+    provider_kwargs = {}
+    if any(".tdx" in t for t in table_list):
+        provider_kwargs["mode"] = "local" if local else "online"
+        provider_kwargs["vipdoc_dir"] = tdx_vipdoc
+
+    api_sync(
+        table_ids=table_list,
+        formats=format_list,
+        start_date=start,
+        end_date=end,
+        force_refresh=force,
+        batch_size=batch,
+        symbol_limit=limit,
+        storage_root=output,
+        provider_kwargs=provider_kwargs
+    )
+
+
+@app.command(name="serve")
+def serve_cmd(
+    host: str = typer.Option("0.0.0.0", "--host", "-h", help="监听地址"),
+    port: int = typer.Option(8000, "--port", "-p", help="监听端口"),
+    reload: bool = typer.Option(True, "--reload", help="是否开启热重载")
+):
+    """
+    启动 FastAPI REST API HTTP 服务
+    """
+    typer.echo(f"[+] Starting cqdata REST API server on http://{host}:{port}")
+    uvicorn.run("cqdata.entrypoints.rest_api:app", host=host, port=port, reload=reload)
+
+
+@app.command(name="wizard")
+def wizard_cmd():
+    """
+    启动终端交互式同步向导
+    """
+    from scripts.wizard import main as run_wizard
+    run_wizard()
+
+
+@app.command(name="tables")
+def tables_cmd(
+    format: str = typer.Option("auto", "--format", "-f", help="指定物理存储格式 (auto, parquet, csv)")
+):
+    """
+    查看本地已存储的所有数据表列表
+    """
+    series_tables = list_series_tables(format=format)
+    event_tables = list_event_tables(format=format)
+
+    typer.echo("==================== 本地数据表概览 ====================")
+    typer.echo("【时间序列 (TimeSeries) 表】:")
+    if not series_tables:
+        typer.echo("  (暂无时序表)")
+    else:
+        for t in series_tables:
+            typer.echo(f"  - {t}")
+
+    typer.echo("\n【事件/静态 (Event) 表】:")
+    if not event_tables:
+        typer.echo("  (暂无事件表)")
+    else:
+        for t in event_tables:
+            typer.echo(f"  - {t}")
+    typer.echo("==========================================================")
+
+
+@app.command(name="info")
+def info_cmd(
+    table_id: str = typer.Argument(..., help="数据表 ID (如 ashare.kline.1d.raw.baostock)"),
+    format: str = typer.Option("auto", "--format", "-f", help="指定物理存储格式")
+):
+    """
+    查看某数据表的详细元数据与物理统计信息
+    """
+    try:
+        symbols = list_symbols(table_id, format=format)
+        start_dt, end_dt = get_time_range(table_id, format=format)
+        schema = get_schema(table_id, format=format)
+        rows = get_row_count(table_id, format=format)
+
+        typer.echo(f"==================== 表元数据: {table_id} ====================")
+        typer.echo(f"记录总行数 (Total Rows): {rows:,}")
+        typer.echo(f"代码总数量 (Symbol Count): {len(symbols):,}")
+        typer.echo(f"时间跨度 (Time Range): {start_dt or 'N/A'} ~ {end_dt or 'N/A'}")
+        typer.echo("\n【字段列定义 (Schema)】:")
+        for col_name, dtype in schema.items():
+            typer.echo(f"  - {col_name:<20} : {dtype}")
+
+        if symbols:
+            preview_syms = symbols[:5]
+            typer.echo(f"\n【代码示例 (前5个)】: {', '.join(preview_syms)}{' ...' if len(symbols) > 5 else ''}")
+        typer.echo("================================================================")
+    except Exception as e:
+        typer.echo(f"[!] Error fetching info for '{table_id}': {e}", err=True)
+
+
+@tdx_app.command(name="download")
+def tdx_download_cmd(
+    vipdoc: str = typer.Option(r"C:\new_tdx\vipdoc", "--vipdoc", "-v", help="vipdoc 目录路径")
+):
+    """
+    下载通达信日线 ZIP 包并解压 lday 数据到本地 vipdoc 目录
+    """
+    vipdoc_path = Path(vipdoc)
+    tdx_download_and_extract(vipdoc_path)
+
+
+if __name__ == "__main__":
+    app()

@@ -2,11 +2,11 @@ import pytest
 import polars as pl
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from app.service.sync_manager import SyncManager
-from app.provider.baostock_provider import BaostockProvider
-from app.storage.csv_storage import CSVStorage
-from app.storage.parquet_storage import ParquetStorage
-from app.service.metadata_manager import MetadataManager
+from cqdata.service.sync_manager import SyncManager
+from cqdata.provider.baostock_provider import BaostockProvider
+from cqdata.storage.csv_storage import CSVStorage
+from cqdata.storage.parquet_storage import ParquetStorage
+from cqdata.service.metadata_manager import MetadataManager
 
 def test_baostock_provider_error_fetch(mock_baostock):
     """

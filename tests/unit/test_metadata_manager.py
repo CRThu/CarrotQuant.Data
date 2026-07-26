@@ -1,7 +1,7 @@
 import json
 import pytest
 from pathlib import Path
-from app.service.metadata_manager import MetadataManager
+from cqdata.service.metadata_manager import MetadataManager
 
 
 class TestMetadataManagerLoad:

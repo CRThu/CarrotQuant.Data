@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
-from app.utils.time_utils import parse_date_to_ts, ts_to_iso, ts_to_str
+from cqdata.utils.time_utils import parse_date_to_ts, ts_to_iso, ts_to_str
 
 def test_parse_date_to_ts_asia_shanghai():
     """

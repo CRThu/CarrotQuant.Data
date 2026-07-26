@@ -1,7 +1,7 @@
 import pytest
-from app.storage.storage_factory import StorageFactory
-from app.storage.csv_storage import CSVStorage
-from app.storage.parquet_storage import ParquetStorage
+from cqdata.storage.storage_factory import StorageFactory
+from cqdata.storage.csv_storage import CSVStorage
+from cqdata.storage.parquet_storage import ParquetStorage
 
 def test_storage_factory_csv():
     """

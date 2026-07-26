@@ -24,9 +24,9 @@ from typing import Any, Optional
 import polars as pl
 from loguru import logger
 
-from app.provider.base import BaseProvider
-from app.provider.data_cleaner import DataCleaner
-from app.provider.tdx_utils import (
+from cqdata.provider.base import BaseProvider
+from cqdata.provider.data_cleaner import DataCleaner
+from cqdata.provider.tdx_utils import (
     discover_tdx_symbols_from_local,
     read_tdx_file_from_local,
     tdx_code_to_standard,
@@ -35,7 +35,7 @@ from app.provider.tdx_utils import (
     fetch_stock_list_online,
     _empty_kline_df,
 )
-from app.utils.time_utils import ts_to_str
+from cqdata.utils.time_utils import ts_to_str
 
 
 class TDXProvider(BaseProvider):

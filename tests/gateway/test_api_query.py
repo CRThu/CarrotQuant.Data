@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from app.gateway.api import app
+from cqdata.gateway.api import cqdata
 from unittest.mock import patch, MagicMock
 import polars as pl
 
@@ -8,7 +8,7 @@ client = TestClient(app)
 
 @pytest.fixture
 def mock_provider_manager():
-    with patch("app.gateway.api.ProviderManager") as mock:
+    with patch("cqdata.gateway.api.ProviderManager") as mock:
         manager_instance = mock.return_value
         provider = MagicMock()
         manager_instance.get_provider.return_value = provider
@@ -31,7 +31,7 @@ def test_query_data_symbol_filter(mock_provider_manager):
         "close": [10.0]
     })
     
-    with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
+    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
             response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=csv")
     
@@ -45,7 +45,7 @@ def test_query_data_timestamp_range(mock_provider_manager):
     """
     测试 GET /api/v1/data/{table_id} 的时间戳区间过滤
     """
-    from app.utils.time_utils import parse_date_to_ts
+    from cqdata.utils.time_utils import parse_date_to_ts
     table_id = "test.query.time"
     _, provider = mock_provider_manager
     provider.get_table_category.return_value = "timeseries"
@@ -61,7 +61,7 @@ def test_query_data_timestamp_range(mock_provider_manager):
         "close": [10.0, 10.1]
     })
     
-    with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
+    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
             response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000,start:2024-01-01,end:2024-01-02&format=csv")
     
@@ -96,7 +96,7 @@ def test_query_data_ev_no_symbol_ok(mock_provider_manager):
         "close": [10.0]
     })
     
-    with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
+    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
             response = client.get(f"/api/v1/data/{table_id}")
     
@@ -112,7 +112,7 @@ def test_query_data_no_files(mock_provider_manager):
     
     mock_storage = MagicMock()
     
-    with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
+    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[]):  # 没有文件
             # 对于 TS, 必须带 symbol 才能过第一关校验
             response = client.get(f"/api/v1/data/{table_id}?filters=symbol:any&format=csv")
@@ -128,7 +128,7 @@ def test_query_data_invalid_format():
     """
     table_id = "test.query.format"
     
-    with patch("app.storage.storage_factory.StorageFactory.get_storage", side_effect=ValueError("Unsupported storage format: invalid")):
+    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", side_effect=ValueError("Unsupported storage format: invalid")):
         response = client.get(f"/api/v1/data/{table_id}?format=invalid")
     
     assert response.status_code == 400
@@ -148,7 +148,7 @@ def test_query_data_parquet_format(mock_provider_manager):
         "close": [10.0]
     })
     
-    with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
+    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/parquet/{table_id}/year=2024"]):
             response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=parquet")
     
@@ -173,7 +173,7 @@ def test_query_data_limit_enforcement(mock_provider_manager):
     mock_storage = MagicMock()
     mock_storage.read_series.return_value = large_df
     
-    with patch("app.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
+    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
         with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=1970"]):
             response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=csv")
     

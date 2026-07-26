@@ -2,9 +2,9 @@ import pytest
 import polars as pl
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from app.service.sync_manager import SyncManager
-from app.provider.base import BaseProvider
-from app.utils.time_utils import parse_date_to_ts, align_to_day_end
+from cqdata.service.sync_manager import SyncManager
+from cqdata.provider.base import BaseProvider
+from cqdata.utils.time_utils import parse_date_to_ts, align_to_day_end
 
 class FakeProvider(BaseProvider):
     """模拟数据源驱动"""
@@ -37,7 +37,7 @@ def test_sync_full_flow(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -71,7 +71,7 @@ def test_sync_full_flow(temp_storage_root):
             assert metadata["statistics"]["symbol_count"] == 2
 
             # --- Step 3: 验证物理巡检与元数据 1:1 匹配 ---
-            from app.storage.csv_storage import CSVStorage
+            from cqdata.storage.csv_storage import CSVStorage
             storage = CSVStorage(str(temp_storage_root / "csv"))
             total_disk_bars = storage.get_total_bars(table_id)
             assert total_disk_bars == metadata["statistics"]["total_bars"]
@@ -82,7 +82,7 @@ def test_sync_incremental_logic(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -118,7 +118,7 @@ def test_sync_force_refresh(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -167,7 +167,7 @@ def test_sync_empty_data_defense(temp_storage_root):
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             return pl.DataFrame()
     
-    with patch("app.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
         sync_mgr = SyncManager()
         empty_provider = EmptyProvider()
         

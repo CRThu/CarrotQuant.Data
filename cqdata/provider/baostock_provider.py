@@ -12,11 +12,11 @@ from tenacity import (
     wait_exponential,
     retry_if_exception_type,
 )
-from app.provider.base import BaseProvider
-from app.provider.data_cleaner import DataCleaner
-from app.utils.time_utils import ts_to_str
+from cqdata.provider.base import BaseProvider
+from cqdata.provider.data_cleaner import DataCleaner
+from cqdata.utils.time_utils import ts_to_str
 
-from app.utils.logger_utils import SuppressOutput
+from cqdata.utils.logger_utils import SuppressOutput
 
 _BS_MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
 
