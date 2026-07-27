@@ -25,7 +25,7 @@ CarrotQuant.Data/
 ├── cqdata/
 │   ├── __init__.py               # 统一导出符号 (read_series, read_events 等)，0 业务逻辑
 │   ├── entrypoints/              # 网关接入层 (python_api, cli, rest_api)
-│   ├── config/                   # 配置管理 (Settings 从 config/config.yaml 加载)
+│   ├── config/                   # 配置管理 (支持 CQDATA_STORAGE_ROOT 环境变量与多级 YAML)
 │   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
 │   ├── service/                  # 业务逻辑层 (SyncManager, DataReader, MetadataReader, TaskPlanner, MetadataManager)
 │   ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
@@ -131,14 +131,14 @@ SyncManager.sync()
 ## 4. 核心模块与类职责
 
 ### 4.1 接入层 (Gateway)
-- **`python_api.py`**: 提供 SDK 高层 API (`read_series`, `read_events`, `sync`, `get_schema`, `get_time_range` 等)。
+- **`python_api.py`**: 提供 SDK 高层 API (`read_series`, `read_events`, `sync`, `configure`, `get_schema`, `get_time_range` 等)。
 - **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata serve`, `cqdata wizard`)。
 - **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，提供查询切片与异步同步任务触发。
 
 ### 4.2 业务服务层 (Service)
 - **`SyncManager`**: 数据同步总调度器，贯穿 Provider 拉取、批处理、Storage 写入与元数据盖章。
 - **`DataReader` / `MetadataReader`**: 提供多年份切片读取、按列投影选择与元数据探查。
-- **`TaskPlanner`**: 根据各格式的水位线（取保守交集）规划前向补全与后向拓展的任务区间。
+- **`TaskPlanner`**: 根据各格式的水位线（取保守交集）规划前向补全与后向拓展的任务区间（首次无水位且未指定 start_date 时默认 fallback 至 2020-01-01）。
 - **`MetadataManager`**: 负责 `metadata.json` 的原子化读写（`.tmp` -> `os.replace` -> `fsync`）。
 
 ### 4.3 数据驱动层 (Provider)

@@ -14,7 +14,10 @@ from cqdata.entrypoints.python_api import (
     get_time_range,
     get_schema,
     get_row_count,
-    sync
+    sync,
+    configure,
+    set_config,
+    get_config
 )
 
 __all__ = [
@@ -27,5 +30,8 @@ __all__ = [
     "get_time_range",
     "get_schema",
     "get_row_count",
-    "sync"
+    "sync",
+    "configure",
+    "set_config",
+    "get_config"
 ]

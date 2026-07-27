@@ -26,7 +26,10 @@ from cqdata.entrypoints import (
     get_time_range,
     get_schema,
     get_row_count,
-    sync
+    sync,
+    configure,
+    set_config,
+    get_config
 )
 
 __version__ = "0.1.1"
@@ -42,5 +45,8 @@ __all__ = [
     "get_schema",
     "get_row_count",
     "sync",
+    "configure",
+    "set_config",
+    "get_config",
     "__version__"
 ]

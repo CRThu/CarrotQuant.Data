@@ -6,18 +6,17 @@ from cqdata.utils.time_utils import parse_date_to_ts, align_to_day_end, align_to
 
 def test_plan_no_local_data_no_start_date():
     """
-    测试本地无数据 + 无 start_date → 必须抛出 ValueError
+    测试本地无数据 + 无 start_date → 默认回退至 2020-01-01
     """
     metadata_mgr = MagicMock()
     metadata_mgr.load.return_value = {"statistics": {}}
     
     planner = TaskPlanner(metadata_mgr)
     
-    with pytest.raises(ValueError) as exc_info:
-        planner.plan("test.table", ["csv"], ["sh.600000"])
-    
-    assert "No local metadata" in str(exc_info.value)
-    assert "start_date" in str(exc_info.value)
+    tasks = planner.plan("test.table", ["csv"], ["sh.600000"])
+    assert len(tasks) == 1
+    assert tasks[0]["start"] == parse_date_to_ts("2020-01-01")
+    assert tasks[0]["symbol"] == "sh.600000"
 
 def test_plan_local_data_no_start_date():
     """

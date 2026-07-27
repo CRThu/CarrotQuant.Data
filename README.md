@@ -125,6 +125,19 @@ graph TB
     uv pip install -e .
     ```
 
+## ⚙️ 配置说明 (Configuration)
+
+CarrotQuant.Data 支持多层级配置加载与灵活注入，优先级从高到低依次为：
+
+1. **代码程序化指定**：调用 `cqdata.configure(storage_root="/path/to/storage")` 或函数传参 `storage_root`（最高优先级）。
+2. **环境变量 `CQDATA_STORAGE_ROOT`**：如 `export CQDATA_STORAGE_ROOT="/my/data/path"`（适合 Docker / 自动化部署）。
+3. **环境变量 `CQDATA_CONFIG`**：指定自定义 YAML 路径，如 `export CQDATA_CONFIG="/path/to/config.yaml"`。
+4. **工作目录配置**：当前工作路径下的 `./config/config.yaml` 或 `./config.yaml`。
+5. **用户主目录配置**：`~/.cqdata/config.yaml`。
+6. **默认缺省路径**：`storage_root`。
+
+---
+
 ## 🚀 快速开始 (Quick Start)
 
 ### 方式一：使用 Python SDK (`import cqdata`) - 推荐
@@ -133,6 +146,9 @@ graph TB
 
 ```python
 import cqdata
+
+# 0. (可选) 全局程序化配置存储路径
+cqdata.configure(storage_root="/path/to/storage")
 
 # 1. 探索本地已下载的数据表列表
 series_tables = cqdata.list_series_tables()  # ['ashare.kline.1d.raw.baostock', ...]

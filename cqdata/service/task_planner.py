@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 from .metadata_manager import MetadataManager
-from ..utils.time_utils import parse_date_to_ts, align_to_day_start, align_to_day_end, ts_to_str
+from ..utils.time_utils import parse_date_to_ts, align_to_day_start, align_to_day_end
 
 class TaskPlanner:
     """
@@ -17,22 +17,20 @@ class TaskPlanner:
         
         Args:
             table_id: 数据表 ID
-            format: 数据格式 (csv/parquet)
+            formats: 数据格式列表 (csv/parquet)
             symbols: 目标证券代码列表
             start_date: 请求起始时间 (str 或 ts)
             end_date: 请求结束时间 (str 或 ts)
             force_refresh: 是否强制全量刷新 (忽略本地水位线)
             
         Returns:
-            List[Dict]: 补丁任务列表，每项含 symbol, start, end。每个 symbol 最多 2 个任务（双向穿透时各一个）。
+            List[Dict]: 补丁任务列表，每项含 symbol, start, end。
         """
         # 空格式列表直接返回空任务
         if not formats:
             return []
         
         # 1. 聚合多个格式的水位线。
-        # 起始取 max, 结束取 min：这是为了找到所有格式共同拥有的"最窄"水位区间。
-        # 只要有一路格式缺失，我们就需要通过任务补齐。
         loc_start = None
         loc_end = None
         
@@ -53,7 +51,8 @@ class TaskPlanner:
                 # 如果有本地水位，从本地结束时间开始（增量）
                 req_start = loc_end
             else:
-                raise ValueError(f"No local metadata for {table_id}. You MUST provide 'start_date' for the first sync.")
+                # 首次同步且未指定 start_date 时，默认 fallback 至 2020-01-01
+                req_start = parse_date_to_ts("2020-01-01")
         else:
             req_start = parse_date_to_ts(start_date)
 
@@ -96,9 +95,6 @@ class TaskPlanner:
                     })
 
             # 后向拓展：从 loc_end 开始补齐未来数据
-            # 使用 req_end (原始午夜) 与 loc_end (偏移到15:00) 直接比较：
-            # 若 req_end < loc_end，说明本地数据已覆盖请求范围，无需后向拓展
-            # 使用 >= 确保最后一天数据不完整时仍被刷新
             if req_end >= loc_end:
                 task_start = align_to_day_start(loc_end)
                 task_end = align_to_day_end(req_end)

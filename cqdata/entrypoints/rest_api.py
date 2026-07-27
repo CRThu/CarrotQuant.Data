@@ -5,7 +5,7 @@ FastAPI RESTful HTTP API 接入面模块。
 全面复用统一的 Service 探查与查询接口，为 Web 应用、微服务与跨语言客户端提供 HTTP 数据服务。
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from typing import List, Optional, Union
 from pydantic import BaseModel
 from loguru import logger

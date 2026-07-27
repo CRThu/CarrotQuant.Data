@@ -162,3 +162,31 @@ def sync(
         storage_root=storage_root,
         provider_kwargs=provider_kwargs
     )
+
+
+def configure(
+    storage_root: Optional[Union[str, Path]] = None,
+    config_file: Optional[Union[str, Path]] = None,
+    **kwargs
+):
+    """
+    全局配置 CarrotQuant.Data 运行参数。
+    可以在 import cqdata 后在代码入口处显式调用。
+
+    示例:
+        import cqdata
+        cqdata.configure(storage_root="/path/to/my_storage")
+    """
+    from cqdata.config import settings
+    return settings.configure(storage_root=storage_root, config_file=config_file, **kwargs)
+
+
+# 别名导出
+set_config = configure
+
+
+def get_config():
+    """获取当前全局 Settings 实例"""
+    from cqdata.config import settings
+    return settings
+
