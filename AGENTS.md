@@ -1,6 +1,6 @@
 # AGENTS.md - CarrotQuant.Data 代码指南
 
-本文档为 AI Agent 提供对 CarrotQuant.Data 项目的完整理解，包含架构、模块、类关系、数据流和开发约束。
+本文档为 AI Agent 提供对 CarrotQuant.Data 项目的完整理解，包含架构、模块职责、数据流、物理存储布局与开发约束。
 
 ---
 
@@ -9,14 +9,12 @@
 CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管理工具。它从免费数据源（Baostock、东方财富、通达信）获取 A 股/指数数据，清洗后持久化到本地 CSV/Parquet 文件，供量化研究和回测使用。
 
 **核心能力**：
-- 从 Baostock 下载 K 线（日线/5 分钟线）、复权因子等数据
-- 从东方财富下载概念/行业板块、龙虎榜、机构交易等数据
-- 从通达信下载 K 线数据（日线/5 分钟线），支持离线 ZIP 解析
+- 支持 Baostock（日线/5分线/复权因子）、东方财富（概念/行业板块/龙虎榜/机构交易）、通达信（日线/5分/1分线）
 - 支持 CSV 和 Parquet 两种存储格式
-- 基于时间戳水位线的增量同步，支持断点续接
-- 三种入口：交互向导 (Wizard)、CLI 命令行、FastAPI REST API
+- 基于时间戳水位线的增量同步与断点续接
+- 三种入口：Python SDK (`cqdata.read_series`/`read_events`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API
 
-**技术栈**：Python >= 3.12, Polars (数据处理), Baostock (数据源), curl_cffi (东财防封), tdxpy (通达信TCP), FastAPI (API), Typer (CLI), Loguru (日志), Pydantic-Settings (配置)
+**技术栈**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, Pydantic-Settings
 
 ---
 
@@ -25,474 +23,137 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 ```
 CarrotQuant.Data/
 ├── cqdata/
-│   ├── __init__.py               # 统一导出 read_series, read_events, list_series_tables 等 API
-│   ├── entrypoints/              # 统一接入网关层
-│   │   ├── __init__.py           # 集中重定向导出
-│   │   ├── python_api.py         # Python SDK API 总定义 (read_series, read_events, list_*)
-│   │   ├── cli.py                # Typer CLI 控制台入口 (cqdata 命令)
-│   │   └── rest_api.py           # FastAPI HTTP 路由服务 (REST API)
-│   ├── config/                   # 配置管理
-│   │   ├── __init__.py           # 导出 settings 单例
-│   │   └── settings.py           # Settings 类，从 config/config.yaml 加载
-│   ├── provider/                 # 数据源驱动层
-│   │   ├── base.py               # BaseProvider 抽象基类
-│   │   ├── baostock_provider.py  # BaostockProvider 实现
-│   │   ├── eastmoney_provider.py # EastMoneyProvider 实现
-│   │   ├── tdx_provider.py       # TDXProvider 通达信驱动实现
-│   │   ├── em_utils.py          # 东财 HTTP 工具 (防封/节流/重试)
-│   │   ├── tdx_utils.py         # 通达信二进制解析与在线获取工具
-│   │   ├── provider_manager.py   # ProviderManager 单例工厂
-│   │   └── data_cleaner.py       # DataCleaner 时间标准化工具
-│   ├── service/                  # 业务逻辑层
-│   │   ├── sync_manager.py       # SyncManager 同步总调度
-│   │   ├── data_reader.py        # DataReader 跨年份切片与按列投影选择 API
-│   │   ├── metadata_reader.py    # MetadataReader 表探查、Schema 与时间范围探查
-│   │   ├── task_planner.py       # TaskPlanner 任务规划器
-│   │   └── metadata_manager.py   # MetadataManager 元数据 IO
-│   ├── storage/          # 持久化存储层
-│   │   ├── base.py               # StorageManager 抽象基类
-│   │   ├── csv_storage.py        # CSVStorage 实现
-│   │   ├── parquet_storage.py    # ParquetStorage 实现
-│   │   ├── storage_factory.py    # StorageFactory 工厂
-│   │   └── data_merger.py        # DataMerger 合并/去重/排序
-│   └── utils/            # 工具箱
-│       ├── logger_utils.py       # setup_logger + SuppressOutput
-│       └── time_utils.py         # 时间戳/ISO/日期转换工具
-├── scripts/
-│   ├── wizard.py         # 交互式同步向导
-│   └── download_tdx.py   # TDX日线ZIP下载脚本 (独立使用，或通过 CLI tdx download 替代)
-├── tests/
-│   ├── conftest.py       # pytest fixtures (temp_storage_root, mock_baostock)
-│   ├── unit/             # 单元测试
-│   ├── integration/      # 集成测试
-│   └── gateway/          # API 网关测试
-└── pyproject.toml        # 项目依赖与构建配置
+│   ├── __init__.py               # 统一导出符号 (read_series, read_events 等)，0 业务逻辑
+│   ├── entrypoints/              # 网关接入层 (python_api, cli, rest_api)
+│   ├── config/                   # 配置管理 (Settings 从 config/config.yaml 加载)
+│   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
+│   ├── service/                  # 业务逻辑层 (SyncManager, DataReader, MetadataReader, TaskPlanner, MetadataManager)
+│   ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
+│   └── utils/                    # 工具箱 (logger_utils, time_utils)
+├── scripts/                      # 辅助脚本 (wizard.py 交互向导, download_tdx.py)
+├── tests/                        # 测试集 (unit, integration, gateway)
+└── pyproject.toml                # 项目依赖与构建配置
 ```
 
 ---
 
-## 3. 系统架构
+## 3. 系统架构与数据流
 
 ### 3.1 分层架构图
 
 ```mermaid
 graph TB
     subgraph Gateway["Gateway 接入层 (cqdata/entrypoints)"]
-        PYTHON_API["python_api.py<br/>(Python SDK)"]
-        CLI["cli.py<br/>(Typer CLI)"]
-        REST["rest_api.py<br/>(FastAPI REST)"]
-        WIZARD["wizard.py<br/>(交互向导)"]
+        PYTHON_API["python_api.py (Python SDK)"]
+        CLI["cli.py (Typer CLI)"]
+        REST["rest_api.py (FastAPI REST)"]
+        WIZARD["wizard.py (交互向导)"]
     end
 
     subgraph Service["Service 业务逻辑层 (cqdata/service)"]
-        SM["SyncManager<br/>同步总调度"]
-        DR["DataReader<br/>数据切片与投影选择"]
-        MR["MetadataReader<br/>元数据与格式探查"]
-        TP["TaskPlanner<br/>任务规划器"]
-        MM["MetadataManager<br/>元数据 IO"]
+        SM["SyncManager 同步总调度"]
+        DR["DataReader 切片与投影"]
+        MR["MetadataReader 探查"]
+        TP["TaskPlanner 任务规划器"]
+        MM["MetadataManager 元数据 IO"]
     end
 
     subgraph Provider["Provider 数据采集层"]
-        PM["ProviderManager<br/>单例工厂"]
-        BP["BaostockProvider<br/>Baostock 驱动"]
-        EP["EastMoneyProvider<br/>东财驱动"]
-        TP["TDXProvider<br/>通达信驱动"]
-        DC["DataCleaner<br/>时间标准化"]
+        PM["ProviderManager 单例工厂"]
+        BP["BaostockProvider"]
+        EP["EastMoneyProvider"]
+        TP_DRV["TDXProvider"]
+        DC["DataCleaner 时间标准化"]
     end
 
     subgraph Storage["Storage 持久化层"]
-        SF["StorageFactory<br/>格式工厂"]
-        CSV["CSVStorage<br/>按 symbol 分片"]
-        PQ["ParquetStorage<br/>年度大表"]
-        DM["DataMerger<br/>去重/排序"]
+        SF["StorageFactory 格式工厂"]
+        CSV["CSVStorage 按 symbol/年分片"]
+        PQ["ParquetStorage 年度大表"]
+        DM["DataMerger 去重/排序"]
     end
 
-    subgraph External["外部依赖"]
+    subgraph External["外部数据源"]
         BAOSTOCK["Baostock API"]
         EASTMONEY["东财 push2 / datacenter API"]
+        TDX["通达信 TCP / vipdoc"]
     end
 
     subgraph Disk["磁盘存储"]
-        CSV_FILES[("CSV 文件<br/>year=yyyy/{symbol}.csv")]
-        PQ_FILES[("Parquet 文件<br/>year=yyyy/data.parquet")]
+        CSV_FILES[("CSV 文件")]
+        PQ_FILES[("Parquet 文件")]
         META[("metadata.json")]
     end
 
     CLI --> SM
-    API --> SM
+    PYTHON_API --> SM
     WIZARD --> SM
 
     SM -->|"① get_provider()"| PM
     SM -->|"② plan()"| TP
     SM -->|"③ get_storage()"| SF
-    SM -->|"④ write_series()/write_event()"| CSV
-    SM -->|"④ write_series()/write_event()"| PQ
+    SM -->|"④ write_*()"| CSV
+    SM -->|"④ write_*()"| PQ
     SM -->|"⑤ save()"| MM
 
     TP -->|"load()"| MM
+    PM --> BP & EP & TP_DRV
+    BP --> BAOSTOCK
+    EP --> EASTMONEY
+    TP_DRV --> TDX
+    BP & EP & TP_DRV --> DC
 
-    PM -->|"实例化+缓存"| BP
-    PM -->|"实例化+缓存"| EP
-    BP -->|"standardize()"| DC
-    BP -->|"query()"| BAOSTOCK
-    EP -->|"standardize()"| DC
-    EP -->|"query()"| EASTMONEY
-
-    SF -->|"format=csv"| CSV
-    SF -->|"format=parquet"| PQ
-
-    CSV -->|"merge()/sort()"| DM
-    PQ -->|"merge()/sort()"| DM
-
-    CSV -->|"原子落盘"| CSV_FILES
-    PQ -->|"原子落盘"| PQ_FILES
-    MM -->|"原子落盘"| META
-    MM -->|"load()"| META
+    SF --> CSV & PQ
+    CSV & PQ --> DM
+    CSV --> CSV_FILES
+    PQ --> PQ_FILES
+    MM --> META
 ```
 
-### 3.2 数据流：一次同步的完整链路
+### 3.2 同步数据流
 
 ```
-用户请求 (CLI/API/Wizard)
+用户请求 (CLI / Python SDK / API / Wizard)
     │
-    ▼
-Gateway (cli.py / api.py)
-    │  解析参数，封装为 SyncManager.sync() 调用
     ▼
 SyncManager.sync()
-    │
-    ├── 1. ProviderManager.get_provider(table_id)
-    │      解析 table_id 末段 "baostock" → 实例化 BaostockProvider (单例缓存)
-    │
-    ├── 2. Provider.get_table_category(table_id)
-    │      返回 "timeseries" 或 "event"，决定存储策略
-    │
-    ├── 3. Provider.get_all_symbols(table_id)
-    │      调用 Baostock API 获取全市场有效证券代码列表
-    │
-    ├── 4. TaskPlanner.plan(table_id, formats, symbols, dates)
-    │      加载各格式的 metadata.json，对比用户请求与本地水位线
-    │      计算每个 symbol 需要补齐的时间区间 → List[Dict]
-    │
-    ├── 5. 批处理循环 (batch_size 控制)
-    │   │
-    │   ├── 5a. 逐 symbol 调用 Provider.fetch(table_id, symbol, start_ts, end_ts)
-    │   │       Baostock API 调用 → 原始数据 → DataCleaner.standardize()
-    │   │       生成标准化 DataFrame (含 timestamp, datetime, symbol 列)
-    │   │
-    │   └── 5b. 批次聚合: pl.concat(batch_dfs) → big_df
-    │          分发到各格式的 Storage.write_series() 或 write_event()
-    │
-    └── 6. 物理巡检 + 元数据盖章
-           对每个格式:
-           - Storage.get_total_bars() / get_global_time_range() / get_all_symbols()
-           - 构建 metadata.json (table_id, category, format, schema, statistics)
-           - MetadataManager.save() 原子化写入
+    ├── 1. ProviderManager.get_provider(table_id) -> 获得 Provider 实例
+    ├── 2. TaskPlanner.plan() -> 比较本地 metadata 水位线与目标时间，规划补充任务
+    ├── 3. 批处理循环 (batch_size 切分 symbols):
+    │      ├── Provider.fetch() -> 拉取原始数据 -> DataCleaner.standardize() 标准化
+    │      └── Batch pl.concat() -> 批量写入 CSVStorage / ParquetStorage
+    └── 4. 物理巡检与元数据更新:
+           Storage 检查物理状态 -> MetadataManager.save() 原子化更新 metadata.json
 ```
 
 ---
 
-## 4. 核心类详解
+## 4. 核心模块与类职责
 
-### 4.1 配置层
+### 4.1 接入层 (Gateway)
+- **`python_api.py`**: 提供 SDK 高层 API (`read_series`, `read_events`, `sync`, `get_schema`, `get_time_range` 等)。
+- **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata serve`, `cqdata wizard`)。
+- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，提供查询切片与异步同步任务触发。
 
-**`cqdata/config/settings.py` — `Settings`**
-- 继承: `pydantic_settings.BaseSettings`
-- 属性 `PROJECT_ROOT`: Path，项目根目录
-- 属性 `STORAGE_ROOT`: str，默认 `"storage_root"`
-- 初始化: 从 `config/config.yaml` 加载覆盖
-- 全局单例: `settings = Settings()`
+### 4.2 业务服务层 (Service)
+- **`SyncManager`**: 数据同步总调度器，贯穿 Provider 拉取、批处理、Storage 写入与元数据盖章。
+- **`DataReader` / `MetadataReader`**: 提供多年份切片读取、按列投影选择与元数据探查。
+- **`TaskPlanner`**: 根据各格式的水位线（取保守交集）规划前向补全与后向拓展的任务区间。
+- **`MetadataManager`**: 负责 `metadata.json` 的原子化读写（`.tmp` -> `os.replace` -> `fsync`）。
 
-### 4.2 工具层
+### 4.3 数据驱动层 (Provider)
+- **`BaseProvider` (ABC)**: 驱动抽象基类，规范 `fetch`, `get_all_symbols`, `get_supported_tables`, `get_table_category`, `get_sort_keys` 接口。
+- **`BaostockProvider`**: Baostock 数据驱动，处理个股/指数 K 线与复权因子，支持断线重连。
+- **`EastMoneyProvider`**: 东方财富数据驱动，处理板块成分股、龙虎榜与机构交易，采用 TLS 指纹防封与节流重试。无 symbol 的宏观表 `get_all_symbols` 返回 `["_ALL_"]`。
+- **`TDXProvider`**: 通达信数据驱动，支持 `online` (TCP 在线) 与 `local` (vipdoc 离线) 两种模式。
+- **`DataCleaner`**: 统一清洗时间轴，转换产生 `timestamp` (Int64 ms) 与 `datetime` (ISO8601) 标准列。
+- **`ProviderManager`**: Provider 单例工厂，根据 `table_id` 末段标识路由驱动。
 
-**`cqdata/utils/time_utils.py`**
-- `parse_date_to_ts(date_val, source_tz)` → int
-  - 将 "YYYY-MM-DD" 字符串按指定时区解析为 UTC 毫秒戳
-  - 整数直接透传
-- `ts_to_iso(ts_ms, display_tz)` → str
-  - UTC 毫秒戳 → ISO8601 带偏移字符串
-  - 示例: `"2024-01-01T08:00:00.000+08:00"`
-- `ts_to_str(ts_ms, fmt, display_tz)` → str
-  - UTC 毫秒戳 → 自定义格式字符串
-
-**`cqdata/utils/logger_utils.py`**
-- `setup_logger(log_level, log_file_prefix)`: 初始化 loguru
-  - 控台输出: stderr，带颜色格式化
-  - 文件输出: `logs/{prefix}_{timestamp}.log`
-- `SuppressOutput`: 上下文管理器
-  - 将 stdout/stderr 重定向到 `/dev/null`
-  - 用于屏蔽 Baostock 等第三方库的 print 输出
-
-### 4.3 Provider 层（数据采集）
-
-**`cqdata/provider/base.py` — `BaseProvider` (ABC)**
-- `fetch(table_id, symbol, start_date, end_date)` → pl.DataFrame
-  - 原子化下载，单次仅处理单支证券
-- `get_all_symbols(table_id)` → list[str]
-  - 返回市场下所有有效证券代码
-- `get_supported_tables()` → list[str]
-  - 返回驱动支持的所有 table_id
-- `get_table_category(table_id)` → str
-  - 返回 `"timeseries"` 或 `"event"`
-- `get_sort_keys(table_id)` → list[str]
-  - 返回指定表的排序列列表，由 Provider 显式指定
-
-**`cqdata/provider/baostock_provider.py` — `BaostockProvider(BaseProvider)`**
-- `_SUPPORTED_TABLE_MAP`: 类级字典，映射 table_id → category
-  - `ashare.kline.1d.adj.baostock` → `"timeseries"`
-  - `ashare.kline.1d.raw.baostock` → `"timeseries"`
-  - `ashare.kline.5m.adj.baostock` → `"timeseries"`
-  - `ashare.kline.5m.raw.baostock` → `"timeseries"`
-  - `aindex.kline.1d.raw.baostock` → `"timeseries"`
-  - `ashare.adj_factor.baostock` → `"event"`
-- `__init__()`: 登录 Baostock (SuppressOutput 包裹)
-- `__del__()`: 登出 Baostock
-- `_relogin()`: 断线重连 (logout → login)
-- `_safe_bs_call(func, *args, **kwargs)`: tenacity 装饰器封装，网络异常时 re-login + 指数退避重试 (最多 `MAX_RETRIES` 次)
-- `get_all_symbols()`:
-  - 调用 `bs.query_stock_basic()`
-  - 根据 table_id 前缀过滤: `ashare` → type=1 (个股), `aindex` → type=2 (指数)
-- `fetch()`: 根据 table_id 中间段路由到:
-  - `_fetch_kline()`:
-    - 调用 `bs.query_history_k_data_plus()`
-    - 解析频率: `1d` → `d`, `5m` → `5`
-    - 解析复权: `raw` → `3`, `adj` → `1`
-    - 字段重命名: `code` → `symbol`, `pctChg` → `change_pct` 等
-    - 数值类型: `cast(pl.Float64)`
-    - 调用 `DataCleaner.standardize()`
-  - `_fetch_adj_factor()`:
-    - 调用 `bs.query_adjust_factor()`
-    - 保留: `backAdjustFactor` → `back_adj_factor`
-    - 剔除: `foreAdjustFactor`, `adjustFactor`
-- 日期默认值: `start_date=None` → `"2020-01-01"`, `end_date=None` → `datetime.now()`（与 EastMoneyProvider 统一）
-- 空数据防御: 空数据时仍执行 cast 和时间标准化，与有数据时保持单一代码路径
-- 异常分发: API 报错 (error_code != '0') 抛 RuntimeError；无数据返回标准化空表
-
-**`cqdata/provider/eastmoney_provider.py` — `EastMoneyProvider(BaseProvider)`**
-- `_SUPPORTED_TABLE_MAP`: 类级字典，映射 table_id → category
-  - `ashare.concept.eastmoney` → `"event"` — 概念板块成分股
-  - `ashare.industry.eastmoney` → `"event"` — 行业板块成分股
-  - `ashare.dragon_tiger.eastmoney` → `"event"` — 龙虎榜
-  - `ashare.inst_trade.eastmoney` → `"event"` — 机构买卖每日统计
-- `_board_name_cache`: 类级字典，缓存 `{board_type: {"board_code": "board_name"}}`，避免重复拉取板块列表
-- `get_all_symbols()`:
-  - 龙虎榜/机构交易表 → 返回 `["_ALL_"]`
-  - 板块成分股表 → 调用 push2 API 获取板块代码列表
-- `fetch()`: 根据 table_id 路由到:
-  - `_fetch_board_cons_df()`: push2 板块成分股，返回 board_code + board_name + symbol + stock_name（无 timestamp/datetime，静态列表数据）
-  - `_fetch_dragon_tiger()`: datacenter 龙虎榜，按月分批 + 自动分页
-  - `_fetch_inst_trade()`: datacenter 机构交易，按月分批 + 自动分页
-- 日期默认值: `start_date=None` → `"2020-01-01"`, `end_date=None` → `datetime.now()`
-- 空数据防御: 创建 DataFrame 时指定 schema（所有列 String），空数据时也执行 cast 和时间标准化，与有数据时保持单一代码路径
-- symbol 标准化: `_to_standard_symbol()` 将纯数字代码转为 `sh./sz./bj.` 前缀格式（6→sh, 8/4→bj, 其余→sz），三处调用：板块成分股、龙虎榜、机构交易
-- 防封策略: curl_cffi TLS 指纹模拟 + 全局节流 + tenacity 自动重试
-
-**`cqdata/provider/tdx_provider.py` — `TDXProvider(BaseProvider)`**
-- `_SUPPORTED_TABLE_MAP`: 类级字典，映射 table_id → category
-  - `ashare.kline.1d.raw.tdx` → `"timeseries"` — A股日线
-  - `ashare.kline.5m.raw.tdx` → `"timeseries"` — A股5分钟线
-  - `ashare.kline.1m.raw.tdx` → `"timeseries"` — A股1分钟线
-  - `aindex.kline.1d.raw.tdx` → `"timeseries"` — 指数日线
-  - `aindex.kline.5m.raw.tdx` → `"timeseries"` — 指数5分钟线
-  - `aindex.kline.1m.raw.tdx` → `"timeseries"` — 指数1分钟线
-- `__init__(mode, vipdoc_dir)`: 支持两种导入模式
-  - `mode="online"` (默认): 通过 tdxpy TCP 在线获取
-  - `mode="local"`: 读取本地 vipdoc 目录 (默认 `C:\new_tdx\vipdoc`)
-- 在线接口能力 (已验证):
-  - 日线: 全部历史 (通过offset，600000可回溯到1999年IPO)
-  - 5分钟线: 约2年 (offset ~24000)
-  - 1分钟线: 约5个月 (offset ~23000)
-- 仅支持 raw (不复权) 数据，复权需求请使用 Baostock
-
-**`cqdata/provider/tdx_utils.py` — 通达信数据工具**
-- `discover_tdx_symbols_from_local(vipdoc_dir, market)`: 从本地 vipdoc lday 目录发现代码
-- `read_tdx_file_from_local(vipdoc_dir, tdx_code, freq)`: 使用 tdxpy reader (TdxDailyBarReader/TdxLCMinBarReader) 从本地 vipdoc 读取数据
-- `fetch_bars_online(symbol, freq, start_date, end_date, table_id)`: tdxpy TCP 在线获取 (支持offset回溯)
-- `fetch_stock_list_online(market)`: tdxpy TCP 获取股票列表
-- `tdx_code_to_standard()` / `standard_to_tdx_code()`: 代码格式转换
-- `_TDX_SERVERS`: 43 个候选服务器 IP (来源: `C:\new_tdx\connect.cfg` HQHOST)
-- `_probe_best_server()`: 并发探测 (ThreadPoolExecutor, 12 线程, 3s 超时)，返回延迟最低的可用服务器
-- `_connect_tdx_api()`: 连接 TDX 服务器，复用已有连接，断线时才重新探测
-- `_reconnect_tdx_api()`: 断线重连：清除缓存并重新探测
-- `_safe_tcp_call(callable_fn)`: tenacity 装饰器封装，网络异常时重连换 IP + 指数退避重试 (最多 `MAX_RETRIES` 次)
-
-**`cqdata/provider/em_utils.py` — 东财 HTTP 工具**
-- `em_get()`: 统一请求入口，自动节流 + 重试 + TLS 指纹模拟
-- `em_push2()`: push2 行情接口，自动回退多个 URL 应对封禁
-- `em_datacenter()`: 东财数据中心单次查询（龙虎榜/解禁/融资融券等共用），返回 `{"data": [...], "count": N}`
-- 防封策略: curl_cffi impersonate="chrome" + EM_MIN_INTERVAL 节流 + MAX_RETRIES 重试
-
-**`cqdata/provider/data_cleaner.py` — `DataCleaner`**
-- `standardize(df, time_col, time_fmt, source_tz, display_tz, time_shift_hours)` → pl.DataFrame
-  - 将 time_col 解析为 Datetime
-  - 标记为 source_tz → 转 UTC 得 timestamp (Int64 ms)
-  - 转 display_tz 得 datetime (ISO8601 String)
-  - 核心列 [symbol, datetime, timestamp] 强制移到最前
-  - 剔除原始 time_col
-  - time_shift_hours: 偏移至收盘时间 15:00 (A 股分区边界安全)
-
-**`cqdata/provider/provider_manager.py` — `ProviderManager`**
-- 单例模式 (`__new__`)
-- `get_provider(table_id)` → BaseProvider
-  - 解析 table_id 末段 → 实例化对应 Provider (baostock / eastmoney / tdx)
-
-### 4.4 Service 层（业务逻辑）
-
-**`cqdata/service/task_planner.py` — `TaskPlanner`**
-- `__init__(metadata_mgr)`: 注入 MetadataManager
-- `plan(table_id, formats, symbols, start_date, end_date, force_refresh)` → List[Dict]
-  - 加载各格式的 metadata.json 统计信息
-  - 多格式水位聚合: start 取 max, end 取 min (木桶原理)
-  - 日期推导:
-    - 无 start_date 且有本地数据 → 从 loc_end 开始 (增量)
-    - 无本地数据 → 必须提供 start_date
-  - 为每个 symbol 计算一个补丁任务:
-    - force_refresh / 无本地数据: 全量覆盖
-    - 前向补全 (req_start < loc_start): task_start=req_start, task_end=align_to_day_end(min(req_end, loc_start))
-    - 后向拓展 (req_end >= loc_end): task_start=align_to_day_start(loc_end), task_end=align_to_day_end(req_end)
-    - 已覆盖: 跳过
-  - 后向拓展使用 `>=` 判定，确保本地数据结束当天被纳入刷新范围（防止分钟线等场景当天数据不完备）
-  - 过滤无效区间 (start >= end)
-
-**`cqdata/service/metadata_manager.py` — `MetadataManager`**
-- `__init__(storage_root)`: 根路径
-- `_get_metadata_path(table_id, format)` → Path
-  - 路径: `storage_root/{format}/{table_id}/metadata.json`
-- `load(table_id, format)` → dict
-  - 存在则读 JSON，不存在返回 `{}`
-- `save(table_id, format, metadata)`
-  - 原子化写入: .tmp → os.replace → fsync
-
-**`cqdata/service/sync_manager.py` — `SyncManager`**
-- `__init__(storage_root)`: 实例化 MetadataManager, TaskPlanner, ProviderManager
-- `sync(table_ids, formats, start_date, end_date, force_refresh, batch_size, symbol_limit)`
-  - 遍历每个 table_id 调用 `_sync_single_table()`
-- `_sync_single_table()`:
-  1. 获取 Provider + Category
-  2. 创建各格式 Storage 实例 (via StorageFactory)
-  3. 发现全量 Symbol (可选 limit 截断)
-  4. TaskPlanner 规划补丁任务
-  5. 批处理循环: 逐 symbol fetch → 聚合 → 多路下沉到各格式 Storage
-  6. 物理巡检 + 元数据更新 (_update_metadata)
-- `_update_metadata()`:
-  - 获取 total_bars, time_range, schema
-  - TS 补充 symbol_count, time_steps (高 IO)
-  - EV 仅保留基础统计 (0 IO)
-  - 静默拦截:
-    - total_bars=0 且无元数据 → 不创建文件
-    - 无新数据且已有元数据 → 不更新
-
-### 4.5 Storage 层（持久化）
-
-**`cqdata/storage/base.py` — `StorageManager` (ABC)**
-- 属性 `category`: timeseries / event
-- 属性 `partition`: abstract
-- 属性 `layout`: abstract
-- 抽象方法:
-  - `read_series(table_id, symbol, year)` → pl.DataFrame
-  - `read_event(table_id, year)` → pl.DataFrame
-  - `write_series(table_id, df, mode)` → None
-  - `write_event(table_id, df, mode, sort_keys)` → None
-  - `get_all_symbols(table_id)` → list[str]
-  - `get_total_bars(table_id)` → int
-  - `get_global_time_range(table_id)` → tuple[int, int]
-  - `get_unique_timestamps(table_id)` → list[int]
-
-**`cqdata/storage/csv_storage.py` — `CSVStorage(StorageManager)`**
-- `__init__(storage_root, category, partition, layout)`
-  - storage_root 传入时已是 `storage_root/csv`
-- `partition` 属性:
-  - TS → `"symbol"`
-  - EV → `"none"`
-- TS 路径: `{root}/{table_id}/year={yyyy}/{symbol}.csv`
-- EV 路径 (Hive): `{root}/{table_id}/year={yyyy}/data.csv`
-- EV 路径 (Flat): `{root}/{table_id}/data.csv`
-- `_is_flat_event(table_id)`: 检查平铺文件是否存在
-- `_get_flat_event_path(table_id)` → Path: 返回平铺路径 `{root}/{table_id}/data.csv`
-- `_read_with_schema(table_id, path, schema_override)`:
-  - 从 metadata.json 加载 schema → 映射 Polars DataType → pl.read_csv(schema=...)
-- `write_series()`:
-  - 按 [symbol, year] 分组
-  - 增量模式读旧数据
-  - DataMerger.merge (TS: subset=[symbol,timestamp])
-  - 排序 (TS: [timestamp])
-  - 原子落盘
-- `write_event()`:
-  - 无 timestamp: 平铺模式，DataMerger.merge (subset=None)，动态排序 `[c for c in df.columns if c != "symbol"][:2] + ["symbol"]`
-  - 有 timestamp: 按 [year] 分组，DataMerger.merge (subset=None)，排序 `[timestamp, symbol]`
-  - 原子落盘
-- `get_all_symbols()`:
-  - EV 返回 []
-  - TS glob year=*/*.csv 取文件名
-- `get_total_bars()`: 平铺模式读单文件，Hive 模式通配符统计
-- `get_global_time_range()`: 平铺模式返回 (0,0)，Hive 模式 min/max timestamp
-
-**`cqdata/storage/parquet_storage.py` — `ParquetStorage(StorageManager)`**
-- `partition` 属性: 始终 `"none"` (Parquet 按年聚合大表)
-- TS 路径: `{root}/{table_id}/year={yyyy}/data.parquet`
-- EV 路径 (Hive): `{root}/{table_id}/year={yyyy}/data.parquet`
-- EV 路径 (Flat): `{root}/{table_id}/data.parquet`
-- `_is_flat_event(table_id)`: 检查平铺文件是否存在
-- `_get_flat_event_path(table_id)` → Path: 返回平铺路径 `{root}/{table_id}/data.parquet`
-- `_read_with_schema()`: pl.read_parquet → cast(schema)
-- `write_series()`:
-  - 按 [year] 分组
-  - 增量合并
-  - 排序 (TS: [symbol, timestamp], Symbol-First)
-  - zstd 压缩写入
-- `write_event()`:
-  - 无 timestamp: 平铺模式，DataMerger.merge (subset=None)，动态排序
-  - 有 timestamp: 按 [year] 分组，DataMerger.merge (subset=None)，排序 `[timestamp, symbol]`
-  - 原子落盘
-- 统计接口基于 pl.scan_parquet 元数据提取
-
-**`cqdata/storage/storage_factory.py` — `StorageFactory`**
-- `get_storage(format, storage_root, category)` → StorageManager
-  - `"csv"` → `CSVStorage(storage_root=f"{storage_root}/csv", category=category)`
-  - `"parquet"` → `ParquetStorage(storage_root=f"{storage_root}/parquet", category=category)`
-
-**`cqdata/storage/data_merger.py` — `DataMerger`**
-- `merge(old_df, new_df, subset)` → pl.DataFrame
-  - pl.concat → unique(subset, keep="last")
-  - subset=None 全行去重
-- `sort(df, keys)` → pl.DataFrame
-  - 动态过滤不存在的列后排序
-  - 默认 keys=["timestamp", "symbol"]
-
-### 4.6 Entrypoints 层（网关接入层）
-
-**`cqdata/entrypoints/python_api.py` — Python SDK 主入口**
-- `read_series(table_id, symbols=None, start_date=None, end_date=None, columns=None, format="auto", as_pandas=False)`: 切片读取 K 线/分笔等时序数据，支持 `columns` 按需列挑选
-- `read_events(table_id, symbols=None, start_date=None, end_date=None, columns=None, format="auto", as_pandas=False)`: 切片读取板块/龙虎榜等事件数据，支持 `columns` 按需列挑选
-- `list_series_tables(format="auto")`: 列出本地已有的时序数据表
-- `list_event_tables(format="auto")`: 列出本地已有的事件数据表
-- `list_formats(table_id)`: 获取指定表已有的存储格式
-- `list_symbols(table_id, format="auto")`: 获取指定表已有的股票/指数代码列表
-- `get_time_range(table_id, format="auto")`: 获取指定表的 ISO 时间起止跨度 tuple `(start_dt, end_dt)`
-- `get_schema(table_id, format="auto")`: 获取指定表的字段名及类型字典
-- `get_row_count(table_id, format="auto")`: 获取指定表物理记录总条数/行数
-- `sync(table_ids, formats, start_date, end_date, ...)`: 触发数据全自动同步
-
-**`cqdata/entrypoints/cli.py` — Typer CLI 终端控制台**
-- 命令 `cqdata sync`: 全自动同步数据（支持 `-t`, `-f`, `-s`, `-e`, `--force`, `--batch`, `--limit`, `-o`, `--local`, `--tdx-vipdoc`）
-- 命令 `cqdata tables`: 表探索，分类列出本地已存储的时序表与事件表
-- 命令 `cqdata info <table_id>`: 信息探查，展示指定表的行数、代码量、时间跨度与字段 Schema 定义
-- 命令 `cqdata serve`: 启动 REST API HTTP 服务（支持 `-h`, `-p`, `--reload`）
-- 命令 `cqdata wizard`: 启动终端交互同步向导
-- 命令 `cqdata tdx download`: 下载通达信日线数据到 vipdoc 目录
-
-**`cqdata/entrypoints/rest_api.py` — FastAPI RESTful HTTP 服务**
-- `GET /api/v1/tables/series` — 获取所有时序表 ID
-- `GET /api/v1/tables/events` — 获取所有事件表 ID
-- `GET /api/v1/tables/{table_id}/formats` — 获取表物理存储格式列表
-- `GET /api/v1/tables/{table_id}/symbols` — 获取表包含的唯一代码列表
-- `GET /api/v1/tables/{table_id}/time_range` — 获取表时间跨度 tuple
-- `GET /api/v1/tables/{table_id}/schema` — 获取表字段列定义及数据类型
-- `GET /api/v1/tables/{table_id}/row_count` — 获取表物理存储行数
-- `POST /api/v1/query/series` — 描述: POST 切片查询时序数据 (支持 `symbols`, `start_date`, `end_date`, `columns`, `format`, `limit`)
-- `POST /api/v1/query/events` — 描述: POST 切片查询事件数据 (支持 `symbols`, `start_date`, `end_date`, `columns`, `format`, `limit`)
-- `POST /api/v1/sync` — 描述: 异步触发数据同步任务
-- `GET /api/v1/tasks` — 描述: 查询当前活跃后台同步任务
+### 4.4 持久化存储层 (Storage)
+- **`StorageManager` (ABC)**: 存储抽象基类，统一 `read_series`, `read_event`, `write_series`, `write_event` 接口。
+- **`CSVStorage`**: TS 数据按 `[symbol, year]` 分片 CSV；EV 数据按 `[year]` 或平铺存储。
+- **`ParquetStorage`**: TS/EV 数据按 `[year]` 保存为 zstd 压缩 Parquet 大表或平铺大表。
+- **`DataMerger`**: 负责新旧 Polars DataFrame 的增量合并（`unique keep='last'`）与多维列排序。
 
 ---
 
@@ -500,172 +161,82 @@ SyncManager.sync()
 
 格式: `{market}.{category}.[sub_category/freq/adj].{source}`
 
-> **注意**: 中间段 `[sub_category/freq/adj]` 可选，部分 table_id 仅用 3 段命名。
-> 驱动工厂仅依据末段 `source` 路由，中间段由具体驱动自行解析。
-
 | 字段 | 说明 | 示例 |
-|------|------|------|
-| market | 市场标识 | ashare (A 股个股), aindex (A 股指数) |
-| category | 数据类别 | kline (K 线), adj_factor (复权因子), lhb (龙虎榜) |
-| freq | 频率 (可选) | 1d (日线), 5m (5 分钟线) |
-| adj | 复权方式 (可选) | adj (后复权), raw (不复权) |
-| source | 数据源 (末段，路由依据) | baostock, eastmoney, tdx |
+|:---|:---|:---|
+| market | 市场标识 | `ashare` (A股个股), `aindex` (A股指数) |
+| category | 数据类别 | `kline` (K线), `adj_factor` (复权因子), `dragon_tiger` (龙虎榜), `concept` (概念板块) |
+| freq/adj | 频率/复权 (可选) | `1d` (日线), `5m` (5分钟), `adj` (后复权), `raw` (不复权) |
+| source | 数据源 (末段，路由依据) | `baostock`, `eastmoney`, `tdx` |
 
-**已注册的 table_id**:
-- `ashare.kline.1d.adj.baostock` (TS) — A 股日线后复权
-- `ashare.kline.1d.raw.baostock` (TS) — A 股日线不复权
-- `ashare.kline.5m.adj.baostock` (TS) — A 股 5 分钟线后复权
-- `ashare.kline.5m.raw.baostock` (TS) — A 股 5 分钟线不复权
-- `aindex.kline.1d.raw.baostock` (TS) — A 股指数日线 (仅 raw)
-- `ashare.adj_factor.baostock` (EV) — A 股复权因子
-- `ashare.concept.eastmoney` (EV) — 概念板块成分股
-- `ashare.industry.eastmoney` (EV) — 行业板块成分股
-- `ashare.dragon_tiger.eastmoney` (EV) — 龙虎榜
-- `ashare.inst_trade.eastmoney` (EV) — 机构买卖每日统计
-- `ashare.kline.1d.raw.tdx` (TS) — A 股日线 (通达信)
-- `ashare.kline.5m.raw.tdx` (TS) — A 股 5 分钟线 (通达信)
-- `ashare.kline.1m.raw.tdx` (TS) — A 股 1 分钟线 (通达信)
-- `aindex.kline.1d.raw.tdx` (TS) — 指数日线 (通达信)
-- `aindex.kline.5m.raw.tdx` (TS) — 指数 5 分钟线 (通达信)
-- `aindex.kline.1m.raw.tdx` (TS) — 指数 1 分钟线 (通达信)
+**主要注册表**:
+- `ashare.kline.1d.adj.baostock` / `ashare.kline.1d.raw.baostock` (TS)
+- `ashare.kline.5m.adj.baostock` / `ashare.kline.5m.raw.baostock` (TS)
+- `ashare.adj_factor.baostock` (EV)
+- `ashare.concept.eastmoney` / `ashare.industry.eastmoney` / `ashare.dragon_tiger.eastmoney` (EV)
+- `ashare.kline.1d.raw.tdx` / `ashare.kline.5m.raw.tdx` / `ashare.kline.1m.raw.tdx` (TS)
 
 ---
 
-## 6. 存储布局 (Hive 分区)
+## 6. 存储布局与元数据协议
 
-### 完整目录树
+### 6.1 Hive 分区存储结构
 
 ```
-storage_root/                          # 根目录 (默认 "storage_root")
-├── csv/                               # CSV 格式存储
-│   └── {table_id}/                    # 按表名组织
-│       ├── year={yyyy}/               # Hive 分区模式
-│       │   ├── {symbol}.csv           # TS: 每个 symbol 独立文件
-│       │   └── data.csv               # EV (有 timestamp): 年度单文件
-│       ├── data.csv                   # EV (无 timestamp, 平铺模式)
-│       └── metadata.json              # 元数据
-├── parquet/                           # Parquet 格式存储
-│   └── {table_id}/                    # 按表名组织
-│       ├── year={yyyy}/               # Hive 分区模式
-│       │   └── data.parquet           # TS/EV: 年度大表
-│       ├── data.parquet               # EV (无 timestamp, 平铺模式)
-│       └── metadata.json              # 元数据
-└── config/                            # 配置目录 (非存储)
+storage_root/
+├── csv/
+│   └── {table_id}/
+│       ├── year={yyyy}/{symbol}.csv   # TS (TimeSeries) 模式
+│       ├── year={yyyy}/data.csv       # EV (Event 有 timestamp) 模式
+│       ├── data.csv                   # EV (Event 无 timestamp) 平铺模式
+│       └── metadata.json
+└── parquet/
+    └── {table_id}/
+        ├── year={yyyy}/data.parquet   # TS & EV (有 timestamp) 模式
+        ├── data.parquet               # EV (无 timestamp) 平铺模式
+        └── metadata.json
 ```
 
-### 路径模板
+### 6.2 路径模板表
 
 | 数据类型 | CSV 路径 | Parquet 路径 |
-|---------|---------|-------------|
-| TimeSeries (TS) | `storage_root/csv/{table_id}/year={yyyy}/{symbol}.csv` | `storage_root/parquet/{table_id}/year={yyyy}/data.parquet` |
-| Event (EV) 有 timestamp | `storage_root/csv/{table_id}/year={yyyy}/data.csv` | `storage_root/parquet/{table_id}/year={yyyy}/data.parquet` |
-| Event (EV) 无 timestamp | `storage_root/csv/{table_id}/data.csv` | `storage_root/parquet/{table_id}/data.parquet` |
-| 元数据 | `storage_root/{format}/{table_id}/metadata.json` | `storage_root/{format}/{table_id}/metadata.json` |
+|:---|:---|:---|
+| TimeSeries (TS) | `csv/{table_id}/year={yyyy}/{symbol}.csv` | `parquet/{table_id}/year={yyyy}/data.parquet` |
+| Event (EV) 有 timestamp | `csv/{table_id}/year={yyyy}/data.csv` | `parquet/{table_id}/year={yyyy}/data.parquet` |
+| Event (EV) 无 timestamp | `csv/{table_id}/data.csv` | `parquet/{table_id}/data.parquet` |
+| 元数据 | `{format}/{table_id}/metadata.json` | `{format}/{table_id}/metadata.json` |
 
-### statistics 字段说明
-- statistics 是物理巡检产出的状态描述
-- 仅用于分析用途，系统不再依赖此字段进行路径调度
-- TS 表包含 `symbol_count` 和 `time_steps` (高 IO 扫描)
-- EV 表仅保留基础统计 (0 IO 扫描)
+### 6.3 元数据规范 (metadata.json)
 
-### 元数据示例 (metadata.json)
+每个表及格式维护独立的 `metadata.json`，记载 `schema` 与 `statistics`（包括起止时间戳、ISO时间与 `total_bars`）。
+> **EV 表性能优化**：EV 表的 `metadata.json` 严禁包含 `symbol_count` 和 `time_steps` 字段，巡检时跳过大文件全量扫描。
+> **复权因子说明**：仅保留后复权因子 `back_adj_factor`，剔除可变的历史前复权因子，防止历史数据变更污染增量水位线。
 
-TimeSeries 类型 (category: "timeseries"):
-```json
-{
-  "table_id": "ashare.kline.1d.adj.baostock",
-  "category": "timeseries",
-  "format": "csv",
-  "partition": "symbol",
-  "layout": "hive",
-  "schema": {
-    "symbol": "String",
-    "datetime": "String",
-    "timestamp": "Int64",
-    "open": "Float64",
-    "high": "Float64",
-    "low": "Float64",
-    "close": "Float64",
-    "volume": "Float64",
-    "amount": "Float64"
-  },
-  "statistics": {
-    "start_timestamp": 1704067200000,
-    "end_timestamp": 1716163200000,
-    "start_datetime": "2024-01-01T00:00:00.000+08:00",
-    "end_datetime": "2024-05-20T00:00:00.000+08:00",
-    "total_bars": 485600,
-    "symbol_count": 5000,
-    "time_steps": 100
-  }
-}
-```
+### 6.4 TS 与 EV 存储行为差异
 
-Event 类型 (category: "event"):
-```json
-{
-  "table_id": "ashare.adj_factor.baostock",
-  "category": "event",
-  "format": "csv",
-  "partition": "none",
-  "layout": "hive",
-  "schema": {
-    "symbol": "String",
-    "datetime": "String",
-    "timestamp": "Int64",
-    "back_adj_factor": "Float64"
-  },
-  "statistics": {
-    "start_timestamp": 1104537600000,
-    "end_timestamp": 1716163200000,
-    "start_datetime": "2005-01-01T00:00:00.000+08:00",
-    "end_datetime": "2024-05-20T00:00:00.000+08:00",
-    "total_bars": 15000
-  }
-}
-```
-
-**EV 元数据扫描优化**: 为确保 IO 性能，EV 表的 `metadata.json` 严禁包含 `symbol_count` 和 `time_steps` 字段，巡检时跳过大文件全量扫描。
-
-**注意**: 复权因子数据仅保留后复权因子 (`back_adj_factor`)，前复权因子 (`foreAdjustFactor`) 和其他复权因子 (`adjustFactor`) 已被物理剔除，以防止回溯特性影响增量同步水位线的安全性。
-
-### 写入接口差异
-
-| 维度 | TS (TimeSeries) | EV (Event) 有 timestamp | EV (Event) 无 timestamp (板块成分股等) |
-|------|----------------|------------------------|--------------------------------------|
-| CSV 分区 | 按 `[symbol, year]` 分片 | 按 `[year]` 单文件 | 平铺 `{table_id}/data.csv` |
-| Parquet 分区 | 按 `[year]` 聚合大表 | 按 `[year]` 单文件 (同 TS) | 平铺 `{table_id}/data.parquet` |
-| 去重策略 | `subset=["symbol", "timestamp"]` | `subset=None` (全行去重) | `subset=None` (全行去重) |
-| CSV 排序 | `["timestamp"]` (单 symbol 文件语义) | `["timestamp", "symbol"]` (Time-First) | `sort_keys` 参数传入 (由 Provider 指定) |
-| Parquet 排序 | `["symbol", "timestamp"]` (Symbol-First，适配 C# MMF 索引) | `["timestamp", "symbol"]` (Time-First) | `sort_keys` 参数传入 (由 Provider 指定) |
-| 列探测 | 必须包含 `symbol` 和 `timestamp` | 自动检查 `symbol` 列，缺失则仅按 `["timestamp"]` 排序 | 无 timestamp，`sort_keys` 参数控制排序 |
+| 维度 | TS (TimeSeries) | EV (Event) 有 timestamp | EV (Event) 无 timestamp |
+|:---|:---|:---|:---|
+| 分区模式 | CSV: `[symbol, year]` / PQ: `[year]` | 按 `[year]` | 平铺文件 |
+| 去重策略 | `subset=["symbol", "timestamp"]` | 全行去重 `subset=None` | 全行去重 `subset=None` |
+| 默认排序 | CSV: `["timestamp"]` / PQ: `["symbol", "timestamp"]` | `["timestamp", "symbol"]` | 由 Provider `get_sort_keys()` 指定 |
 
 ---
 
-## 7. 数据类型协议与双时间轴
+## 7. 数据协议与双时间轴
 
-### 7.1 双时间轴 (所有入库数据必须包含)
-- `timestamp`: Int64 (UTC 毫秒级时间戳) — 用于去重、分区、排序的物理主键
-- `datetime`: String (ISO8601 带偏移, 如 "2024-01-01T15:00:00.000+08:00") — 可读展示列
-- `symbol`: String (证券代码, 如 "sh.600000") — 复合主键之一
+### 7.1 核心字段契约
+入库数据必须包含以下时间与主键字段：
+- `timestamp`: Int64 (UTC 毫秒级时间戳) — 去重、分区、排序的主键
+- `datetime`: String (ISO8601 带偏移，如 `"2024-01-01T15:00:00.000+08:00"`) — 强时区带偏移的可读列
+- `symbol`: String (证券代码，如 `"sh.600000"`) — 复合主键之一
 
-### 7.2 双时区驱动机制
-系统引入 `source_tz` 和 `display_tz` 两个时区参数，用于精确控制时间轴生成：
+### 7.2 双时区机制
+- **`source_tz`**: 用于解析原始挂钟时间对齐到 UTC 0（默认 `"Asia/Shanghai"`）。
+- **`display_tz`**: 用于生成带偏移量的 ISO8601 `datetime` 显示列（默认 `"Asia/Shanghai"`）。
+- **A股日线对齐规则**: 日线数据默认统一对齐至 `15:00:00`（A股收盘时间），防止跨日边界物理分区错位。
+- 必须使用标准 `zoneinfo` 库处理时区，严禁手动计算偏移。
 
-- **`source_tz`**: 用于将原始挂钟时间对齐到 UTC 0。必须使用 IANA 时区名称（如 `"Asia/Shanghai"`, `"UTC"`, `"America/New_York"`）。
-- **`display_tz`**: 用于生成 datetime 显示列（带偏移量的 ISO8601）。必须使用 IANA 时区名称。
-- **默认值**: 针对 A 股环境，两者默认均为 `"Asia/Shanghai"`。系统统一将所有 +8 时区的日期数据默认对齐至 15:00:00（即 A 股市场收盘时间），以确保分月/分年文件物理分割边界的安全性（避免 00:00 边界错位）。
-
-**实现规范**:
-1. 必须使用 Python 3.9+ 的 `zoneinfo` 库处理时区，严禁手动计算时区偏移。
-2. `datetime` 字符串必须以 `+HH:MM` 或 `-HH:MM` 结尾（如 `2024-01-01T15:00:00.000+08:00`）。
-3. 严禁使用不带偏移量的本地时间。
-
-**验证要求**:
-- 跨时区验证：`source_tz="UTC"` 且 `display_tz="Asia/Shanghai"`，北京时间 8 点的数据生成的 timestamp 应为 UTC 0 点。
-- 夏令时验证：使用 `America/New_York` 测试 6 月份数据，验证 datetime 后缀应自动为 `-04:00`。
-
-### 7.3 类型映射 (读取时使用)
+### 7.3 类型映射规约 (type_map)
+读取数据时，必须依据 `metadata.json` 定义的 schema 显式执行 `pl.cast()`：
 ```python
 type_map = {
     "Int64": pl.Int64, "Float64": pl.Float64, "String": pl.String,
@@ -675,185 +246,68 @@ type_map = {
 
 ---
 
-## 8. 关键设计模式
+## 8. 核心设计原则
 
-1. **原子落盘**: 所有写操作先写 `.tmp` 文件 → `os.replace` 替换，防止写入中断导致数据损坏
-2. **读取强锁**: 读取时必须加载 metadata.json 的 schema 进行显式 cast，禁止自动类型推断
-3. **空数据防御**: 驱动返回空表时补齐 schema；存储层空表不创建文件；元数据静默机制
-4. **批处理聚合**: 按 batch_size 切分 symbols → 批内 pl.concat → 单次下沉存储，避免 Parquet 写放大
-5. **Fail-Fast**: 任一 symbol 失败立即抛异常中断，不降级为空数据
-6. **水位线增量**: 多格式水位取 min(end)，确保所有格式都覆盖
-
-### 8.1 空数据防御三层机制
-
-| 层级 | 位置 | 行为 | 价值 |
-|------|------|------|------|
-| 驱动骨架补齐 | Provider.fetch() | 空数据时返回含完整 schema 的空表 (通过 DataCleaner) | 确保下游 SyncManager 捕捉正确 Schema |
-| 存储写入拦截 | Storage.write_*() | `df.is_empty()` 时立即 return，不创建任何磁盘文件 | 杜绝空表产生文件夹残留 |
-| 元数据静默机制 | SyncManager._update_metadata() | total_bars=0 且无元数据 → 不创建 metadata.json；无新增且已有元数据 → 不更新 | 元数据必须是磁盘有效数据的真实映射 |
-
-### 8.2 异常分发原则
-驱动层必须严格区分"业务性空数据"与"技术中断"：
-
-- **技术中断/非法参数** (网络波动、授权失效、不支持的 table_id/复权/频率等): 必须 `raise` 中断流水线，严禁降级为空 DataFrame 返回，否则会导致水位线误推进
-- **业务性成功/空数据** (API 成功但无结果，如停牌、因子未到生效期): 允许返回标准化后的空 DataFrame
-
-### 8.3 职责边界
-- 存储层**不负责清洗**任何 `date` 或 `time` 字段，若缺失 `timestamp` 列且非平铺模式应拒绝入库
-- 存储层**不负责类型推断**，metadata.json 缺失时必须抛出 `RuntimeError`
-- EV 数据支持**无损降级**: 当 `symbol` 列缺失时，排序自动回退到仅基于 `timestamp`，严禁抛出 `ColumnNotFoundError`
+1. **原子落盘**: 任何写操作均采用 `.tmp` 文件写入 -> `os.replace` -> `fsync` 刷盘，杜绝写入中断导致文件损坏。
+2. **读取强锁与显式 Cast**: 读取数据时必须读取 `metadata.json` 的 schema 进行显式 `pl.cast()`，严禁使用 Polars 自动类型推断。
+3. **空数据防御三层机制**:
+   - *驱动层*: 无数据时也必须通过 `DataCleaner` 返回带完整 schema 的空 DataFrame。
+   - *存储层*: 传入空 DataFrame 时静默拦截，不创建空文件或残留目录。
+   - *元数据层*: `total_bars=0` 且无元数据时不创建文件；无新数据且已有元数据时不重复更新。
+4. **Fail-Fast 异常分发**:
+   - 网络中断、网络授权失效或非法参数：必须抛出异常中断流水线，防止水位线被误推进。
+   - 业务合法空数据（如停牌、无龙虎榜记录）：允许返回带 Schema 的空表。
+5. **增量水位线**: 多格式同步时水位线取交集保守计算 (`start` 取 max, `end` 取 min)，保证各存储格式完整覆盖。
+6. **无损降级处理**: EV 数据在缺少 `symbol` 列时自动回退为仅按 `timestamp` 排序，严禁抛出 `ColumnNotFoundError`。
 
 ---
 
-## 9. 开发约束（强制）
+## 9. 开发与测试约束
 
-- **禁止 pandas**: 全系统强制使用 Polars (pl)
-- **禁止前复权**: 仅支持 raw (不复权) 或 adj (后复权)
-- **禁止自动类型推断**: 读取必须通过 metadata schema 显式 cast
-- **禁止 how="diagonal"**: pl.concat 禁用对角拼接，缺失列属于 Provider 问题
-- **运行命令前缀**: 所有执行指令必须带有 `uv run` 前缀
-- **语言**: 代码注释及开发文档必须使用中文
-- **时区处理**: 使用 Python `zoneinfo` 库，禁止手动计算偏移；A 股数据默认对齐至 15:00 收盘时间
-- **字段要求**: `symbol` 为强制保留字段，`timestamp` (Int64) 和 `datetime` (String) 为必选时间轴字段
-- **类型规约**: 写入端数值列强制 `cast(pl.Float64)`，读取端禁止自动类型推断
-- **聚合一致性**: `DataMerger` 合并过程中严禁使用 `how="diagonal"`，数据源列缺失属于 Provider 问题
-- **无损降级**: EV 数据无 `symbol` 列时静默处理，严禁抛出 `ColumnNotFoundError`
-- **物理布局**: TS: `storage_root/{format}/{table_id}/year=2024/{symbol}.{ext}`; EV (有 timestamp): `storage_root/{format}/{table_id}/year=2024/data.{ext}`; EV (无 timestamp): `storage_root/{format}/{table_id}/data.{ext}`
-- **去重一致性**: EV 模式强制全行去重，无 `symbol` 的宏观数据依然有效
-- **元数据巡检**: EV 目录文件内无 `symbol` 列时 `get_all_symbols` 返回空列表; `metadata.json` 缺失时抛出 `RuntimeError`
-
----
-
-## 10. 单元测试规范
-
-- **实现即测试**: 实现新功能或修复 bug 时必须同步编写/更新对应的单元测试
-- **外部依赖**: 根据项目已有的测试分层约定，合理 mock 或真实调用外部 IO
-- **运行验证**: 修改代码后必须运行项目的测试命令确保全部通过
+- **技术栈禁令**: 强制全系统使用 Polars (`pl`)，**严禁使用 pandas**。
+- **复权约束**: 仅支持 `raw` (不复权) 或 `adj` (后复权)，禁止前复权。
+- **干净入口**: `cqdata/__init__.py` 仅用于符号导出，实现 **0 业务逻辑**。
+- **时区规范**: 统一使用 `zoneinfo`，禁止手动加减小时偏移。
+- **日志与输出**:
+  - 系统日志使用 Loguru，输出挂载至 `stderr` 及 `logs/{prefix}_{YYYYMMDD_HHMMSS}.log`。
+  - 核心驱动层调第三方库（如 Baostock）必须使用 `SuppressOutput` 包裹，防止垃圾 `print` 污染 CLI 控台。
+- **测试与运行**:
+  - 所有命令使用 `uv run` 前缀（如 `uv run pytest tests/ -v`）。
+  - 实现新功能或修改 Bug 时必须同步补充/修改对应的单元测试。
+- **Git 提交**:
+  - 消息语言为中文，遵从 Conventional Commits 规范（如 `feat:` / `fix:` / `refactor:`）。
+  - 未经用户明确确认，禁止自动执行 `git add/commit/push` 操作。
+- **架构一致性**: 任何涉及架构、数据流或核心 API 的改动，必须同步更新本 `AGENTS.md`。
 
 ---
 
-## 11. Git 提交规范
+## 10. 测试结构与运行
 
-- **提交消息语言**: 中文
-- **格式**: conventional commits (`feat/fix/refactor:` + 中文描述)
-- **流程**: 先 `git diff --staged` 查看改动 → `git log --oneline -5` 参考风格 → 生成中文消息 → 用户确认后提交
-- **禁止自动变更**: 除非用户明确要求，禁止自动执行 stage / commit / push 等任何有改动行为的 git 操作
-
----
-
-## 12. 日志与输出控制规范
-
-### 12.1 日志中心化管理 (Loguru)
-- **入口**: `cqdata/utils/logger_utils.py` 提供 `setup_logger` 初始化接口
-- **分流策略**: 同时挂载控制台 (Stderr) 和物理文件 (File) 处理器
-  - **控制台**: 带颜色格式化显示，便于开发调试
-  - **文件**: 记录详细上下文，包含时间戳、函数名及行号
-
-### 12.2 物理文件持久化规范
-- **命名方式**: 每次运行生成独立的日志文件，文件名包含前缀与高精度时间点
-  - 格式: `logs/{prefix}_{YYYYMMDD_HHMMSS}.log`
-  - 示例: `logs/sync_task_20240329_120000.log`
-- **留存策略**: 禁止自动删除历史日志，确保全生命周期数据可追溯
-- **滚动与优化**:
-  - Rotation: 单个日志文件超过 100MB 时触发物理滚动
-  - Compression: 已滚动的旧日志自动执行 `.zip` 压缩
-
-### 12.3 控制台整洁防护
-- **原则**: 严格区分"系统日志"与"类库打印"
-- **SuppressOutput**: 核心驱动层必须使用 `SuppressOutput` 上下文管理器拦截第三方库（如 Baostock）的 `print()` 输出，将其静默至 `/dev/null`，保护 CLI/向导界面不受垃圾信息污染
-
----
-
-## 13. 测试结构与运行
-
-### 测试目录
+### 10.1 测试目录结构
 ```
 tests/
-├── conftest.py                    # 全局 fixtures
-├── unit/
-│   ├── test_utils_time.py         # 时区转换工具
-│   ├── test_storage_csv.py        # CSV 读写/去重/排序/EV
-│   ├── test_storage_parquet.py    # Parquet 读写/去重/排序/EV
-│   ├── test_storage_flat.py       # 平铺模式: 无 timestamp 列的 EV 数据
-│   ├── test_storage_factory.py    # 存储工厂
-│   ├── test_storage_merger.py     # DataMerger 合并/去重/排序
-│   ├── test_service_planner.py    # TaskPlanner 补丁规划
-│   ├── test_service_batch_sync.py # SyncManager 批处理写入
-│   ├── test_sync_and_metadata.py  # 元数据与物理统计一致性
-│   ├── test_update_metadata.py    # _update_metadata 单元测试
-│   ├── test_metadata_manager.py   # MetadataManager 单元测试
-│   ├── test_provider_baostock.py  # BaostockProvider 单元测试 (mock)
-│   ├── test_provider_eastmoney.py # EastMoneyProvider 单元测试 (mock)
-│   └── test_provider_tdx.py       # TDXProvider 单元测试 (mock)
-├── integration/
-│   ├── test_provider_baostock.py  # Baostock 真实 API 测试 (需网络)
-│   ├── test_provider_eastmoney.py # EastMoneyProvider 东财驱动测试 (需网络)
-│   ├── test_sync_full_flow.py     # 全链路: 全量→增量→巡检→盖章
-│   ├── test_sync_defense.py       # 空数据防御/异常中断/Fail-Fast
-│   └── test_sync_multi_storage.py # 多格式一致性
-└── gateway/
-    └── test_api_query.py          # API 查询接口测试
+├── conftest.py                    # 全局 fixtures (temp_storage_root, mock_baostock)
+├── unit/                          # 工具、Provider、Storage、Service 单元测试 (mock IO)
+├── integration/                   # 真实 API 与全流程同步测试 (包含全量/增量/防封/空数据测试)
+└── gateway/                       # REST API 接口测试
 ```
 
-### 关键 Fixtures (`tests/conftest.py`)
-- `temp_storage_root`: 创建临时目录覆盖 settings.STORAGE_ROOT，测试后自动清理
-- `mock_baostock`: Mock Baostock API (login, query_stock_basic, query_history_k_data_plus)
-
-### 运行命令
+### 10.2 常用测试命令
 ```bash
-uv run pytest tests/ -v                                    # 全部测试
-uv run pytest tests/unit/ -v                               # 仅单元测试
-uv run pytest tests/unit/test_utils_time.py -v             # 单个文件
-uv run pytest tests/unit/test_utils_time.py::test_ts_to_iso_summer_time -v  # 单个用例
+uv run pytest tests/ -v                                   # 运行全部测试
+uv run pytest tests/unit/ -v                              # 仅运行单元测试
+uv run pytest tests/unit/test_utils_time.py -v            # 运行指定测试文件
 ```
 
 ---
 
-## 14. 新增数据源指南
+## 11. 新增数据源指南
 
-1. 在 `cqdata/provider/` 下创建 `{source}_provider.py`
-2. 继承 `BaseProvider`，实现 `fetch`, `get_all_symbols`, `get_supported_tables`, `get_table_category`, `get_sort_keys`
-3. 在 `_SUPPORTED_TABLE_MAP` 中注册支持的 table_id
-4. 在 `ProviderManager.get_provider()` 中添加路由逻辑
-5. 驱动内部使用 `SuppressOutput` 包裹第三方库调用
-6. 驱动 `fetch()` 必须:
-   - 返回标准化 DataFrame (含 timestamp, datetime, symbol) — 时序数据
-   - 或返回不含 timestamp 的 DataFrame — 静态列表数据 (如板块成分股)
-   - 空数据时返回含完整 schema 的空表 (通过 DataCleaner)
-   - API 错误抛 RuntimeError，业务无数据返回空表
-7. 驱动 `get_sort_keys()` 必须返回该表的排序列列表:
-   - TS 表: `["timestamp"]`
-   - EV 表有 timestamp: `["timestamp", "symbol"]`
-   - EV 表无 timestamp: 根据业务语义指定 (如 `["board_code", "board_name", "symbol"]`)
-8. 在 `tests/integration/` 添加对应测试
-
----
-
-## 15. 开发与文档维护规范
-
-### 15.1 Agent 开发原则与流程
-- **先沟通讨论，后设计编码**: 在进行任何功能扩展或架构改动前，必须先与用户充分讨论沟通，明确需求、第一性原理与设计方案（输出 Implementation Plan）。严禁未经讨论直接编写或大范围修改代码。
-- **第一性原理 (First-Principles Thinking)**: 从底层物理存储、数据流和业务本质推演架构方案，拒绝盲目套用设计模式或仅修复表面症状。
-- **最小代码改动 (Minimal Code Change)**: 严格遵循最小变更原则，精确定位改动范围，避免不必要的重构与无关代码污染。
-- **需求与边界情况全面覆盖**:
-  * 充分考虑空数据表、缺失元数据、格式降级（如 auto 优先选择 parquet、备选 csv）等异常与边界场景。
-  * 考虑依赖兼容性（如转 pandas 时无 pyarrow 依赖的无缝降级）。
-- **架构变更同步更新 AGENTS.md**: 任何涉及项目结构、API 接口、核心逻辑或数据流的改动完成后，**必须同步检查并更新本 `AGENTS.md`**，保持文档与代码实现 100% 强一致。
-
-### 15.2 文档维护原则
-- 任何涉及项目结构、API 接口、核心逻辑或数据流的变更后，必须同步检查并更新本 `AGENTS.md`
-- 严禁保留过时的路径、名称或逻辑描述
-
-### 15.3 编辑规范
-- 使用代码编辑工具修改代码时，TargetContent 块必须精准且最小化
-- 严禁通过包含大量无关前后文来增加匹配难度，防止误伤不相关代码区域
-- 修改代码时不要误伤无关注释，确保注释内容与修改目标无关时不得改动
-
-### 15.4 设计原则
-- **最小改动原则**: 优先最小化变更，避免不必要的重构
-- **组件抽象化防耦合**: 新组件通过抽象基类接入，不直接依赖具体实现
-- **干净入口与高内聚**: `cqdata/__init__.py` 仅用于导出 API 符号（0 业务实现），具体业务逻辑（如 `read` 与 `sync` 快捷入口）内聚在其所属的 Service 模块中
-- **扩展性优先**: 新增数据源/存储格式时，遵循现有接口契约扩展
-- **单一事实来源**: 本文件是项目架构的唯一权威文档，代码实现必须与之一致
-- **显式优于隐式**: 类型、接口、约束必须显式声明，不依赖隐式约定
-- **架构审查**: 当发现代码不符合低内聚高耦合原则时，推荐询问用户是否进行架构级重构
+新增数据源驱动时遵循以下步骤：
+1. 在 `cqdata/provider/` 下新建 `{source}_provider.py`，继承 `BaseProvider`。
+2. 实现 `fetch`, `get_all_symbols`, `get_supported_tables`, `get_table_category`, `get_sort_keys` 方法。
+3. 在类属性 `_SUPPORTED_TABLE_MAP` 中注册可用的 `table_id`。
+4. 在 `ProviderManager.get_provider()` 中加入该驱动的路由逻辑。
+5. 驱动调第三方 API 时使用 `SuppressOutput` 包裹控制台输出。
+6. `fetch()` 返回数据需经过 `DataCleaner.standardize()`，无数据时返回带完整 Schema 的空表。
+7. 在 `tests/unit/` 和 `tests/integration/` 中补充对应的单元与集成测试。

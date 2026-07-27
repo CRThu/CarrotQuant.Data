@@ -1,182 +1,119 @@
 import pytest
 from fastapi.testclient import TestClient
-from cqdata.gateway.api import cqdata
 from unittest.mock import patch, MagicMock
 import polars as pl
 
+from cqdata.entrypoints.rest_api import app
+
 client = TestClient(app)
 
-@pytest.fixture
-def mock_provider_manager():
-    with patch("cqdata.gateway.api.ProviderManager") as mock:
-        manager_instance = mock.return_value
-        provider = MagicMock()
-        manager_instance.get_provider.return_value = provider
-        provider.get_table_category.return_value = "timeseries" # Default to timeseries
-        yield manager_instance, provider
 
-def test_query_data_symbol_filter(mock_provider_manager):
-    """
-    测试 GET /api/v1/data/{table_id} 的 symbol 过滤
-    """
-    table_id = "test.query.symbol"
-    _, provider = mock_provider_manager
-    provider.get_table_category.return_value = "timeseries"
-    
-    mock_storage = MagicMock()
-    # mock_storage.read_series 返回数据
-    mock_storage.read_series.return_value = pl.DataFrame({
+def test_list_series_tables():
+    with patch("cqdata.entrypoints.rest_api.list_series_tables", return_value=["ashare.kline.1d.adj.baostock"]):
+        response = client.get("/api/v1/tables/series")
+        assert response.status_code == 200
+        assert response.json() == {"tables": ["ashare.kline.1d.adj.baostock"]}
+
+
+def test_list_event_tables():
+    with patch("cqdata.entrypoints.rest_api.list_event_tables", return_value=["ashare.adj_factor.baostock"]):
+        response = client.get("/api/v1/tables/events")
+        assert response.status_code == 200
+        assert response.json() == {"tables": ["ashare.adj_factor.baostock"]}
+
+
+def test_list_formats():
+    with patch("cqdata.entrypoints.rest_api.list_formats", return_value=["csv", "parquet"]):
+        response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/formats")
+        assert response.status_code == 200
+        assert response.json() == {
+            "table_id": "ashare.kline.1d.adj.baostock",
+            "formats": ["csv", "parquet"]
+        }
+
+
+def test_list_symbols():
+    with patch("cqdata.entrypoints.rest_api.list_symbols", return_value=["sh.600000", "sz.000001"]):
+        response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/symbols")
+        assert response.status_code == 200
+        assert response.json() == {
+            "table_id": "ashare.kline.1d.adj.baostock",
+            "symbol_count": 2,
+            "symbols": ["sh.600000", "sz.000001"]
+        }
+
+
+def test_get_time_range():
+    with patch("cqdata.entrypoints.rest_api.get_time_range", return_value=("2024-01-01T15:00:00.000+08:00", "2024-05-20T15:00:00.000+08:00")):
+        response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/time_range")
+        assert response.status_code == 200
+        assert response.json()["start_datetime"] == "2024-01-01T15:00:00.000+08:00"
+
+
+def test_get_schema():
+    with patch("cqdata.entrypoints.rest_api.get_schema", return_value={"symbol": "String", "close": "Float64"}):
+        response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/schema")
+        assert response.status_code == 200
+        assert response.json()["schema"] == {"symbol": "String", "close": "Float64"}
+
+
+def test_get_row_count():
+    with patch("cqdata.entrypoints.rest_api.get_row_count", return_value=12345):
+        response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/row_count")
+        assert response.status_code == 200
+        assert response.json() == {"table_id": "ashare.kline.1d.adj.baostock", "row_count": 12345}
+
+
+def test_post_query_series():
+    mock_df = pl.DataFrame({
         "timestamp": [1704067200000],
+        "datetime": ["2024-01-01T15:00:00.000+08:00"],
         "symbol": ["sh.600000"],
-        "close": [10.0]
+        "close": [10.5]
     })
-    
-    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
-            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=csv")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["table_id"] == table_id
-    assert data["count"] == 1
-    assert data["data"][0]["symbol"] == "sh.600000"
+    with patch("cqdata.entrypoints.rest_api.read_series", return_value=mock_df):
+        payload = {
+            "table_id": "ashare.kline.1d.adj.baostock",
+            "symbols": ["sh.600000"],
+            "start_date": "2024-01-01",
+            "end_date": "2024-01-05"
+        }
+        response = client.post("/api/v1/query/series", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["table_id"] == "ashare.kline.1d.adj.baostock"
+        assert data["count"] == 1
+        assert data["data"][0]["symbol"] == "sh.600000"
 
-def test_query_data_timestamp_range(mock_provider_manager):
-    """
-    测试 GET /api/v1/data/{table_id} 的时间戳区间过滤
-    """
-    from cqdata.utils.time_utils import parse_date_to_ts
-    table_id = "test.query.time"
-    _, provider = mock_provider_manager
-    provider.get_table_category.return_value = "timeseries"
-    
-    start_ts = parse_date_to_ts("2024-01-01")
-    end_ts = parse_date_to_ts("2024-01-02")
-    
-    mock_storage = MagicMock()
-    # 确保 mock 数据在 [start_ts, end_ts] 范围内
-    mock_storage.read_series.return_value = pl.DataFrame({
-        "timestamp": [start_ts, end_ts],
-        "symbol": ["sh.600000"] * 2,
-        "close": [10.0, 10.1]
-    })
-    
-    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
-            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000,start:2024-01-01,end:2024-01-02&format=csv")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["count"] == 2
 
-def test_query_data_ts_requires_symbol(mock_provider_manager):
-    """
-    测试 TS 类别查询必须带 symbol
-    """
-    table_id = "test.query.ts_no_symbol"
-    _, provider = mock_provider_manager
-    provider.get_table_category.return_value = "timeseries"
-    
-    response = client.get(f"/api/v1/data/{table_id}")
-    assert response.status_code == 400
-    assert "TS data query requires 'symbol'" in response.json()["detail"]
-
-def test_query_data_ev_no_symbol_ok(mock_provider_manager):
-    """
-    测试 EV 类别查询不带 symbol 也可以
-    """
-    table_id = "test.query.ev_no_symbol"
-    _, provider = mock_provider_manager
-    provider.get_table_category.return_value = "event"
-    
-    mock_storage = MagicMock()
-    mock_storage.read_event.return_value = pl.DataFrame({
-        "timestamp": [1704067200000],
+def test_post_query_events():
+    mock_df = pl.DataFrame({
         "symbol": ["sh.600000"],
-        "close": [10.0]
+        "board_name": ["概念板块"]
     })
-    
-    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=2024"]):
-            response = client.get(f"/api/v1/data/{table_id}")
-    
-    assert response.status_code == 200
-    assert response.json()["count"] == 1
+    with patch("cqdata.entrypoints.rest_api.read_events", return_value=mock_df):
+        payload = {
+            "table_id": "ashare.concept.eastmoney",
+            "limit": 100
+        }
+        response = client.post("/api/v1/query/events", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["table_id"] == "ashare.concept.eastmoney"
+        assert data["count"] == 1
 
-def test_query_data_no_files(mock_provider_manager):
-    """
-    测试没有数据文件时返回空结果
-    """
-    table_id = "test.query.empty"
-    _, provider = mock_provider_manager
-    
-    mock_storage = MagicMock()
-    
-    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("glob.glob", return_value=[]):  # 没有文件
-            # 对于 TS, 必须带 symbol 才能过第一关校验
-            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:any&format=csv")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["data"] == []
-    assert "No data files found" in data["message"]
 
-def test_query_data_invalid_format():
-    """
-    测试无效格式返回 400
-    """
-    table_id = "test.query.format"
-    
-    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", side_effect=ValueError("Unsupported storage format: invalid")):
-        response = client.get(f"/api/v1/data/{table_id}?format=invalid")
-    
-    assert response.status_code == 400
-    assert "Unsupported storage format" in response.json()["detail"]
+def test_post_sync_and_active_tasks():
+    with patch("cqdata.entrypoints.rest_api.sync") as mock_sync:
+        payload = {
+            "table_ids": ["ashare.kline.1d.adj.baostock"],
+            "formats": ["parquet"],
+            "start_date": "2024-01-01"
+        }
+        response = client.post("/api/v1/sync", json=payload)
+        assert response.status_code == 200
+        assert response.json()["status"] == "accepted"
 
-def test_query_data_parquet_format(mock_provider_manager):
-    """
-    测试 Parquet 格式查询
-    """
-    table_id = "test.query.parquet"
-    _, provider = mock_provider_manager
-    
-    mock_storage = MagicMock()
-    mock_storage.read_series.return_value = pl.DataFrame({
-        "timestamp": [1704067200000],
-        "symbol": ["sh.600000"],
-        "close": [10.0]
-    })
-    
-    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("glob.glob", return_value=[f"storage_root/parquet/{table_id}/year=2024"]):
-            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=parquet")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["format"] == "parquet"
-
-def test_query_data_limit_enforcement(mock_provider_manager):
-    """
-    测试返回条数限制（最多1000条）
-    """
-    table_id = "test.query.limit"
-    _, provider = mock_provider_manager
-    
-    # 创建一个返回大量数据的 mock
-    large_df = pl.DataFrame({
-        "timestamp": list(range(2000)),
-        "symbol": ["sh.600000"] * 2000,
-        "close": [10.0] * 2000
-    })
-    
-    mock_storage = MagicMock()
-    mock_storage.read_series.return_value = large_df
-    
-    with patch("cqdata.storage.storage_factory.StorageFactory.get_storage", return_value=mock_storage):
-        with patch("glob.glob", return_value=[f"storage_root/csv/{table_id}/year=1970"]):
-            response = client.get(f"/api/v1/data/{table_id}?filters=symbol:sh.600000&format=csv")
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert data["count"] == 1000  # 最多返回1000条
+        # 验证 active_tasks
+        resp_tasks = client.get("/api/v1/tasks")
+        assert resp_tasks.status_code == 200
