@@ -14,7 +14,7 @@ from cqdata.config import settings
 from cqdata.service.metadata_manager import MetadataManager
 from cqdata.provider.provider_manager import ProviderManager
 from cqdata.storage.storage_factory import StorageFactory
-from cqdata.utils.time_utils import parse_date_to_ts
+from cqdata.utils.time_utils import parse_date_to_ts, align_to_day_end
 
 
 class DataReader:
@@ -173,7 +173,7 @@ class DataReader:
 
         # 3. 解析时间区间毫秒戳
         start_ts = parse_date_to_ts(start_date) if start_date else None
-        end_ts = parse_date_to_ts(end_date) if end_date else None
+        end_ts = align_to_day_end(parse_date_to_ts(end_date)) if end_date else None
 
         # 4. 获取 Storage Manager 实例
         storage = StorageFactory.get_storage(
