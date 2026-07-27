@@ -52,7 +52,7 @@ graph TB
         SM["SyncManager<br/>同步总调度"]
         DR["DataReader<br/>切片与按列投影"]
         MR["MetadataReader<br/>探查与过滤 API"]
-        TP["TaskPlanner<br/>任务规划器"]
+        TASK_PLANNER["TaskPlanner<br/>任务规划器"]
         MM["MetadataManager<br/>元数据 IO"]
     end
 
@@ -60,7 +60,7 @@ graph TB
         PM["ProviderManager"]
         BP["BaostockProvider"]
         EP["EastMoneyProvider"]
-        TP["TDXProvider"]
+        TDX_PROV["TDXProvider"]
     end
 
     subgraph Storage["存储层 (cqdata/storage)"]
@@ -79,14 +79,14 @@ graph TB
     REST --> SM
     WIZARD --> SM
 
-    SM --> TP
+    SM --> TASK_PLANNER
     SM --> PM
     SM --> SF
-    TP --> MM
+    TASK_PLANNER --> MM
     SM --> MM
     PM --> BP
     PM --> EP
-    PM --> TP
+    PM --> TDX_PROV
     SF --> CSV
     SF --> PQ
 ```
@@ -204,15 +204,18 @@ cqdata sync -t ashare.kline.1d.raw.baostock -f parquet -s 2023-01-01 -e 2023-12-
 
 通达信驱动支持 **Local (离线 vipdoc 导包)** 与 **Online (在线 TCP 协议)** 两种模式。两者的输出格式和字段完全对齐，落地在同一个 `table_id` 下，数据会自动无缝去重与合并。
 
+- **Local 离线模式读取能力**：原生支持解析本地 `vipdoc` 目录下的 **日线 (`.day`)、5分钟线 (`.lc5`) 以及 1分钟线 (`.lc1`)** 等所有离线二进制文件（包含通达信软件自行下载导出的分钟线文件）。
+- **极速初始化脚本 (`cqdata tdx download`)**：用于一键拉取并解压通达信官方服务器的全量日线行情包（`hsjday.zip`），实现数十年日线历史数据的秒级导入。
+
 > [!TIP]
 > **强烈推荐的最佳实践流程**：
-> 1. **首次极速初始化（Local 模式）**：通过下载脚本拉取通达信官方 `vipdoc` 离线包并解析导入，在数秒至数十秒内即可完成全量数十年历史 K 线的导入（相比纯在线拉取快百倍且免受频控影响）。
-> 2. **日常增量更新（Online 模式）**：日常收盘后直接执行在线增量同步，系统会自动根据水位线补全最新几日的增量 K 线。
+> 1. **首次极速初始化（Local 模式）**：通过 `cqdata tdx download` 下载官方 `vipdoc` 日线离线包（或直接挂载本地已有的通达信客户端 `vipdoc` 目录）解析导入，秒级完成历史数据装载。
+> 2. **日常增量更新（Online 模式）**：日常收盘后直接执行在线增量同步，系统会自动根据水位线补全最新几日的增量 K 线（支持 1d / 5m / 1m）。
 
 ```bash
 # 步骤 1: 极速初始化 - 下载并解压通达信官方全量日线行情包 (hsjday.zip)
 cqdata tdx download
-# 或使用 uv 直接运行下载脚本
+# 或使用 uv 直接运行下载脚本 (也可通过 --tdx-vipdoc 指定本地已有通达信客户端目录)
 uv run scripts/download_tdx.py
 
 # 步骤 2: 日常盘后增量 - 触发通达信在线按水位线追加最新数据 (支持 1d 日线 / 5m / 1m 分钟线)

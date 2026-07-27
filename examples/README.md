@@ -30,14 +30,3 @@ uv run python examples/05_export_pandas.py
 uv run python examples/06_metadata_inspection.py
 ```
 
----
-
-## 💡 通达信 (TDX) 同步特别说明
-
-通达信驱动支持 **Local 离线包** 与 **Online 在线 TCP** 两种同步模式：
-
-> [!TIP]
-> **最佳推荐实践**：
-> 1. **历史全量日线**：推荐运行 `uv run scripts/download_tdx.py` 或 `cqdata tdx download` 先下载通达信官方全量日线 `vipdoc` 离线包极速初始化。
-> 2. **盘后增量/分钟线**：日常通过 `cqdata.sync(table_ids=["ashare.kline.1d.raw.tdx"])` 在线拉取最新增量或分钟线，系统将自动去重与合并。
-
