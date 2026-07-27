@@ -21,7 +21,7 @@ CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的
 ```text
 CarrotQuant.Data/
 ├── cqdata/           # 核心代码包 (支持 import cqdata)
-│   ├── entrypoints/  # 统一网关接入层 (python_api, cli, rest_api)
+│   ├── entrypoints/  # 接入层 (python_api, cli, rest_api)
 │   ├── config/       # 配置管理模块
 │   ├── provider/     # 数据源驱动 (BaostockProvider, EastMoneyProvider, TDXProvider)
 │   ├── service/      # 核心业务逻辑 (DataReader, MetadataReader, SyncManager 等)
@@ -41,7 +41,7 @@ CarrotQuant.Data/
 
 ```mermaid
 graph TB
-    subgraph Gateway["网关接入层 (cqdata/entrypoints)"]
+    subgraph Entrypoints["接入层 (cqdata/entrypoints)"]
         PYTHON_API["python_api.py<br/>(Python SDK)"]
         CLI["cli.py<br/>(Typer CLI)"]
         REST["rest_api.py<br/>(FastAPI REST)"]

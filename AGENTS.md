@@ -24,14 +24,14 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 CarrotQuant.Data/
 ├── cqdata/
 │   ├── __init__.py               # 统一导出符号 (read_series, read_events 等)，0 业务逻辑
-│   ├── entrypoints/              # 网关接入层 (python_api, cli, rest_api)
+│   ├── entrypoints/              # 接入层 (python_api, cli, rest_api)
 │   ├── config/                   # 配置管理 (支持 CQDATA_STORAGE_ROOT 环境变量与多级 YAML)
 │   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
 │   ├── service/                  # 业务逻辑层 (SyncManager, DataReader, MetadataReader, TaskPlanner, MetadataManager)
 │   ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
 │   └── utils/                    # 工具箱 (logger_utils, time_utils)
 ├── scripts/                      # 辅助脚本 (wizard.py 交互向导, download_tdx.py)
-├── tests/                        # 测试集 (unit, integration, gateway)
+├── tests/                        # 测试集 (unit, integration)
 └── pyproject.toml                # 项目依赖与构建配置
 ```
 
@@ -43,7 +43,7 @@ CarrotQuant.Data/
 
 ```mermaid
 graph TB
-    subgraph Gateway["Gateway 接入层 (cqdata/entrypoints)"]
+    subgraph Entrypoints["Entrypoints 接入层 (cqdata/entrypoints)"]
         PYTHON_API["python_api.py (Python SDK)"]
         CLI["cli.py (Typer CLI)"]
         REST["rest_api.py (FastAPI REST)"]
@@ -287,9 +287,8 @@ type_map = {
 ```
 tests/
 ├── conftest.py                    # 全局 fixtures (temp_storage_root, mock_baostock)
-├── unit/                          # 工具、Provider、Storage、Service 单元测试 (mock IO)
-├── integration/                   # 真实 API 与全流程同步测试 (包含全量/增量/防封/空数据测试)
-└── gateway/                       # REST API 接口测试
+├── unit/                          # 工具、Provider、Storage、Service 及 Entrypoints 单元测试 (mock IO)
+└── integration/                   # 真实 API 与全流程同步测试 (包含全量/增量/防封/空数据测试)
 ```
 
 ### 10.2 常用测试命令

@@ -14,6 +14,8 @@ from loguru import logger
 
 from cqdata.provider.eastmoney_provider import EastMoneyProvider
 
+pytestmark = pytest.mark.network
+
 
 @pytest.fixture
 def provider():

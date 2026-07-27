@@ -35,7 +35,7 @@ project_root = Path(__file__).parent.parent.absolute()
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from app.utils.logger_utils import setup_logger
+from cqdata.utils.logger_utils import setup_logger
 
 # 初始化日志，每次运行生成独立的时间戳日志文件
 setup_logger(log_level="INFO", log_file_prefix="wizard")
@@ -46,10 +46,10 @@ def get_project_root():
 
 def discover_supported_tables():
     """
-    动态扫描 app/provider 下的驱动，获取所有支持的 table_id。
+    动态扫描 cqdata/provider 下的驱动，获取所有支持的 table_id。
     """
     project_root = get_project_root()
-    provider_path = project_root / "app" / "provider"
+    provider_path = project_root / "cqdata" / "provider"
     
     # 确保 PYTHONPATH 包含项目根目录，以便导入
     sys.path.insert(0, str(project_root))
@@ -57,7 +57,7 @@ def discover_supported_tables():
     all_tables = []
     try:
         for file in provider_path.glob("*_provider.py"):
-            module_name = f"app.provider.{file.stem}"
+            module_name = f"cqdata.provider.{file.stem}"
             module = importlib.import_module(module_name)
             
             # 寻找继承自 BaseProvider 的类
@@ -78,6 +78,7 @@ def discover_supported_tables():
         
     return sorted(list(set(all_tables)))
 
+
 def start_wizard():
     """启动数据同步向导"""
     print("="*60)
@@ -88,7 +89,7 @@ def start_wizard():
     available_tables = discover_supported_tables()
     
     if not available_tables:
-        print("[!] 未发现数据表驱动。请检查 app/provider 目录。")
+        print("[!] 未发现数据表驱动。请检查 cqdata/provider 目录。")
         return
 
     print("\n[1/5] 选择同步对象: 请通过编号选择或切换")
@@ -176,7 +177,7 @@ def start_wizard():
 
     # 构造命令
     cmd = [
-        sys.executable, "-m", "app.gateway.cli", "sync",
+        sys.executable, "-m", "cqdata.entrypoints.cli", "sync",
         "--tables", tables_to_sync,
         "--formats", formats,
         "--batch", batch_size

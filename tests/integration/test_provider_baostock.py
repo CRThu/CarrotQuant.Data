@@ -3,6 +3,7 @@ import polars as pl
 from loguru import logger
 from cqdata.provider.provider_manager import ProviderManager
 
+@pytest.mark.network
 def test_baostock_provider_fetch():
     """
     测试 BaostockProvider 的数据采集与标准化，验证重命名与清理逻辑
@@ -67,6 +68,8 @@ def test_baostock_provider_fetch():
     
     print("\nTest Passed: All renaming and cleaning logic verified.")
 
+
+@pytest.mark.network
 def test_baostock_provider_adj_factor():
     """
     测试 BaostockProvider 的复权因子数据采集与标准化，验证 Event 数据逻辑

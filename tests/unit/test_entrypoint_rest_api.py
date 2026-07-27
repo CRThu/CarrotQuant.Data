@@ -1,3 +1,9 @@
+"""
+tests/unit/test_entrypoint_rest_api.py
+
+FastAPI REST 服务 endpoint 路由单元测试。
+"""
+
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock

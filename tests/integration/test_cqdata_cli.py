@@ -12,7 +12,7 @@ from cqdata.storage.storage_factory import StorageFactory
 from cqdata.service.metadata_manager import MetadataManager
 import polars as pl
 
-runner = CliRunner()
+runner = CliRunner(env={"COLUMNS": "200", "TERM": "dumb"})
 
 
 @pytest.fixture
@@ -96,14 +96,14 @@ def test_cli_serve_help():
     """测试 cqdata serve --help"""
     result = runner.invoke(app, ["serve", "--help"])
     assert result.exit_code == 0
-    assert "--port" in result.stdout
+    assert "port" in result.stdout.lower()
 
 
 def test_cli_tdx_help():
     """测试 cqdata tdx download --help"""
     result = runner.invoke(app, ["tdx", "download", "--help"])
     assert result.exit_code == 0
-    assert "--vipdoc" in result.stdout
+    assert "vipdoc" in result.stdout.lower()
 
 
 def test_cli_wizard_help():

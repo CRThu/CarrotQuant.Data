@@ -37,6 +37,9 @@ packages = ["cqdata"]
 
 [tool.pytest.ini_options]
 addopts = "--ignore=demo"
+markers = [
+    "network: 标记需要连接真实外部网络的集成测试"
+]
 
 [build-system]
 requires = ["hatchling"]
