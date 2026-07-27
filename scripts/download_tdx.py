@@ -1,12 +1,11 @@
-"""通达信数据下载脚本。
+"""通达信日线行情包下载脚本。
 
-从 TDX 服务器下载 hsjday.zip 并自动解压到 vipdoc 目录，
-供 TDXProvider(mode='local') 使用。
+从通达信官方服务器下载全量日线数据包 (hsjday.zip) 并解压到 vipdoc 目录，
+供 TDXProvider(mode='local') 用于日线历史数据极速初始化。
 
 用法:
-    uv run scripts/download_tdx.py                         # 下载到默认 vipdoc 目录
-    uv run scripts/download_tdx.py --output C:/new_tdx/vipdoc  # 指定输出目录
-    uv run scripts/download_tdx.py --freq 1d,5m            # 指定频率 (5m/1m 仅从本地 vipdoc 获取)
+    uv run scripts/download_tdx.py                         # 下载到默认 vipdoc 目录 (./vipdoc)
+    uv run scripts/download_tdx.py --output C:/new_tdx/vipdoc  # 指定自定义 vipdoc 目录
 """
 
 import argparse
@@ -27,15 +26,44 @@ TDX_DAILY_URL = "https://data.tdx.com.cn/vipdoc/hsjday.zip"
 _EXTRACT_PREFIXES = ("sh/lday/", "sz/lday/", "bj/lday/")
 
 
+import time
+
+
 def download_and_extract(output_dir: Path):
     """下载 hsjday.zip 并解压到 vipdoc 目录。"""
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    last_log_time = 0.0
+    last_downloaded = 0
+
+    def progress_reporthook(block_num: int, block_size: int, total_size: int):
+        """每秒平滑刷新一次下载百分比与实时速度日志。"""
+        nonlocal last_log_time, last_downloaded
+        now = time.time()
+        downloaded = block_num * block_size
+
+        # 首次或每隔 1.0 秒，或已全部下载完成时输出一行 Log
+        if now - last_log_time >= 1.0 or (total_size > 0 and downloaded >= total_size):
+            time_diff = now - last_log_time
+            speed = (downloaded - last_downloaded) / time_diff if time_diff > 0 else 0
+            speed_mb = speed / (1024 * 1024)
+            downloaded_mb = downloaded / (1024 * 1024)
+
+            if total_size > 0:
+                total_mb = total_size / (1024 * 1024)
+                pct = min(100.0, downloaded / total_size * 100)
+                logger.info(f"[下载中] {pct:5.1f}% | {downloaded_mb:5.1f}/{total_mb:.1f} MB | 速度: {speed_mb:5.2f} MB/s")
+            else:
+                logger.info(f"[下载中] {downloaded_mb:5.1f} MB | 速度: {speed_mb:5.2f} MB/s")
+
+            last_log_time = now
+            last_downloaded = downloaded
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         zip_path = Path(tmp_dir) / "hsjday.zip"
 
         logger.info("正在下载: %s", TDX_DAILY_URL)
-        urlretrieve(TDX_DAILY_URL, str(zip_path))
+        urlretrieve(TDX_DAILY_URL, str(zip_path), reporthook=progress_reporthook)
         logger.info("下载完成: %s", zip_path)
 
         logger.info("正在解压到: %s", output_dir)

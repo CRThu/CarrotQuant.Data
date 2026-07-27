@@ -29,6 +29,10 @@ def main():
         force_refresh=True
     )
 
+    # 提示: 对于通达信 (TDX) 数据表 (如 ashare.kline.1d.raw.tdx)，
+    # 建议先运行 `cqdata tdx download` 或 `uv run scripts/download_tdx.py`
+    # 使用 vipdoc 离线包极速初始化历史行情，后续再使用 cqdata.sync(...) 进行在线盘后追加。
+
     print("\n数据同步任务全部执行完成！")
 
 

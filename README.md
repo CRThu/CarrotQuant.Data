@@ -198,12 +198,25 @@ cqdata sync --tables "ashare.kline.1d.raw.baostock,ashare.adj_factor.baostock"
 
 # 指定日期区间与保存格式进行全量强制更新
 cqdata sync -t ashare.kline.1d.raw.baostock -f parquet -s 2023-01-01 -e 2023-12-31 --force
+```
 
-# 通达信在线同步
-cqdata sync -t ashare.kline.1d.raw.tdx
+#### 💡 通达信 (TDX) 最佳同步实践说明
 
-# 下载通达信日线数据到 vipdoc 目录
+通达信驱动支持 **Local (离线 vipdoc 导包)** 与 **Online (在线 TCP 协议)** 两种模式。两者的输出格式和字段完全对齐，落地在同一个 `table_id` 下，数据会自动无缝去重与合并。
+
+> [!TIP]
+> **强烈推荐的最佳实践流程**：
+> 1. **首次极速初始化（Local 模式）**：通过下载脚本拉取通达信官方 `vipdoc` 离线包并解析导入，在数秒至数十秒内即可完成全量数十年历史 K 线的导入（相比纯在线拉取快百倍且免受频控影响）。
+> 2. **日常增量更新（Online 模式）**：日常收盘后直接执行在线增量同步，系统会自动根据水位线补全最新几日的增量 K 线。
+
+```bash
+# 步骤 1: 极速初始化 - 下载并解压通达信官方全量日线行情包 (hsjday.zip)
 cqdata tdx download
+# 或使用 uv 直接运行下载脚本
+uv run scripts/download_tdx.py
+
+# 步骤 2: 日常盘后增量 - 触发通达信在线按水位线追加最新数据 (支持 1d 日线 / 5m / 1m 分钟线)
+cqdata sync -t ashare.kline.1d.raw.tdx
 ```
 
 **命令行关键参数：**
