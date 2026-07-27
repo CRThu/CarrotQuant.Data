@@ -383,20 +383,26 @@ class EastMoneyProvider(BaseProvider):
 
         r = em_push2(params=params, timeout=15)
         data_json = r.json()
-        diff = data_json["data"]["diff"] or []
-        total = data_json["data"]["total"]
+        data_block = data_json.get("data") if isinstance(data_json, dict) else None
+        if not data_block or not isinstance(data_block, dict):
+            return []
+
+        diff = data_block.get("diff") or []
+        total = data_block.get("total", 0)
         if not diff:
             return []
 
         per_page = len(diff)
-        total_page = math.ceil(total / per_page)
+        total_page = math.ceil(total / per_page) if per_page > 0 else 1
         all_rows = list(diff)
 
         for page in range(2, total_page + 1):
             params["pn"] = str(page)
             r = em_push2(params=params, timeout=15)
-            data_json = r.json()
-            all_rows.extend(data_json["data"]["diff"] or [])
+            d_json = r.json()
+            d_block = d_json.get("data") if isinstance(d_json, dict) else None
+            if d_block and isinstance(d_block, dict):
+                all_rows.extend(d_block.get("diff") or [])
 
         return [
             {self._CONS_FIELD_MAP[k]: v for k, v in row.items() if k in self._CONS_FIELD_MAP}
@@ -406,9 +412,25 @@ class EastMoneyProvider(BaseProvider):
     def _fetch_board_cons_df(self, board_type: str, board_code: str) -> pl.DataFrame:
         """拉取板块成分股，返回标准化 Polars DataFrame。
 
+        当 board_code 为 '_ALL_' 时，自动遍历全量板块并合并。
         板块成分股为静态列表数据，无事件时间属性，不生成 timestamp/datetime 列。
         主键: [board_code, symbol]，列顺序: [board_code, board_name, symbol, stock_name]
         """
+        # 支持全量板块遍历 ('_ALL_')
+        if board_code == "_ALL_":
+            name_map = self._fetch_board_list(board_type)
+            dfs = []
+            for b_code in name_map.keys():
+                sub_df = self._fetch_board_cons_df(board_type, b_code)
+                if not sub_df.is_empty():
+                    dfs.append(sub_df)
+            if not dfs:
+                return pl.DataFrame(schema={
+                    "board_code": pl.String, "board_name": pl.String,
+                    "symbol": pl.String, "stock_name": pl.String,
+                })
+            return pl.concat(dfs)
+
         cons = self._fetch_board_cons(board_type, board_code)
         # 创建 DataFrame，指定 schema（空数据时也保持列结构）
         cons_cols = list(self._CONS_FIELD_MAP.values())
