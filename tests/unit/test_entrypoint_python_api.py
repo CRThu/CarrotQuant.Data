@@ -36,11 +36,10 @@ def test_read_unified_polars():
         assert res_event.height == 1
 
 
-def test_read_missing_table_raises_file_not_found():
-    """测试当 table_id 本地无存储与元数据时直接抛出 FileNotFoundError"""
-    with patch("cqdata.service.metadata_reader.list_formats", return_value=[]):
-        with pytest.raises(FileNotFoundError, match="No storage found for table_id"):
-            python_api.read("non_existent_table")
+def test_read_unknown_table_raises_error():
+    """测试当 table_id 无法识别或未注册时直接抛出 ValueError 报错，绝不降级猜测"""
+    with pytest.raises(ValueError, match="Unsupported"):
+        python_api.read("unknown_table_id")
 
 
 def test_list_and_get_metadata_functions():

@@ -25,7 +25,7 @@ def read(
     format: str = "auto"
 ) -> pl.DataFrame:
     """
-    统一数据切片读取入口 (直接读取本地元数据记载的 category 智能路由，无元数据直接报错)
+    统一数据切片读取入口 (按 table_id 严格路由，不支持或未知的 table_id 直接抛出 ValueError 报错)
 
     Args:
         table_id: 数据集 ID (例如 'ashare.kline.1d.raw.baostock' 或 'ashare.dragon_tiger.eastmoney')
@@ -38,18 +38,10 @@ def read(
     Returns:
         pl.DataFrame
     """
-    # 1. 自动解析生效的存储格式 (parquet 或 csv)
-    formats = mr.list_formats(table_id)
-    if not formats:
-        raise FileNotFoundError(f"No storage found for table_id '{table_id}'. Please sync data first.")
+    from cqdata.provider.provider_manager import ProviderManager
+    provider = ProviderManager().get_provider(table_id)
+    category = provider.get_table_category(table_id)
 
-    real_fmt = formats[0] if format == "auto" else format
-
-    # 2. 直接读取物理元数据记载的真实 category (元数据不存在自动抛出 FileNotFoundError)
-    meta = MetadataManager(settings.storage_path).load(table_id, real_fmt)
-    category = meta.get("category", "timeseries")
-
-    # 3. 路由调用切片读取器
     if category == "event":
         return dr.read_events(
             table_id=table_id,
@@ -57,7 +49,7 @@ def read(
             start_date=start_date,
             end_date=end_date,
             columns=columns,
-            format=real_fmt
+            format=format
         )
     else:
         return dr.read_series(
@@ -66,7 +58,7 @@ def read(
             start_date=start_date,
             end_date=end_date,
             columns=columns,
-            format=real_fmt
+            format=format
         )
 
 
