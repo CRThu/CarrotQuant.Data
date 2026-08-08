@@ -7,7 +7,6 @@ tests/unit/test_data_reader.py
 
 import pytest
 import polars as pl
-import pandas as pd
 
 from cqdata.service.data_reader import DataReader, read_series, read_events
 from cqdata.storage.storage_factory import StorageFactory

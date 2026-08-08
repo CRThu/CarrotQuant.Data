@@ -7,7 +7,6 @@ Python SDK 接入面 (python_api.py) 单元测试。
 
 import pytest
 import polars as pl
-import pandas as pd
 from unittest.mock import patch, MagicMock
 
 import cqdata
