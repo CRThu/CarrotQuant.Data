@@ -2,90 +2,108 @@
 cqdata/config/settings.py
 
 全局配置管理模块。
-基于 Pydantic-Settings，支持多层级配置加载与程序化动态配置：
-1. 环境变量 CQDATA_STORAGE_ROOT
-2. 环境变量 CQDATA_CONFIG 指定的 YAML 文件
-3. 当前工作目录下的 ./config/config.yaml 或 ./config.yaml
-4. 用户主目录下的 ~/.cqdata/config.yaml
+纯 Python 实现轻量 Settings，支持显式配置加载与程序化动态修改：
+1. 环境变量 CQDATA_CONFIG_PATH / CQDATA_STORAGE_PATH (显式指定)
+2. 显式 configure(config_path) 加载 YAML 配置文件
+3. 显式修改 cqdata.settings 属性
 """
 
 import os
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any
 import yaml
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CQDATA_", extra="ignore")
+class Settings:
+    """
+    全局 Settings 类 (纯 Python 实现，无 pydantic-settings 依赖)
+    """
 
-    # 存储根目录，默认 "storage_root"
-    STORAGE_ROOT: str = "storage_root"
+    def __init__(self):
+        # 核心配置字段默认值
+        self.storage_path: str = "storage_root"
+        self.log_dir: str = "logs"
+        self.log_level: str = "INFO"
+        self.defaults: Dict[str, Any] = {}
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._load_config()
+        # 初始化时自动加载配置
+        self._load_initial_config()
 
-    def _load_config(self):
-        # 1. 如果设置了 CQDATA_STORAGE_ROOT 环境变量，直接生效并返回
-        if os.getenv("CQDATA_STORAGE_ROOT"):
-            self.STORAGE_ROOT = os.getenv("CQDATA_STORAGE_ROOT")
-            return
+    def _load_initial_config(self) -> None:
+        """
+        按优先级规则初始化加载配置：
+        1. 内置默认值
+        2. 环境变量 CQDATA_CONFIG_PATH 显式指定配置文件
+        3. 环境变量 CQDATA_STORAGE_PATH 显式覆盖 storage_path
+        """
+        # 1. 环境变量 CQDATA_CONFIG_PATH 显式指定 YAML 配置文件
+        config_path_env = os.getenv("CQDATA_CONFIG_PATH")
+        if config_path_env:
+            path = Path(config_path_env)
+            if path.exists():
+                self.load_from_file(path)
 
-        # 2. 依次按优先级搜索候选 YAML 配置文件
-        candidates = []
-        if os.getenv("CQDATA_CONFIG"):
-            candidates.append(Path(os.getenv("CQDATA_CONFIG")))
-
-        cwd = Path.cwd()
-        candidates.extend([
-            cwd / "config" / "config.yaml",
-            cwd / "config.yaml",
-            Path.home() / ".cqdata" / "config.yaml"
-        ])
-
-        for config_path in candidates:
-            if config_path.exists():
-                try:
-                    self.load_from_file(config_path)
-                    break
-                except Exception:
-                    pass
+        # 2. 环境变量 CQDATA_STORAGE_PATH 显式覆盖 storage_path
+        if os.getenv("CQDATA_STORAGE_PATH"):
+            self.storage_path = os.getenv("CQDATA_STORAGE_PATH")
 
     def load_from_file(self, config_path: Union[str, Path]) -> "Settings":
-        """显式从指定 YAML 配置文件加载配置"""
+        """
+        显式从指定 YAML 配置文件加载配置
+        """
         path = Path(config_path)
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
+
         with open(path, "r", encoding="utf-8") as f:
             config_data = yaml.safe_load(f)
-            if config_data and "storage_root" in config_data:
-                self.STORAGE_ROOT = str(config_data["storage_root"])
+
+        if isinstance(config_data, dict):
+            if "storage_path" in config_data:
+                self.storage_path = str(config_data["storage_path"])
+            elif "storage_root" in config_data:
+                # 兼容 YAML 中的 storage_root 字段写全名
+                self.storage_path = str(config_data["storage_root"])
+
+            if "log_dir" in config_data:
+                self.log_dir = str(config_data["log_dir"])
+
+            if "log_level" in config_data:
+                self.log_level = str(config_data["log_level"]).upper()
+
+            if "defaults" in config_data and isinstance(config_data["defaults"], dict):
+                self.defaults = config_data["defaults"]
+                self._update_accessor_defaults()
+
         return self
 
-    def configure(
-        self,
-        storage_root: Optional[Union[str, Path]] = None,
-        config_file: Optional[Union[str, Path]] = None,
-        **kwargs
-    ) -> "Settings":
+    def configure(self, config_path: Union[str, Path]) -> "Settings":
         """
-        程序化全局配置入口。
-        
+        从指定 YAML 配置文件加载全局参数。
+
         示例:
-            settings.configure(storage_root="/path/to/storage")
+            cqdata.configure("./config.yaml")
         """
-        if config_file:
-            self.load_from_file(config_file)
-        if storage_root is not None:
-            self.STORAGE_ROOT = str(storage_root)
-
-        for k, v in kwargs.items():
-            attr = k.upper()
-            if hasattr(self, attr):
-                setattr(self, attr, v)
-
+        self.load_from_file(config_path)
+        self._refresh_logger()
         return self
 
+    def _refresh_logger(self) -> None:
+        """配置变更后安全刷新 loggerHandler"""
+        try:
+            from cqdata.utils.logger_utils import setup_logger
+            setup_logger(log_level=self.log_level, log_dir=self.log_dir)
+        except Exception:
+            pass
 
+    def _update_accessor_defaults(self) -> None:
+        """更新全局 accessor defaults 链"""
+        try:
+            from cqdata.entrypoints.accessors import default
+            default.update_from_dict(self.defaults)
+        except (ImportError, AttributeError):
+            pass
+
+
+# 全局 Settings 单例实例
 settings = Settings()

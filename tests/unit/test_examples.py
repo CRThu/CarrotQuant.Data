@@ -37,6 +37,7 @@ def test_example_scripts_import_and_execution(example_name, temp_storage_root):
 
     with patch("cqdata.sync"), \
          patch("cqdata.read", return_value=mock_df), \
+         patch("cqdata.entrypoints.accessors.base.read", return_value=mock_df), \
          patch("cqdata.list_tables", return_value=[{"table_id": "ashare.kline.1d.raw.baostock", "category": "timeseries"}]), \
          patch("cqdata.list_formats", return_value=["parquet"]), \
          patch("cqdata.list_symbols", return_value=["sh.600000"]), \

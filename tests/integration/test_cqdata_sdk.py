@@ -59,31 +59,33 @@ def test_sdk_full_flow(mock_sdk_env, temp_storage_root):
     """验证 import cqdata 的完整工作流程"""
     ts_table, _ = mock_sdk_env
 
+    # 通过全局 settings 显式设置测试存储路径
+    cqdata.settings.storage_path = str(temp_storage_root)
+
     # 1. 探查列表
-    tables = cqdata.list_tables(storage_root=temp_storage_root)
+    tables = cqdata.list_tables()
     table_ids = [t["table_id"] for t in tables]
     assert ts_table in table_ids
     assert tables[0]["category"] == "timeseries"
 
     # 2. 获取代码与辅助过滤元数据
-    symbols = cqdata.list_symbols(ts_table, storage_root=temp_storage_root)
+    symbols = cqdata.list_symbols(ts_table)
     assert set(symbols) == {"sh.600000", "sz.000001"}
 
-    start_dt, end_dt = cqdata.get_time_range(ts_table, storage_root=temp_storage_root)
+    start_dt, end_dt = cqdata.get_time_range(ts_table)
     assert "2024-01-02" in start_dt
 
-    schema = cqdata.get_schema(ts_table, storage_root=temp_storage_root)
+    schema = cqdata.get_schema(ts_table)
     assert "close" in schema
 
-    row_count = cqdata.get_row_count(ts_table, storage_root=temp_storage_root)
+    row_count = cqdata.get_row_count(ts_table)
     assert row_count == 2
 
     # 3. 显式切片读取并投影列
     df = cqdata.read(
         ts_table,
         symbols=["sh.600000"],
-        columns=["timestamp", "close"],
-        storage_root=temp_storage_root
+        columns=["timestamp", "close"]
     )
     assert len(df) == 1
     assert df.columns == ["timestamp", "close"]

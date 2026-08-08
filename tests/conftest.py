@@ -15,10 +15,10 @@ def temp_storage_root(tmp_path):
     """
     创建一个临时的存储根目录，并自动清理。
     """
-    original_root = settings.STORAGE_ROOT
-    settings.STORAGE_ROOT = str(tmp_path)
+    original_root = settings.storage_path
+    settings.storage_path = str(tmp_path)
     yield tmp_path
-    settings.STORAGE_ROOT = original_root
+    settings.storage_path = original_root
 
 @pytest.fixture
 def mock_baostock():

@@ -11,3 +11,15 @@ logs/
 tdx_data/
 
 config/config.yaml
+
+# Testing & Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# Virtual Environment & Build
+.venv/
+*.egg-info/
+dist/
+build/

@@ -21,8 +21,8 @@ def test_rest_api_full_flow_with_physical_storage(temp_storage_root, monkeypatch
     """
     通过 TestClient 进行全局端到端物理交互测试
     """
-    # 动态 patch 全局 STORAGE_ROOT
-    monkeypatch.setattr("cqdata.config.settings.STORAGE_ROOT", str(temp_storage_root))
+    # 动态 patch 全局 storage_path
+    monkeypatch.setattr("cqdata.config.settings.storage_path", str(temp_storage_root))
 
     table_id = "ashare.kline.1d.raw.baostock"
     fmt = "parquet"

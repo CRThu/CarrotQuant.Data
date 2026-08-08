@@ -127,14 +127,12 @@ graph TB
 
 ## ⚙️ 配置说明 (Configuration)
 
-CarrotQuant.Data 支持多层级配置加载与灵活注入，优先级从高到低依次为：
+CarrotQuant.Data 秉承 **“显式胜于隐式 (Explicit is better than implicit)”** 的配置契约，支持以下显式加载与覆盖方式（优先级从高到低）：
 
-1. **代码程序化指定**：调用 `cqdata.configure(storage_root="/path/to/storage")` 或函数传参 `storage_root`（最高优先级）。
-2. **环境变量 `CQDATA_STORAGE_ROOT`**：如 `export CQDATA_STORAGE_ROOT="/my/data/path"`（适合 Docker / 自动化部署）。
-3. **环境变量 `CQDATA_CONFIG`**：指定自定义 YAML 路径，如 `export CQDATA_CONFIG="/path/to/config.yaml"`。
-4. **工作目录配置**：当前工作路径下的 `./config/config.yaml` 或 `./config.yaml`。
-5. **用户主目录配置**：`~/.cqdata/config.yaml`。
-6. **默认缺省路径**：`storage_root`。
+1. **代码程序化修改**：直接设置单例属性 `cqdata.settings.storage_path = "/path/to/storage"` 或调用 `cqdata.configure("/path/to/config.yaml")`（最高优先级）。
+2. **环境变量 `CQDATA_STORAGE_PATH`**：如 `export CQDATA_STORAGE_PATH="/my/data/path"`（适合 Docker / CLI / 自动化部署）。
+3. **环境变量 `CQDATA_CONFIG_PATH`**：指定自定义 YAML 配置文件路径，如 `export CQDATA_CONFIG_PATH="/path/to/config.yaml"`。
+4. **内置默认配置**：默认存储路径 `storage_path = "storage_root"`，默认日志 `log_dir = "logs"`, `log_level = "INFO"`。
 
 ---
 
@@ -147,11 +145,14 @@ CarrotQuant.Data 支持多层级配置加载与灵活注入，优先级从高到
 ```python
 import cqdata
 
-# 0. (可选) 全局程序化配置存储路径
-cqdata.configure(storage_root="/path/to/storage")
+# 0. (可选) 从 YAML 配置文件加载全局配置
+cqdata.configure("./config.yaml")
 
-# 1. 探查本地表清单及分类
-tables = cqdata.list_tables()
+# 或者直接修饰属性
+cqdata.settings.storage_path = "./custom_storage"
+
+# 1. OOP 便捷读取 (界面极简，干净清爽)
+df_kline = cqdata.ashare.kline.get(symbols="sh.600000", start_date="2024-01-01")
 
 # 2. 查阅代码清单、时间跨度、Schema 映射与物理总行数
 symbols = cqdata.list_symbols("ashare.kline.1d.raw.baostock")
@@ -232,10 +233,10 @@ cqdata sync -t ashare.kline.1d.raw.tdx
 cqdata wizard
 ```
 
-### 方式四：启动 REST API HTTP 服务
-
+### 方式四：启动 REST API 服务 (支持 -c 加载配置文件)
 ```bash
-cqdata serve --port 8000
+cqdata server --port 8000 -c ./config.yaml
+# (也可使用兼容别名: cqdata serve)
 ```
 
 启动后提供基于 FastAPI 的 RESTful HTTP 接口（全量端点汇总）：

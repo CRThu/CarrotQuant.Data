@@ -37,7 +37,7 @@ def test_sync_full_flow(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -82,7 +82,7 @@ def test_sync_incremental_logic(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -118,7 +118,7 @@ def test_sync_force_refresh(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -167,7 +167,7 @@ def test_sync_empty_data_defense(temp_storage_root):
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             return pl.DataFrame()
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         empty_provider = EmptyProvider()
         

@@ -26,9 +26,9 @@ class MetadataReader:
         初始化 MetadataReader
         
         Args:
-            storage_root: 存储根目录 (未指定时默认使用 settings.STORAGE_ROOT)
+            storage_root: 存储根目录 (未指定时默认使用 settings.storage_path)
         """
-        self.storage_root = Path(storage_root) if storage_root else Path(settings.STORAGE_ROOT)
+        self.storage_root = Path(storage_root) if storage_root else Path(settings.storage_path)
         self.meta_mgr = MetadataManager(str(self.storage_root))
 
     def _determine_format(self, table_id: str, requested_format: str = "auto") -> str:

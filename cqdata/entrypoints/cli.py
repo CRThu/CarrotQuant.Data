@@ -54,6 +54,10 @@ def sync_cmd(
         provider_kwargs["mode"] = "local" if local else "online"
         provider_kwargs["vipdoc_dir"] = tdx_vipdoc
 
+    if output:
+        from cqdata.config import settings
+        settings.storage_path = output
+
     api_sync(
         table_ids=table_list,
         formats=format_list,
@@ -62,21 +66,28 @@ def sync_cmd(
         force_refresh=force,
         batch_size=batch,
         symbol_limit=limit,
-        storage_root=output,
         provider_kwargs=provider_kwargs
     )
 
 
-@app.command(name="serve")
-def serve_cmd(
+@app.command(name="server")
+def server_cmd(
     host: str = typer.Option("0.0.0.0", "--host", "-h", help="监听地址"),
     port: int = typer.Option(8000, "--port", "-p", help="监听端口"),
-    reload: bool = typer.Option(True, "--reload", help="是否开启热重载")
+    reload: bool = typer.Option(True, "--reload", help="是否开启热重载"),
+    config: Optional[str] = typer.Option(None, "--config", "-c", help="加载指定 YAML 配置文件路径"),
+    storage_path: Optional[str] = typer.Option(None, "--storage-path", "-o", help="指定存储根目录")
 ):
     """
-    启动 FastAPI REST API HTTP 服务
+    启动 FastAPI REST API HTTP 服务 (例如 cqdata server -p 8000 -c ./config.yaml)
     """
-    typer.echo(f"[+] Starting cqdata REST API server on http://{host}:{port}")
+    from cqdata.config import settings
+    if config:
+        settings.configure(config)
+    if storage_path:
+        settings.storage_path = storage_path
+
+    typer.echo(f"[+] Starting cqdata REST API server on http://{host}:{port} (storage_path: {settings.storage_path})")
     uvicorn.run("cqdata.entrypoints.rest_api:app", host=host, port=port, reload=reload)
 
 

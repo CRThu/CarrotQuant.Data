@@ -12,9 +12,9 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 - 支持 Baostock（日线/5分线/复权因子）、东方财富（概念/行业板块/龙虎榜/机构交易）、通达信（日线/5分/1分线）
 - 支持 CSV 和 Parquet 两种存储格式
 - 基于时间戳水位线的增量同步与断点续接
-- 三种入口：Python SDK (`cqdata.read`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API
+- 三种入口：Python SDK (OOP `cqdata.ashare.kline.get()` / 统一 `cqdata.read()`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API
 
-**技术栈**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, Pydantic-Settings
+**技术栈**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, PyYAML
 
 ---
 
@@ -23,9 +23,13 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 ```
 CarrotQuant.Data/
 ├── cqdata/
-│   ├── __init__.py               # 统一导出符号 (read, list_tables 等)，0 业务逻辑
-│   ├── entrypoints/              # 接入层 (python_api, cli, rest_api)
-│   ├── config/                   # 配置管理 (支持 CQDATA_STORAGE_ROOT 环境变量与多级 YAML)
+│   ├── __init__.py               # 统一导出符号 (ashare, aindex, read, list_tables 等)，0 业务逻辑
+│   ├── entrypoints/              # 接入层 (accessors/ OOP子包, python_api, cli, rest_api)
+│   │   ├── accessors/            # OOP 便捷访问层 (base.py, ashare.py, aindex.py)
+│   │   ├── python_api.py         # Python SDK 底层切片与探查 API
+│   │   ├── cli.py                # Typer CLI 控制台主入口 (cqdata sync/server/info/tables)
+│   │   └── rest_api.py           # FastAPI REST HTTP 服务
+│   ├── config/                   # 配置管理 (支持 CQDATA_STORAGE_PATH 环境变量与 YAML)
 │   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
 │   ├── service/                  # 业务逻辑层 (SyncManager, DataReader, MetadataReader, TaskPlanner, MetadataManager)
 │   ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
@@ -131,8 +135,9 @@ SyncManager.sync()
 ## 4. 核心模块与类职责
 
 ### 4.1 接入层 (Gateway)
-- **`python_api.py`**: 提供 SDK 高阶 API (`read`, `list_tables`, `sync`, `configure`, `get_schema`, `get_time_range` 等)，统一切片读取与数据表探查，按 `table_id` 分类自动智能路由。
-- **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata serve`, `cqdata wizard`)。
+- **`accessors/` 包**: 提供 OOP 便捷访问层子包（`ashare.kline`, `aindex.kline` 等）与 `DefaultConfig` 三层链式继承解析器，支持极其直观的 `.get()` 参数补全与智能默认值支持。
+- **`python_api.py`**: 提供 SDK 高阶 API (`read`, `list_tables`, `sync`, `configure`, `get_schema`, `get_time_range` 等)，以磁盘物理 `metadata.json` 为单事实来源直接高效路由。
+- **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata server`, `cqdata wizard`)。
 - **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，输出 `columns` 表头 + 二维矩阵 (`df.rows()`)。
 
 ### 4.2 业务服务层 (Service)
@@ -248,6 +253,20 @@ type_map = {
 
 ## 8. 核心设计原则
 
+### 8.1 架构哲学与设计指导
+1. **第一性原理 (First Principles)**:
+   从问题本质出发设计，绝不增加无必要的中间层或冗余形参。代码逻辑追求极简、直观与高执行效率，拒绝任何花里胡哨的过度设计与魔术推测。
+2. **单一事实来源 (Single Source of Truth, SSOT)**:
+   - 物理磁盘的 `metadata.json` 是数据属性、Schema 与起止范围的唯一事实标准。
+   - 探查与读取数据时严格以磁盘 `metadata.json` 为准，绝不在代码中凭空假设或做模棱两可的降级猜测。
+3. **高内聚低耦合的分层架构 (Layered Architecture)**:
+   - **Entrypoints (接入层)**: 仅负责参数校验与路由，0 业务逻辑。
+   - **Service (服务层)**: 负责同步规划、数据切片调度与元数据原子刷盘。
+   - **Provider (驱动层)**: 专一负责网络/二进制数据拉取与 `DataCleaner` 标准化。
+   - **Storage (存储层)**: 专一负责增量合并 (`DataMerger`)、去重、排序与 Hive 物理落盘。
+   - **单向依赖规则**: 接入层 ➔ 服务层 ➔ 驱动层/存储层，严格禁止跨层反向调用。
+
+### 8.2 物理与鲁棒性原则
 1. **原子落盘**: 任何写操作均采用 `.tmp` 文件写入 -> `os.replace` -> `fsync` 刷盘，杜绝写入中断导致文件损坏。
 2. **读取强锁与显式 Cast**: 读取数据时必须读取 `metadata.json` 的 schema 进行显式 `pl.cast()`，严禁使用 Polars 自动类型推断。
 3. **空数据防御三层机制**:
@@ -264,6 +283,9 @@ type_map = {
 
 ## 9. 开发与测试约束
 
+- **零盲目假设与沟通契约**:
+  - **严禁盲目假设**：当对需求意图、架构变动或接口设计存在不确切或多种可选方案时，必须先提出疑问与方案选择，与用户讨论确认后再执行代码修改，严禁擅自做主更改逻辑。
+  - **最小改动原则**：代码修改严格遵循最小可行改动原则，严禁删除不相关的代码与注释。
 - **技术栈禁令**: 强制全系统使用 Polars (`pl`)，**严禁使用 pandas**（包括 SDK 接口、类型提示与数据转换，全量基于 Polars）。
 - **包管理与安装禁令**: **严禁使用 `pip install`** 方式安装依赖包。项目包管理一律统一使用 `uv` 工具链（如 `uv sync` / `uv add`）。
 - **复权约束**: 仅支持 `raw` (不复权) 或 `adj` (后复权)，禁止前复权。
@@ -278,6 +300,12 @@ type_map = {
 - **Git 提交**:
   - 消息语言为中文，遵从 Conventional Commits 规范（如 `feat:` / `fix:` / `refactor:`）。
   - 未经用户明确确认，禁止自动执行 `git add/commit/push` 操作。
+- **版本发布与 bump 规范**:
+  - 项目在 `pyproject.toml` 中配置了 `[tool.bumpversion]` 自动化关联，将 `pyproject.toml` 和 `cqdata/__init__.py` 的版本号保持强同步。
+  - 严禁手动多处修改版本号。更新版本统一通过 `bump-my-version` 工具链自动升级并打 Tag：
+    - 升级修补版本号 (`1.1.0` ➔ `1.1.1`): `uv run bump-my-version bump patch`
+    - 升级次版本号 (`1.1.0` ➔ `1.2.0`): `uv run bump-my-version bump minor`
+    - 升级主版本号 (`1.1.0` ➔ `2.0.0`): `uv run bump-my-version bump major`
 - **文档与示例同步契约**: 任何涉及架构、核心 API、接入面 (Entrypoint) 或数据结构的改动，必须**同时同步更新**以下 4 处内容：
   1. `AGENTS.md`
   2. `README.md`

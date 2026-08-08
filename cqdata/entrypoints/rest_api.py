@@ -25,7 +25,9 @@ from cqdata.entrypoints.python_api import (
     sync
 )
 
-app = FastAPI(title="CarrotQuant.Data REST API", version="1.1.0")
+from cqdata import __version__
+
+app = FastAPI(title="CarrotQuant.Data REST API", version=__version__)
 
 # 挂载 CORS 跨域中间件，允许 Web 前端应用直接调用 API
 app.add_middleware(
@@ -42,8 +44,8 @@ async def api_health_check():
     """健康检查与系统运行状态探针"""
     return {
         "status": "ok",
-        "version": "1.1.0",
-        "storage_root": str(settings.STORAGE_ROOT),
+        "version": __version__,
+        "storage_root": str(settings.storage_path),
         "active_tasks": len(ACTIVE_SYNC_TASKS)
     }
 

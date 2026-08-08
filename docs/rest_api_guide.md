@@ -1,6 +1,6 @@
 # CarrotQuant.Data REST API 详细接口使用指南
 
-`cqdata` 提供了基于 FastAPI 的 RESTful HTTP 接口，方便 Web 前端、微服务架构与非 Python 语言客户端（如 Go, C++, Rust, Node.js, Java）快速集成金融数据同步与切片查询服务。
+`cqdata server` 提供了基于 FastAPI 的 RESTful HTTP 接口，方便 Web 前端、微服务架构与非 Python 语言客户端（如 Go, C++, Rust, Node.js, Java）快速集成金融数据同步与切片查询服务。
 
 ---
 
@@ -31,7 +31,7 @@
 
 | 分类 | 端点路径 | HTTP 方法 | 功能说明 |
 | :--- | :--- | :---: | :--- |
-| **系统探针** | `/health` | `GET` | 服务运行状态探针与 `STORAGE_ROOT` 探查 |
+| **系统探针** | `/health` | `GET` | 服务运行状态探针与 `storage_path` 探查 |
 | **元数据探查** | `/tables` | `GET` | 列出本地所有数据表清单（平铺对象数组，含 `category` 分类） |
 | | `/tables/{table_id}/formats` | `GET` | 获取某数据表已落地的存储格式列表 (`["parquet", "csv"]`) |
 | | `/tables/{table_id}/symbols` | `GET` | 获取某数据表已落地的证券/代码唯一清单 |

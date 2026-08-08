@@ -13,9 +13,12 @@ from cqdata.entrypoints.python_api import (
     get_schema,
     get_row_count,
     sync,
-    configure,
-    set_config,
-    get_config
+    configure
+)
+from cqdata.entrypoints.accessors import (
+    default,
+    ashare,
+    aindex
 )
 
 __all__ = [
@@ -28,6 +31,7 @@ __all__ = [
     "get_row_count",
     "sync",
     "configure",
-    "set_config",
-    "get_config"
+    "default",
+    "ashare",
+    "aindex"
 ]

@@ -78,7 +78,7 @@ def test_metadata_and_sync_flow_csv(temp_storage_root):
     """
     table_id = "test.metadata.sync.csv"
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -111,7 +111,7 @@ def test_metadata_and_sync_flow_parquet(temp_storage_root):
     """
     table_id = "test.metadata.sync.parquet"
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider(symbols=["sh.600000", "sz.000001", "sz.000002"])
 
@@ -140,7 +140,7 @@ def test_metadata_physical_stats_consistency(temp_storage_root):
     """
     table_id = "test.metadata.consistency"
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -167,7 +167,7 @@ def test_metadata_schema_validation(temp_storage_root):
     """
     table_id = "test.metadata.schema"
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -197,7 +197,7 @@ def test_metadata_time_range_accuracy(temp_storage_root):
     start_ts = parse_date_to_ts("2024-01-01")
     end_ts = parse_date_to_ts("2024-01-02")
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -232,7 +232,7 @@ def test_metadata_multiple_formats_consistency(temp_storage_root):
     """
     table_id = "test.metadata.multi_format"
 
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 

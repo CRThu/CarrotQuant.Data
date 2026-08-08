@@ -39,7 +39,7 @@ def test_sync_multi_storage_consistency(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -71,7 +71,7 @@ def test_sync_multi_storage_watermark(temp_storage_root):
     from datetime import datetime, timezone, timedelta
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -101,7 +101,7 @@ def test_sync_multi_storage_incremental(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -157,7 +157,7 @@ def test_sync_multi_storage_symbol_consistency(temp_storage_root):
                 return pl.DataFrame(data)
             return pl.DataFrame()
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         multi_provider = MultiSymbolProvider()
         
@@ -182,7 +182,7 @@ def test_sync_multi_storage_timestamp_alignment(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -208,7 +208,7 @@ def test_sync_multi_storage_atomic_fetch(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         
         # 创建带有 fetch 计数的 Provider
@@ -259,7 +259,7 @@ def test_sync_multi_storage_file_generation(temp_storage_root):
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -327,7 +327,7 @@ def test_sync_multi_storage_concurrent_formats(temp_storage_root):
                 return pl.DataFrame(data)
             return pl.DataFrame()
     
-    with patch("cqdata.config.settings.settings.STORAGE_ROOT", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
         sync_mgr = SyncManager()
         multi_provider = MultiSymbolProvider()
         

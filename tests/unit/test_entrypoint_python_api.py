@@ -36,6 +36,13 @@ def test_read_unified_polars():
         assert res_event.height == 1
 
 
+def test_read_missing_table_raises_file_not_found():
+    """测试当 table_id 本地无存储与元数据时直接抛出 FileNotFoundError"""
+    with patch("cqdata.service.metadata_reader.list_formats", return_value=[]):
+        with pytest.raises(FileNotFoundError, match="No storage found for table_id"):
+            python_api.read("non_existent_table")
+
+
 def test_list_and_get_metadata_functions():
     """测试 list_* 与 get_* 元数据读取助手函数正确委托给 metadata_reader"""
     with patch("cqdata.service.metadata_reader.list_series_tables", return_value=["table1"]), \
@@ -72,16 +79,10 @@ def test_sync_function_delegation():
         assert kwargs["start_date"] == "2024-01-01"
 
 
-def test_configure_and_get_config():
-    """测试 configure 全局参数配置与 get_config 获取 Settings 实例"""
-    cfg = python_api.get_config()
-    assert cfg is not None
+def test_configure():
+    """测试 configure 全局参数配置"""
+    assert cqdata.settings is not None
 
     with patch("cqdata.config.settings.Settings.configure") as mock_conf:
-        python_api.configure(storage_root="/tmp/test_root")
+        python_api.configure("/tmp/test_config.yaml")
         assert mock_conf.called
-
-    # 验证别名 set_config
-    with patch("cqdata.config.settings.Settings.configure") as mock_conf_alias:
-        cqdata.set_config(storage_root="/tmp/test_root_alias")
-        assert mock_conf_alias.called

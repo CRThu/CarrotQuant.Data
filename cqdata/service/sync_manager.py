@@ -17,7 +17,7 @@ class SyncManager:
 
     def __init__(self, storage_root: str = None):
         # 内部自治实例化：基于配置中心
-        self.storage_root = storage_root or settings.STORAGE_ROOT
+        self.storage_root = storage_root or settings.storage_path
         self.metadata_mgr = MetadataManager(self.storage_root)
         self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()

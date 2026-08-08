@@ -3,23 +3,40 @@ import os
 import datetime
 from loguru import logger
 from pathlib import Path
+from typing import Optional, Union
 
-def setup_logger(log_level="INFO", log_file_prefix="sync"):
+
+def setup_logger(
+    log_level: Optional[str] = None,
+    log_file_prefix: str = "sync",
+    log_dir: Optional[Union[str, Path]] = None
+):
     """
     配置 loguru 日志，同时输出到控制台和文件。
-    
+
     Args:
-        log_level: 日志级别
-        log_file_prefix: 日志文件前缀，最终文件名会包含时间戳 (如 logs/sync_20240329_120000.log)
+        log_level: 日志级别 (如 'INFO', 'DEBUG')，若为 None 从 settings 读取
+        log_file_prefix: 日志文件前缀
+        log_dir: 日志目录，若为 None 从 settings 读取
     """
-    # 获取项目根目录 (假设此文件在 app/utils/)
-    project_root = Path(__file__).parent.parent.parent.absolute()
-    
+    from cqdata.config.settings import settings
+
+    if log_level is None:
+        log_level = getattr(settings, "log_level", "INFO")
+
+    if log_dir is None:
+        log_dir = getattr(settings, "log_dir", "logs")
+
+    log_dir_path = Path(log_dir)
+    if not log_dir_path.is_absolute():
+        # 相对路径以当前工作目录为参照
+        log_dir_path = Path.cwd() / log_dir_path
+
     # 生成带时间戳的文件名
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_filename = f"{log_file_prefix}_{timestamp}.log"
-    log_path = project_root / "logs" / log_filename
-    
+    log_path = log_dir_path / log_filename
+
     # 确保日志目录存在
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -36,16 +53,16 @@ def setup_logger(log_level="INFO", log_file_prefix="sync"):
     # 添加文件输出
     logger.add(
         str(log_path),
-        rotation="100 MB",     # 日志文件非常大时才轮转 (也可以不设置，但保留一个保险)
-        # retention=None,        # 明确不设置 retention，则不会自动删除旧日志
+        rotation="100 MB",     # 日志文件非常大时才轮转
         compression="zip",     # 压缩旧日志
         level=log_level,
         encoding="utf-8",
         enqueue=True,          # 线程安全
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"
     )
-    
+
     return logger
+
 
 class SuppressOutput:
     """

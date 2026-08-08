@@ -92,9 +92,9 @@ def test_cli_sync_command(mock_cli_storage, temp_storage_root):
         assert kwargs["symbol_limit"] == 10
 
 
-def test_cli_serve_help():
-    """测试 cqdata serve --help"""
-    result = runner.invoke(app, ["serve", "--help"])
+def test_cli_server_help():
+    """测试 cqdata server --help"""
+    result = runner.invoke(app, ["server", "--help"])
     assert result.exit_code == 0
     assert "port" in result.stdout.lower()
 
