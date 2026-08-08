@@ -14,7 +14,7 @@ from cqdata.service import metadata_reader as mr
 from cqdata.service import sync_manager as sm
 
 
-def read_series(
+def read(
     table_id: str,
     symbols: Optional[Union[str, List[str]]] = None,
     start_date: Optional[str] = None,
@@ -24,74 +24,63 @@ def read_series(
     storage_root: Optional[Union[str, Path]] = None
 ) -> pl.DataFrame:
     """
-    切片读取【时间序列 (TimeSeries)】数据 (如 K 线、分笔)
-    
+    统一数据切片读取入口 (自动按 table_id 智能路由到时序表或事件表处理流水线)
+
     Args:
-        table_id: 数据集 ID (例如 'ashare.kline.1d.raw.baostock')
-        symbols: 证券代码或代码列表 ('sh.600000' 或 ['sh.600000', 'sz.000001'])
+        table_id: 数据集 ID (例如 'ashare.kline.1d.raw.baostock' 或 'ashare.dragon_tiger.eastmoney')
+        symbols: 证券代码或代码列表
         start_date: 起始日期 ('YYYY-MM-DD')
         end_date: 结束日期 ('YYYY-MM-DD')
         columns: 选挑字段清单 (例如 ['timestamp', 'close', 'volume'])
         format: 存储格式 ('auto', 'parquet', 'csv')
         storage_root: 自定义存储根目录
-        
+
     Returns:
         pl.DataFrame
     """
-    return dr.read_series(
-        table_id=table_id,
-        symbols=symbols,
-        start_date=start_date,
-        end_date=end_date,
-        columns=columns,
-        format=format,
-        storage_root=storage_root
-    )
+    from cqdata.provider.provider_manager import ProviderManager
+    try:
+        category = ProviderManager().get_provider(table_id).get_table_category(table_id)
+    except Exception:
+        category = "timeseries"
+
+    if category == "event":
+        df = dr.read_events(
+            table_id=table_id,
+            symbols=symbols,
+            start_date=start_date,
+            end_date=end_date,
+            columns=columns,
+            format=format,
+            storage_root=storage_root
+        )
+    else:
+        df = dr.read_series(
+            table_id=table_id,
+            symbols=symbols,
+            start_date=start_date,
+            end_date=end_date,
+            columns=columns,
+            format=format,
+            storage_root=storage_root
+        )
+
+    return df
 
 
-def read_events(
-    table_id: str,
-    symbols: Optional[Union[str, List[str]]] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    columns: Optional[Union[str, List[str]]] = None,
-    format: str = "auto",
-    storage_root: Optional[Union[str, Path]] = None
-) -> pl.DataFrame:
+def list_tables(format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> List[Dict[str, str]]:
     """
-    切片读取【事件/静态 (Event)】数据 (如板块成分股、龙虎榜、机构交易)
-    
-    Args:
-        table_id: 数据集 ID (例如 'ashare.dragon_tiger.eastmoney')
-        symbols: 证券代码或代码列表
-        start_date: 起始日期
-        end_date: 结束日期
-        columns: 选挑字段清单
-        format: 存储格式 ('auto', 'parquet', 'csv')
-        storage_root: 自定义存储根目录
-        
+    列出本地已存在的所有数据表清单及分类信息 (平铺对象列表)
+
     Returns:
-        pl.DataFrame
+        List[Dict[str, str]]: [{'table_id': '...', 'category': 'timeseries'|'event'}, ...]
     """
-    return dr.read_events(
-        table_id=table_id,
-        symbols=symbols,
-        start_date=start_date,
-        end_date=end_date,
-        columns=columns,
-        format=format,
-        storage_root=storage_root
-    )
+    series_tables = mr.list_series_tables(format=format, storage_root=storage_root)
+    event_tables = mr.list_event_tables(format=format, storage_root=storage_root)
 
-
-def list_series_tables(format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> List[str]:
-    """列出本地已存在的所有【时间序列 (TimeSeries)】数据表 ID"""
-    return mr.list_series_tables(format=format, storage_root=storage_root)
-
-
-def list_event_tables(format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> List[str]:
-    """列出本地已存在的所有【事件/静态 (Event)】数据表 ID"""
-    return mr.list_event_tables(format=format, storage_root=storage_root)
+    tables = [{"table_id": tid, "category": "timeseries"} for tid in series_tables]
+    tables.extend([{"table_id": tid, "category": "event"} for tid in event_tables])
+    return tables
 
 
 def list_formats(table_id: str, storage_root: Optional[Union[str, Path]] = None) -> List[str]:

@@ -60,8 +60,10 @@ def test_sdk_full_flow(mock_sdk_env, temp_storage_root):
     ts_table, _ = mock_sdk_env
 
     # 1. 探查列表
-    series_tables = cqdata.list_series_tables(storage_root=temp_storage_root)
-    assert ts_table in series_tables
+    tables = cqdata.list_tables(storage_root=temp_storage_root)
+    table_ids = [t["table_id"] for t in tables]
+    assert ts_table in table_ids
+    assert tables[0]["category"] == "timeseries"
 
     # 2. 获取代码与辅助过滤元数据
     symbols = cqdata.list_symbols(ts_table, storage_root=temp_storage_root)
@@ -77,7 +79,7 @@ def test_sdk_full_flow(mock_sdk_env, temp_storage_root):
     assert row_count == 2
 
     # 3. 显式切片读取并投影列
-    df = cqdata.read_series(
+    df = cqdata.read(
         ts_table,
         symbols=["sh.600000"],
         columns=["timestamp", "close"],

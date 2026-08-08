@@ -12,8 +12,7 @@ def main():
     table_id = "ashare.kline.1d.raw.baostock"
 
     print("=== 1. 盘点本地数据表 ===")
-    print("已存在的时序表:", cqdata.list_series_tables())
-    print("已存在的事件表:", cqdata.list_event_tables())
+    print("已存在的数据表清单:", cqdata.list_tables())
 
     print(f"\n=== 2. 盘点表 [{table_id}] 的元信息 ===")
     print("存储格式:", cqdata.list_formats(table_id))

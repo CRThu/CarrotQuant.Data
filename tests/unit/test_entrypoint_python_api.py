@@ -14,38 +14,36 @@ import cqdata
 from cqdata.entrypoints import python_api
 
 
-def test_read_series_polars():
-    """测试 read_series 返回 Polars DataFrame"""
+def test_read_unified_polars():
+    """测试统一 read 接口按 table_id 智能路由返回 Polars DataFrame"""
     mock_pl_df = pl.DataFrame({
         "timestamp": [1704067200000],
         "symbol": ["sh.600000"],
         "close": [10.5]
     })
     with patch("cqdata.service.data_reader.read_series", return_value=mock_pl_df):
-        res_pl = python_api.read_series("ashare.kline.1d.raw.baostock", symbols="sh.600000")
+        res_pl = python_api.read("ashare.kline.1d.raw.baostock", symbols="sh.600000")
         assert isinstance(res_pl, pl.DataFrame)
         assert res_pl.height == 1
 
-
-def test_read_events_polars():
-    """测试 read_events 返回 Polars DataFrame"""
-    mock_pl_df = pl.DataFrame({
+    mock_event_df = pl.DataFrame({
         "symbol": ["sh.600000"],
         "board_name": ["银行"]
     })
-    with patch("cqdata.service.data_reader.read_events", return_value=mock_pl_df):
-        res_pl = python_api.read_events("ashare.concept.eastmoney")
-        assert isinstance(res_pl, pl.DataFrame)
-        assert res_pl.height == 1
+    with patch("cqdata.service.data_reader.read_events", return_value=mock_event_df):
+        res_event = python_api.read("ashare.concept.eastmoney")
+        assert isinstance(res_event, pl.DataFrame)
+        assert res_event.height == 1
 
 
 def test_list_and_get_metadata_functions():
     """测试 list_* 与 get_* 元数据读取助手函数正确委托给 metadata_reader"""
-    with patch("cqdata.service.metadata_reader.list_series_tables", return_value=["table1"]):
-        assert python_api.list_series_tables() == ["table1"]
-
-    with patch("cqdata.service.metadata_reader.list_event_tables", return_value=["table2"]):
-        assert python_api.list_event_tables() == ["table2"]
+    with patch("cqdata.service.metadata_reader.list_series_tables", return_value=["table1"]), \
+         patch("cqdata.service.metadata_reader.list_event_tables", return_value=["table2"]):
+        tables = python_api.list_tables()
+        assert len(tables) == 2
+        assert tables[0] == {"table_id": "table1", "category": "timeseries"}
+        assert tables[1] == {"table_id": "table2", "category": "event"}
 
     with patch("cqdata.service.metadata_reader.list_formats", return_value=["parquet"]):
         assert python_api.list_formats("table1") == ["parquet"]

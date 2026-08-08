@@ -12,7 +12,7 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 - 支持 Baostock（日线/5分线/复权因子）、东方财富（概念/行业板块/龙虎榜/机构交易）、通达信（日线/5分/1分线）
 - 支持 CSV 和 Parquet 两种存储格式
 - 基于时间戳水位线的增量同步与断点续接
-- 三种入口：Python SDK (`cqdata.read_series`/`read_events`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API
+- 三种入口：Python SDK (`cqdata.read`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API
 
 **技术栈**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, Pydantic-Settings
 
@@ -23,7 +23,7 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 ```
 CarrotQuant.Data/
 ├── cqdata/
-│   ├── __init__.py               # 统一导出符号 (read_series, read_events 等)，0 业务逻辑
+│   ├── __init__.py               # 统一导出符号 (read, list_tables 等)，0 业务逻辑
 │   ├── entrypoints/              # 接入层 (python_api, cli, rest_api)
 │   ├── config/                   # 配置管理 (支持 CQDATA_STORAGE_ROOT 环境变量与多级 YAML)
 │   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
@@ -131,9 +131,9 @@ SyncManager.sync()
 ## 4. 核心模块与类职责
 
 ### 4.1 接入层 (Gateway)
-- **`python_api.py`**: 提供 SDK 高层 API (`read_series`, `read_events`, `sync`, `configure`, `get_schema`, `get_time_range` 等)。
+- **`python_api.py`**: 提供 SDK 高阶 API (`read`, `list_tables`, `sync`, `configure`, `get_schema`, `get_time_range` 等)，统一切片读取与数据表探查，按 `table_id` 分类自动智能路由。
 - **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata serve`, `cqdata wizard`)。
-- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，提供查询切片与异步同步任务触发。
+- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，输出 `columns` 表头 + 二维矩阵 (`df.rows()`)。
 
 ### 4.2 业务服务层 (Service)
 - **`SyncManager`**: 数据同步总调度器，贯穿 Provider 拉取、批处理、Storage 写入与元数据盖章。
@@ -278,7 +278,11 @@ type_map = {
 - **Git 提交**:
   - 消息语言为中文，遵从 Conventional Commits 规范（如 `feat:` / `fix:` / `refactor:`）。
   - 未经用户明确确认，禁止自动执行 `git add/commit/push` 操作。
-- **架构一致性**: 任何涉及架构、数据流或核心 API 的改动，必须同步更新本 `AGENTS.md`。
+- **文档与示例同步契约**: 任何涉及架构、核心 API、接入面 (Entrypoint) 或数据结构的改动，必须**同时同步更新**以下 4 处内容：
+  1. `AGENTS.md`
+  2. `README.md`
+  3. `docs/` 目录下的相关指南文档 (如 `docs/rest_api_guide.md` 与 `docs/python_sdk_guide.md` 等)。
+  4. `examples/` 目录下的示例代码脚本。
 
 ---
 

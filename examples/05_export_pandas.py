@@ -12,11 +12,10 @@ def main():
     table_id = "ashare.kline.1d.raw.baostock"
     print(f"=== 转换读取为 Pandas DataFrame (table: {table_id}) ===")
 
-    # 设置 as_pandas=True
-    df_pandas = cqdata.read_series(
-        table_id=table_id,
-        as_pandas=True
-    )
+    # 调用 Polars 的 .to_pandas() 方法
+    df_pandas = cqdata.read(
+        table_id=table_id
+    ).to_pandas()
 
     print(f"返回对象类型: {type(df_pandas)}")
     print(df_pandas.head(3))

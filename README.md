@@ -11,7 +11,7 @@ CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的
 - **灵活的存储格式**：原生支持 `csv` 和基于列式存储的高效 `parquet` 格式，以满足不同体量的数据读写需求。
 - **增量与全量同步**：基于时间戳水位线的同步机制，支持从断点智能续接（增量拉取），以及强制全量覆盖更新刷新数据。
 - **现代化多通道接入支持**：
-  - **Python SDK**：简单直观的 `import cqdata` API，支持高性能跨年份数据切片读取 (`cqdata.read_series`, `cqdata.read_events`)、`columns` 按需字段选择、格式识别与元数据探查。
+  - **Python SDK**：简单直观的 `import cqdata` API，支持高性能跨年份数据切片读取 (`cqdata.read`)、`columns` 按需字段选择、格式识别与元数据探查。
   - **命令行工具 (CLI)**：统一的 `cqdata` 命令行工具，提供数据同步 (`cqdata sync`)、数据表探索 (`cqdata tables`)、元数据查询 (`cqdata info`) 与 HTTP 服务启动 (`cqdata serve`)。
   - **REST API 服务**：基于 FastAPI 的 REST API，为远程微服务提供 HTTP 数据切片与同步触发。
 - **优秀的底层性能**：使用 [Polars](https://pola.rs/) 库进行高性能的数据加工和清洗。
@@ -150,31 +150,28 @@ import cqdata
 # 0. (可选) 全局程序化配置存储路径
 cqdata.configure(storage_root="/path/to/storage")
 
-# 1. 探索本地已下载的数据表列表
-series_tables = cqdata.list_series_tables()  # ['ashare.kline.1d.raw.baostock', ...]
-event_tables = cqdata.list_event_tables()    # ['ashare.adj_factor.baostock', ...]
+# 1. 探查本地表清单及分类
+tables = cqdata.list_tables()
 
-# 2. 探查数据表属性与辅助过滤条件
-formats = cqdata.list_formats("ashare.kline.1d.raw.baostock")     # ['parquet', 'csv']
-symbols = cqdata.list_symbols("ashare.kline.1d.raw.baostock")     # ['sh.600000', ...]
+# 2. 查阅代码清单、时间跨度、Schema 映射与物理总行数
+symbols = cqdata.list_symbols("ashare.kline.1d.raw.baostock")
 start_dt, end_dt = cqdata.get_time_range("ashare.kline.1d.raw.baostock")
 schema = cqdata.get_schema("ashare.kline.1d.raw.baostock")         # {'timestamp': 'Int64', ...}
 total_rows = cqdata.get_row_count("ashare.kline.1d.raw.baostock") # 13570685
 
-# 3. 显式切片读取 K 线时序数据 (支持 columns 按需挑选列，极节省内存)
-df = cqdata.read_series(
+# 3. 统一切片读取 K 线时序数据 (支持 columns 按需挑选列，极节省内存)
+df = cqdata.read(
     table_id="ashare.kline.1d.raw.baostock",
     symbols=["sh.600000", "sz.000001"],
     start_date="2024-01-01",
     end_date="2024-06-30",
-    columns=["timestamp", "datetime", "symbol", "close", "volume"],
-    as_pandas=False  # 默认返回 Polars DataFrame，设为 True 返回 Pandas DataFrame
+    columns=["timestamp", "datetime", "symbol", "close", "volume"]
 )
 print(df)
 
-# 4. 读取事件/板块静态数据
-events_df = cqdata.read_events(
-    table_id="ashare.adj_factor.baostock",
+# 4. 统一切片读取板块/龙虎榜事件数据
+events_df = cqdata.read(
+    table_id="ashare.concept.eastmoney",
     symbols=["sh.600000"]
 )
 
@@ -241,19 +238,18 @@ cqdata wizard
 cqdata serve --port 8000
 ```
 
-启动后提供标准 RESTful HTTP 接口（全量端点汇总）：
+启动后提供基于 FastAPI 的 RESTful HTTP 接口（全量端点汇总）：
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/api/v1/tables/series` | GET | 列出本地所有时序表 ID |
-| `/api/v1/tables/events` | GET | 列出本地所有事件表 ID |
+| `/api/v1/health` | GET | 系统健康检查与服务运行状态探针 |
+| `/api/v1/tables` | GET | 列出本地所有数据表总览 (平铺列表，含 `category` 属性) |
 | `/api/v1/tables/{table_id}/formats` | GET | 获取指定表已存储的物理格式列表 (`['parquet', 'csv']`) |
 | `/api/v1/tables/{table_id}/symbols` | GET | 获取指定表已下载的股票/证券代码列表 |
 | `/api/v1/tables/{table_id}/time_range` | GET | 获取指定表的时间跨度 tuple `(start_datetime, end_datetime)` |
 | `/api/v1/tables/{table_id}/schema` | GET | 获取指定表的字段列名与类型字典 |
 | `/api/v1/tables/{table_id}/row_count` | GET | 获取指定表的记录总条数/行数 |
-| `/api/v1/query/series` | POST | 切片查询时序数据（支持 `symbols`, `start_date`, `end_date`, `columns`, `format`） |
-| `/api/v1/query/events` | POST | 切片查询事件数据（支持 `symbols`, `start_date`, `end_date`, `columns`, `format`） |
+| `/api/v1/query` | GET | 统一切片查询接口（支持 `symbols`, `start_date`, `end_date`, `columns`, `page`, `page_size`），按 `table_id` 自动智能路由，输出 `columns` 表头与 `data` 二维 List 矩阵 |
 | `/api/v1/sync` | POST | 异步触发后台数据同步任务 |
 | `/api/v1/tasks` | GET | 查询活跃同步任务状态 |
 

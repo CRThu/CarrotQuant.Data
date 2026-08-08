@@ -22,8 +22,8 @@ def main():
     )
     print("同步完成！")
 
-    print("\n=== 2. 读取时序 (TimeSeries) 数据 ===")
-    df = cqdata.read_series(
+    print("\n=== 2. 读取数据 (统一 cqdata.read 入口) ===")
+    df = cqdata.read(
         table_id=table_id,
         start_date="2024-01-01",
         end_date="2024-01-10"

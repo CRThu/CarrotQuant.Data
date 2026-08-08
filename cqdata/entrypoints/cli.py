@@ -13,8 +13,7 @@ from pathlib import Path
 
 from cqdata.entrypoints.python_api import (
     sync as api_sync,
-    list_series_tables,
-    list_event_tables,
+    list_tables,
     list_symbols,
     get_time_range,
     get_schema,
@@ -97,8 +96,9 @@ def tables_cmd(
     """
     查看本地已存储的所有数据表列表
     """
-    series_tables = list_series_tables(format=format)
-    event_tables = list_event_tables(format=format)
+    all_tables = list_tables(format=format)
+    series_tables = [t["table_id"] for t in all_tables if t["category"] == "timeseries"]
+    event_tables = [t["table_id"] for t in all_tables if t["category"] == "event"]
 
     typer.echo("==================== 本地数据表概览 ====================")
     typer.echo("【时间序列 (TimeSeries) 表】:")

@@ -12,7 +12,7 @@ def main():
     ev_table = "ashare.concept.eastmoney"
     print(f"=== 读取事件/板块数据 (table: {ev_table}) ===")
 
-    df_events = cqdata.read_events(
+    df_events = cqdata.read(
         table_id=ev_table,
         columns=["board_code", "board_name", "symbol", "stock_name"]
     )

@@ -5,10 +5,8 @@ cqdata/entrypoints/__init__.py
 """
 
 from cqdata.entrypoints.python_api import (
-    read_series,
-    read_events,
-    list_series_tables,
-    list_event_tables,
+    read,
+    list_tables,
     list_formats,
     list_symbols,
     get_time_range,
@@ -21,10 +19,8 @@ from cqdata.entrypoints.python_api import (
 )
 
 __all__ = [
-    "read_series",
-    "read_events",
-    "list_series_tables",
-    "list_event_tables",
+    "read",
+    "list_tables",
     "list_formats",
     "list_symbols",
     "get_time_range",

@@ -8,12 +8,12 @@
 
 | 文件名 | 说明 | 重点 API |
 | :--- | :--- | :--- |
-| [`01_quickstart.py`](01_quickstart.py) | 快速上手基础示例 | `cqdata.sync`, `cqdata.read_series` |
+| [`01_quickstart.py`](01_quickstart.py) | 快速上手基础示例 | `cqdata.sync`, `cqdata.read` |
 | [`02_sync_data.py`](02_sync_data.py) | 数据同步与调度示例 | `cqdata.sync` (支持不同存储格式/全量/增量) |
-| [`03_read_series.py`](03_read_series.py) | 时序数据切片读取 | `read_series` (**支持不复权 raw 与 后复权 adj**) |
-| [`04_read_events.py`](04_read_events.py) | 事件/静态数据切片读取 | `read_events` (概念板块/龙虎榜等) |
-| [`05_export_pandas.py`](05_export_pandas.py) | Pandas DataFrame 转码 | `read_series` / `read_events` (`as_pandas=True`) |
-| [`06_metadata_inspection.py`](06_metadata_inspection.py) | 元数据与存储盘点示例 | `cqdata.list_series_tables`, `get_time_range`, `get_schema` 等 |
+| [`03_read_series.py`](03_read_series.py) | 时序数据切片读取 | `cqdata.read` (**支持不复权 raw 与 后复权 adj**) |
+| [`04_read_events.py`](04_read_events.py) | 事件/静态数据切片读取 | `cqdata.read` (概念板块/龙虎榜等) |
+| [`05_export_pandas.py`](05_export_pandas.py) | Pandas DataFrame 转码 | `cqdata.read().to_pandas()` |
+| [`06_metadata_inspection.py`](06_metadata_inspection.py) | 元数据与存储盘点示例 | `cqdata.list_tables`, `get_time_range`, `get_schema` 等 |
 
 ---
 
