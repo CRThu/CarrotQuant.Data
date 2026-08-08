@@ -8,7 +8,6 @@ Python SDK API 接入面模块。
 from typing import List, Tuple, Dict, Union, Optional
 from pathlib import Path
 import polars as pl
-import pandas as pd
 
 from cqdata.service import data_reader as dr
 from cqdata.service import metadata_reader as mr
@@ -22,9 +21,8 @@ def read_series(
     end_date: Optional[str] = None,
     columns: Optional[Union[str, List[str]]] = None,
     format: str = "auto",
-    storage_root: Optional[Union[str, Path]] = None,
-    as_pandas: bool = False
-) -> Union[pl.DataFrame, pd.DataFrame]:
+    storage_root: Optional[Union[str, Path]] = None
+) -> pl.DataFrame:
     """
     切片读取【时间序列 (TimeSeries)】数据 (如 K 线、分笔)
     
@@ -36,10 +34,9 @@ def read_series(
         columns: 选挑字段清单 (例如 ['timestamp', 'close', 'volume'])
         format: 存储格式 ('auto', 'parquet', 'csv')
         storage_root: 自定义存储根目录
-        as_pandas: 是否转换为 pandas.DataFrame
         
     Returns:
-        pl.DataFrame 或 pd.DataFrame
+        pl.DataFrame
     """
     return dr.read_series(
         table_id=table_id,
@@ -48,8 +45,7 @@ def read_series(
         end_date=end_date,
         columns=columns,
         format=format,
-        storage_root=storage_root,
-        as_pandas=as_pandas
+        storage_root=storage_root
     )
 
 
@@ -60,9 +56,8 @@ def read_events(
     end_date: Optional[str] = None,
     columns: Optional[Union[str, List[str]]] = None,
     format: str = "auto",
-    storage_root: Optional[Union[str, Path]] = None,
-    as_pandas: bool = False
-) -> Union[pl.DataFrame, pd.DataFrame]:
+    storage_root: Optional[Union[str, Path]] = None
+) -> pl.DataFrame:
     """
     切片读取【事件/静态 (Event)】数据 (如板块成分股、龙虎榜、机构交易)
     
@@ -74,10 +69,9 @@ def read_events(
         columns: 选挑字段清单
         format: 存储格式 ('auto', 'parquet', 'csv')
         storage_root: 自定义存储根目录
-        as_pandas: 是否转换为 pandas.DataFrame
         
     Returns:
-        pl.DataFrame 或 pd.DataFrame
+        pl.DataFrame
     """
     return dr.read_events(
         table_id=table_id,
@@ -86,8 +80,7 @@ def read_events(
         end_date=end_date,
         columns=columns,
         format=format,
-        storage_root=storage_root,
-        as_pandas=as_pandas
+        storage_root=storage_root
     )
 
 

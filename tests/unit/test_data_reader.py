@@ -119,10 +119,4 @@ def test_read_events_basic(mock_stored_data, temp_storage_root):
     assert len(df) == 2
 
 
-def test_read_as_pandas(mock_stored_data, temp_storage_root):
-    """测试转化为 Pandas DataFrame"""
-    ts_table, _ = mock_stored_data
 
-    df_pd = read_series(ts_table, as_pandas=True, storage_root=temp_storage_root)
-    assert isinstance(df_pd, pd.DataFrame)
-    assert len(df_pd) == 4

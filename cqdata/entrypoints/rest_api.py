@@ -3,10 +3,12 @@ cqdata/entrypoints/rest_api.py
 
 FastAPI RESTful HTTP API 接入面模块。
 全面复用统一的 Service 探查与查询接口，为 Web 应用、微服务与跨语言客户端提供 HTTP 数据服务。
+数据切片查询统一使用 HTTP GET 形式，并提供标准的 page / page_size 分页支持。
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+import math
 from typing import List, Optional, Union
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
 from loguru import logger
 
@@ -23,7 +25,7 @@ from cqdata.entrypoints.python_api import (
     sync
 )
 
-app = FastAPI(title="CarrotQuant.Data REST API", version="1.0.0")
+app = FastAPI(title="CarrotQuant.Data REST API", version="1.1.0")
 
 # 全局并发锁集合，防止同一 table_id 重复并发同步
 ACTIVE_SYNC_TASKS = set()
@@ -39,24 +41,12 @@ class SyncRequest(BaseModel):
     symbol_limit: Optional[int] = None
 
 
-class SeriesQueryRequest(BaseModel):
-    table_id: str
-    symbols: Optional[Union[str, List[str]]] = None
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    columns: Optional[Union[str, List[str]]] = None
-    format: str = "auto"
-    limit: Optional[int] = 5000
-
-
-class EventsQueryRequest(BaseModel):
-    table_id: str
-    symbols: Optional[Union[str, List[str]]] = None
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    columns: Optional[Union[str, List[str]]] = None
-    format: str = "auto"
-    limit: Optional[int] = 5000
+def parse_comma_param(val: Optional[str]) -> Optional[List[str]]:
+    """将逗号分隔的 Query 字符串解析为 List[str] 清单"""
+    if not val:
+        return None
+    items = [item.strip() for item in val.split(",") if item.strip()]
+    return items if items else None
 
 
 def run_sync_task(
@@ -132,57 +122,99 @@ async def api_get_row_count(table_id: str, format: str = "auto"):
     return {"table_id": table_id, "row_count": get_row_count(table_id, format=format)}
 
 
-# ==================== 数据切片查询 Endpoints ====================
+# ==================== 数据切片查询 Endpoints (纯 HTTP GET 形式) ====================
 
-@app.post("/api/v1/query/series")
-async def api_query_series(req: SeriesQueryRequest):
-    """切片查询时间序列数据 (K线/分笔)"""
+@app.get("/api/v1/query/series")
+async def api_query_series(
+    table_id: str = Query(..., description="数据表 ID (如 ashare.kline.1d.raw.baostock)"),
+    symbols: Optional[str] = Query(None, description="股票代码或以逗号分隔的代码列表 (如 sh.600000,sz.000001)"),
+    start_date: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    columns: Optional[str] = Query(None, description="选挑字段清单，以逗号分隔 (如 timestamp,close)"),
+    format: str = Query("auto", description="存储格式 (auto, parquet, csv)"),
+    page: int = Query(1, ge=1, description="当前页码 (从1开始)"),
+    page_size: int = Query(5000, ge=1, description="每页记录数")
+):
+    """
+    切片查询【时间序列 (TimeSeries)】数据 (K线/分笔)，支持 HTTP GET 查询参数与物理分页
+    """
     try:
+        parsed_symbols = parse_comma_param(symbols)
+        parsed_columns = parse_comma_param(columns)
+
         df = read_series(
-            table_id=req.table_id,
-            symbols=req.symbols,
-            start_date=req.start_date,
-            end_date=req.end_date,
-            columns=req.columns,
-            format=req.format,
-            as_pandas=False
+            table_id=table_id,
+            symbols=parsed_symbols,
+            start_date=start_date,
+            end_date=end_date,
+            columns=parsed_columns,
+            format=format
         )
-        if req.limit and not df.is_empty():
-            df = df.limit(req.limit)
+
+        total = df.height
+        total_pages = math.ceil(total / page_size) if total > 0 else 0
+        offset = (page - 1) * page_size
+
+        sliced_df = df.slice(offset, page_size) if not df.is_empty() else df
 
         return {
-            "table_id": req.table_id,
-            "count": df.height,
-            "data": df.to_dicts() if not df.is_empty() else []
+            "table_id": table_id,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "count": sliced_df.height,
+            "data": sliced_df.to_dicts() if not sliced_df.is_empty() else []
         }
     except Exception as e:
-        logger.error(f"[REST API] query_series error: {e}")
+        logger.error(f"[REST API] GET query_series error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/query/events")
-async def api_query_events(req: EventsQueryRequest):
-    """切片查询事件/静态数据"""
+@app.get("/api/v1/query/events")
+async def api_query_events(
+    table_id: str = Query(..., description="数据表 ID (如 ashare.dragon_tiger.eastmoney)"),
+    symbols: Optional[str] = Query(None, description="股票代码或以逗号分隔的代码列表"),
+    start_date: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    columns: Optional[str] = Query(None, description="选挑字段清单，以逗号分隔"),
+    format: str = Query("auto", description="存储格式 (auto, parquet, csv)"),
+    page: int = Query(1, ge=1, description="当前页码 (从1开始)"),
+    page_size: int = Query(5000, ge=1, description="每页记录数")
+):
+    """
+    切片查询【事件/静态 (Event)】数据 (板块成分股/龙虎榜等)，支持 HTTP GET 查询参数与物理分页
+    """
     try:
+        parsed_symbols = parse_comma_param(symbols)
+        parsed_columns = parse_comma_param(columns)
+
         df = read_events(
-            table_id=req.table_id,
-            symbols=req.symbols,
-            start_date=req.start_date,
-            end_date=req.end_date,
-            columns=req.columns,
-            format=req.format,
-            as_pandas=False
+            table_id=table_id,
+            symbols=parsed_symbols,
+            start_date=start_date,
+            end_date=end_date,
+            columns=parsed_columns,
+            format=format
         )
-        if req.limit and not df.is_empty():
-            df = df.limit(req.limit)
+
+        total = df.height
+        total_pages = math.ceil(total / page_size) if total > 0 else 0
+        offset = (page - 1) * page_size
+
+        sliced_df = df.slice(offset, page_size) if not df.is_empty() else df
 
         return {
-            "table_id": req.table_id,
-            "count": df.height,
-            "data": df.to_dicts() if not df.is_empty() else []
+            "table_id": table_id,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "count": sliced_df.height,
+            "data": sliced_df.to_dicts() if not sliced_df.is_empty() else []
         }
     except Exception as e:
-        logger.error(f"[REST API] query_events error: {e}")
+        logger.error(f"[REST API] GET query_events error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -190,7 +222,7 @@ async def api_query_events(req: EventsQueryRequest):
 
 @app.post("/api/v1/sync")
 async def api_sync_data(request: SyncRequest, background_tasks: BackgroundTasks):
-    """异步触发数据同步"""
+    """异步触发数据同步 (写/非幂等操作，保留 HTTP POST 方法)"""
     processing_tables = []
     locked_tables = []
 

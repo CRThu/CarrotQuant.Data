@@ -82,8 +82,7 @@ class DataReader:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         columns: Optional[Union[str, List[str]]] = None,
-        format: str = "auto",
-        as_pandas: bool = False
+        format: str = "auto"
     ):
         """
         读取【时间序列 (TimeSeries)】数据
@@ -95,10 +94,9 @@ class DataReader:
             end_date: 结束日期字符串 (格式 'YYYY-MM-DD' 或 ISO)
             columns: 列挑选清单 (如 ['timestamp', 'close', 'volume'])，降低开销
             format: 存储格式 ('auto', 'parquet', 'csv')
-            as_pandas: 是否转换为 pandas.DataFrame (默认 False，返回 polars.DataFrame)
             
         Returns:
-            pl.DataFrame 或 pd.DataFrame: 查询切片后的数据
+            pl.DataFrame: 查询切片后的数据
         """
         return self._read_data(
             table_id=table_id,
@@ -107,8 +105,7 @@ class DataReader:
             start_date=start_date,
             end_date=end_date,
             columns=columns,
-            format=format,
-            as_pandas=as_pandas
+            format=format
         )
 
     def read_events(
@@ -118,8 +115,7 @@ class DataReader:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         columns: Optional[Union[str, List[str]]] = None,
-        format: str = "auto",
-        as_pandas: bool = False
+        format: str = "auto"
     ):
         """
         读取【事件/静态 (Event)】数据
@@ -131,10 +127,9 @@ class DataReader:
             end_date: 结束日期字符串
             columns: 列挑选清单
             format: 存储格式 ('auto', 'parquet', 'csv')
-            as_pandas: 是否转换为 pandas.DataFrame (默认 False，返回 polars.DataFrame)
             
         Returns:
-            pl.DataFrame 或 pd.DataFrame: 查询切片后的数据
+            pl.DataFrame: 查询切片后的数据
         """
         return self._read_data(
             table_id=table_id,
@@ -143,8 +138,7 @@ class DataReader:
             start_date=start_date,
             end_date=end_date,
             columns=columns,
-            format=format,
-            as_pandas=as_pandas
+            format=format
         )
 
     def _read_data(
@@ -155,8 +149,7 @@ class DataReader:
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         columns: Optional[Union[str, List[str]]] = None,
-        format: str = "auto",
-        as_pandas: bool = False
+        format: str = "auto"
     ):
         """底层统一通用切片与加载核心实现"""
         # 1. 规范化 symbols 参数
@@ -269,14 +262,6 @@ class DataReader:
             # 按需列挑选 (columns)
             result_df = self._apply_column_selection(result_df, columns)
 
-        # 9. 转 Pandas 表达
-        if as_pandas:
-            try:
-                return result_df.to_pandas()
-            except (ModuleNotFoundError, ImportError):
-                import pandas as pd
-                return pd.DataFrame(result_df.to_dict(as_series=False))
-
         return result_df
 
 
@@ -288,8 +273,7 @@ def read_series(
     end_date: Optional[str] = None,
     columns: Optional[Union[str, List[str]]] = None,
     format: str = "auto",
-    storage_root: Optional[Union[str, Path]] = None,
-    as_pandas: bool = False
+    storage_root: Optional[Union[str, Path]] = None
 ):
     """读取时间序列数据的快捷函数"""
     reader = DataReader(storage_root=storage_root)
@@ -299,8 +283,7 @@ def read_series(
         start_date=start_date,
         end_date=end_date,
         columns=columns,
-        format=format,
-        as_pandas=as_pandas
+        format=format
     )
 
 
@@ -311,8 +294,7 @@ def read_events(
     end_date: Optional[str] = None,
     columns: Optional[Union[str, List[str]]] = None,
     format: str = "auto",
-    storage_root: Optional[Union[str, Path]] = None,
-    as_pandas: bool = False
+    storage_root: Optional[Union[str, Path]] = None
 ):
     """读取事件/静态数据的快捷函数"""
     reader = DataReader(storage_root=storage_root)
@@ -322,6 +304,5 @@ def read_events(
         start_date=start_date,
         end_date=end_date,
         columns=columns,
-        format=format,
-        as_pandas=as_pandas
+        format=format
     )

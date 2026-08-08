@@ -14,51 +14,29 @@ import cqdata
 from cqdata.entrypoints import python_api
 
 
-def test_read_series_polars_and_pandas():
-    """测试 read_series 支持返回 Polars 与 Pandas 两种 DataFrame"""
+def test_read_series_polars():
+    """测试 read_series 返回 Polars DataFrame"""
     mock_pl_df = pl.DataFrame({
+        "timestamp": [1704067200000],
         "symbol": ["sh.600000"],
-        "timestamp": [1700000000000],
-        "close": [10.0]
+        "close": [10.5]
     })
-    mock_pd_df = pd.DataFrame({
-        "symbol": ["sh.600000"],
-        "timestamp": [1700000000000],
-        "close": [10.0]
-    })
-
-    with patch("cqdata.service.data_reader.read_series", return_value=mock_pl_df) as mock_dr_read:
-        # 1. 默认 Polars
+    with patch("cqdata.service.data_reader.read_series", return_value=mock_pl_df):
         res_pl = python_api.read_series("ashare.kline.1d.raw.baostock", symbols="sh.600000")
         assert isinstance(res_pl, pl.DataFrame)
         assert res_pl.height == 1
 
-        # 2. Pandas 转换
-        mock_dr_read.return_value = mock_pd_df
-        res_pd = python_api.read_series("ashare.kline.1d.raw.baostock", symbols="sh.600000", as_pandas=True)
-        assert isinstance(res_pd, pd.DataFrame)
-        assert len(res_pd) == 1
 
-
-def test_read_events_polars_and_pandas():
-    """测试 read_events 支持返回 Polars 与 Pandas 两种 DataFrame"""
+def test_read_events_polars():
+    """测试 read_events 返回 Polars DataFrame"""
     mock_pl_df = pl.DataFrame({
         "symbol": ["sh.600000"],
         "board_name": ["银行"]
     })
-    mock_pd_df = pd.DataFrame({
-        "symbol": ["sh.600000"],
-        "board_name": ["银行"]
-    })
-
-    with patch("cqdata.service.data_reader.read_events", return_value=mock_pl_df) as mock_dr_read:
+    with patch("cqdata.service.data_reader.read_events", return_value=mock_pl_df):
         res_pl = python_api.read_events("ashare.concept.eastmoney")
         assert isinstance(res_pl, pl.DataFrame)
         assert res_pl.height == 1
-
-        mock_dr_read.return_value = mock_pd_df
-        res_pd = python_api.read_events("ashare.concept.eastmoney", as_pandas=True)
-        assert isinstance(res_pd, pd.DataFrame)
 
 
 def test_list_and_get_metadata_functions():
