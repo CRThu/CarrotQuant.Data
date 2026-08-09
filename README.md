@@ -11,8 +11,9 @@ CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的
 - **灵活的存储格式**：原生支持 `csv` 和基于列式存储的高效 `parquet` 格式，以满足不同体量的数据读写需求。
 - **增量与全量同步**：基于时间戳水位线的同步机制，支持从断点智能续接（增量拉取），以及强制全量覆盖更新刷新数据。
 - **现代化多通道接入支持**：
+  - **React Web 终端**：现代暗黑极速金融终端 (`web/`)，基于 Bun + Vite 6 + React 19 + TradingView Lightweight Charts (v4 3-Pane 时间轴强同步) + 方案 A 概念/行业成分股 0 延时穿透。
   - **Python SDK**：简单直观的 `import cqdata` API，支持高性能跨年份数据切片读取 (`cqdata.read`)、`columns` 按需字段选择、格式识别与元数据探查。
-  - **命令行工具 (CLI)**：统一的 `cqdata` 命令行工具，提供数据同步 (`cqdata sync`)、数据表探索 (`cqdata tables`)、元数据查询 (`cqdata info`) 与 HTTP 服务启动 (`cqdata serve`)。
+  - **命令行工具 (CLI)**：统一的 `cqdata` 命令行工具，提供数据同步 (`cqdata sync`)、数据表探索 (`cqdata tables`)、元数据查询 (`cqdata info`) 与 HTTP 服务启动 (`cqdata server`)。
   - **REST API 服务**：基于 FastAPI 的 REST API，为远程微服务提供 HTTP 数据切片与同步触发。
 - **优秀的底层性能**：使用 [Polars](https://pola.rs/) 库进行高性能的数据加工和清洗。
 
@@ -27,6 +28,9 @@ CarrotQuant.Data/
 │   ├── service/      # 核心业务逻辑 (DataReader, MetadataReader, SyncManager 等)
 │   ├── storage/      # 本地持久化存储 (CSVStorage, ParquetStorage)
 │   └── utils/        # 通用工具箱
+├── web/              # React Web 金融终端 (Bun + Vite 6 + React 19 + TradingView 3-Pane)
+│   ├── src/          # 视图 View、组件 Component、Hooks 与转换服务
+│   └── package.json
 ├── scripts/
 │   ├── wizard.py         # 交互向导脚本 (也可通过 cqdata wizard 运行)
 │   └── download_tdx.py   # 通达信数据下载脚本
@@ -254,6 +258,29 @@ cqdata server --port 8000 -c ./config.yaml
 | `/api/v1/sync` | POST | 异步触发后台数据同步任务 |
 | `/api/v1/tasks` | GET | 查询活跃同步任务状态 |
 
+### 方式五：启动 React Web 极速金融终端 (`web/`)
+
+```bash
+# 1. 启动后端 REST API 服务
+cqdata server --port 8000
+
+# 2. 启动 React 前端服务
+cd web
+bun install
+bun dev
+```
+
+打开浏览器访问 `http://localhost:5173/` 体验 TradingView 3-Pane K线强同步与概念/行业板块 0 延时穿透。
+详细使用指南与架构说明请参阅 [docs/web_terminal_guide.md](docs/web_terminal_guide.md)。
+
+## 📚 相关文档 (Documentation)
+
+- [Python SDK 使用指南](docs/python_sdk_guide.md)
+- [REST API 接口文档](docs/rest_api_guide.md)
+- [React Web 终端指南](docs/web_terminal_guide.md)
+- [示例代码与脚本](examples/README.md)
+
 ## 📝 许可证 (License)
 
 本项目遵循 [Apache License 2.0](LICENSE) - 详细请参阅 LICENSE 文件。
+

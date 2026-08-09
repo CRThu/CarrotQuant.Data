@@ -12,9 +12,11 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 - 支持 Baostock（日线/5分线/复权因子）、东方财富（概念/行业板块/龙虎榜/机构交易）、通达信（日线/5分/1分线）
 - 支持 CSV 和 Parquet 两种存储格式
 - 基于时间戳水位线的增量同步与断点续接
-- 三种入口：Python SDK (OOP `cqdata.ashare.kline.get()` / 统一 `cqdata.read()`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API
+- 四种入口：Python SDK (OOP `cqdata.ashare.kline.get()` / 统一 `cqdata.read()`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API、**极速 React Web 终端 (`web/` TradingView 3-Pane 图表 + 方案 A 概念穿透)**
 
-**技术栈**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, PyYAML
+**技术栈**：
+- **后端**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, PyYAML
+- **前端**：Bun, React 19, Vite 6, TypeScript 7, Tailwind CSS v4, TradingView Lightweight Charts (v4 3-Pane 时间轴强同步)
 
 ---
 
@@ -34,6 +36,13 @@ CarrotQuant.Data/
 │   ├── service/                  # 业务逻辑层 (SyncManager, DataReader, MetadataReader, TaskPlanner, MetadataManager)
 │   ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
 │   └── utils/                    # 工具箱 (logger_utils, time_utils)
+├── web/                          # React Web 金融终端 frontend (Bun + Vite 6 + Tailwind v4 + TradingView 3-Pane)
+│   ├── src/
+│   │   ├── components/           # HeaderBar, TradingViewKLineChart, ErrorBoundary, SyncModal 等
+│   │   ├── views/                # StockListView, ConceptIndustryView (方案A穿透), StockDetailView
+│   │   ├── services/             # apiClient, transformers (2D矩阵转K线), indicators (MA/MACD/BS点)
+│   │   └── hooks/                # useMarketData, useConceptData, useTables
+│   └── package.json
 ├── scripts/                      # 辅助脚本 (wizard.py 交互向导, download_tdx.py)
 ├── tests/                        # 测试集 (unit, integration)
 └── pyproject.toml                # 项目依赖与构建配置
@@ -48,6 +57,7 @@ CarrotQuant.Data/
 ```mermaid
 graph TB
     subgraph Entrypoints["Entrypoints 接入层 (cqdata/entrypoints)"]
+        WEB["web/ (React Web 终端)"]
         PYTHON_API["python_api.py (Python SDK)"]
         CLI["cli.py (Typer CLI)"]
         REST["rest_api.py (FastAPI REST)"]

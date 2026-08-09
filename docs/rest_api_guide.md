@@ -2,6 +2,9 @@
 
 `cqdata server` 提供了基于 FastAPI 的 RESTful HTTP 接口，方便 Web 前端、微服务架构与非 Python 语言客户端（如 Go, C++, Rust, Node.js, Java）快速集成金融数据同步与切片查询服务。
 
+> [!NOTE]
+> 项目内置了官方标准 React Web 前端实现（位于 `web/` 目录），基于该 REST API 提供了 TradingView 3-Pane 强同步 K 线与板块概念 0 延时穿透。详情请参阅 [React Web 终端使用指南](web_terminal_guide.md)。
+
 ---
 
 ## 1. 核心设计原则与数据响应协议
