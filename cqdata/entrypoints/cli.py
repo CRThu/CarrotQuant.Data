@@ -56,7 +56,7 @@ def sync_cmd(
 
     if output:
         from cqdata.config import settings
-        settings.storage_path = output
+        settings.data_dir = output
 
     api_sync(
         table_ids=table_list,
@@ -77,7 +77,7 @@ def server_cmd(
     reload: bool = typer.Option(False, "--reload", help="是否开启热重载"),
     open_browser: bool = typer.Option(False, "--open", "-o", help="服务启动后自动调起系统默认浏览器访问 Web 终端"),
     config: Optional[str] = typer.Option(None, "--config", "-c", help="加载指定 YAML 配置文件路径"),
-    storage_path: Optional[str] = typer.Option(None, "--storage-path", help="指定存储根目录")
+    data_dir: Optional[str] = typer.Option(None, "--data-dir", help="指定数据存储根目录")
 ):
     """
     启动 FastAPI REST API HTTP 服务与 React Web 终端 (例如 cqdata server -p 8888 --open)
@@ -89,8 +89,8 @@ def server_cmd(
     from cqdata.config import settings
     if config:
         settings.configure(config)
-    if storage_path:
-        settings.storage_path = storage_path
+    if data_dir:
+        settings.data_dir = data_dir
 
     if open_browser:
         display_host = "localhost" if host in ("0.0.0.0", "127.0.0.1") else host
@@ -98,7 +98,7 @@ def server_cmd(
         typer.echo(f"[+] 正在准备自动唤醒默认浏览器打开 Web 终端: {url}")
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 
-    typer.echo(f"[+] Starting cqdata REST API server on http://{host}:{port} (storage_path: {settings.storage_path})")
+    typer.echo(f"[+] Starting cqdata REST API server on http://{host}:{port} (data_dir: {settings.data_dir})")
     uvicorn.run("cqdata.entrypoints.rest_api:app", host=host, port=port, reload=reload)
 
 

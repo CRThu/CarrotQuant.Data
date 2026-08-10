@@ -133,10 +133,24 @@ graph TB
 
 CarrotQuant.Data 秉承 **“显式胜于隐式 (Explicit is better than implicit)”** 的配置契约，支持以下显式加载与覆盖方式（优先级从高到低）：
 
-1. **代码程序化修改**：直接设置单例属性 `cqdata.settings.storage_path = "/path/to/storage"` 或调用 `cqdata.configure("/path/to/config.yaml")`（最高优先级）。
-2. **环境变量 `CQDATA_STORAGE_PATH`**：如 `export CQDATA_STORAGE_PATH="/my/data/path"`（适合 Docker / CLI / 自动化部署）。
+1. **代码程序化修改**：直接设置单例属性 `cqdata.settings.data_dir = "/path/to/data"` 或调用 `cqdata.configure("/path/to/config.yaml")`（最高优先级）。
+2. **环境变量 `CQDATA_DATA_DIR`**：如 `export CQDATA_DATA_DIR="/my/data/path"`（适合 Docker / CLI / 自动化部署）。
 3. **环境变量 `CQDATA_CONFIG_PATH`**：指定自定义 YAML 配置文件路径，如 `export CQDATA_CONFIG_PATH="/path/to/config.yaml"`。
-4. **内置默认配置**：默认存储路径 `storage_path = "storage_root"`，默认日志 `log_dir = "logs"`, `log_level = "INFO"`。
+4. **内置默认配置**：默认存储路径 `data_dir = "data"`，默认日志 `log_dir = "logs"`, `log_level = "INFO"`。
+
+完整配置文件结构参考 [config.yaml.sample](file:///d:/Quant/CarrotQuant.Data/config/config.yaml.sample)：
+
+```yaml
+# config.yaml
+data_dir: "data"       # 数据存储根目录
+log_dir: "logs"        # 日志输出目录
+log_level: "INFO"      # 日志级别 (DEBUG/INFO/WARNING/ERROR)
+
+# OOP 访问层全局默认配置链
+defaults:
+  source: "baostock"
+  format: "parquet"
+```
 
 ---
 
@@ -152,8 +166,8 @@ import cqdata
 # 0. (可选) 从 YAML 配置文件加载全局配置
 cqdata.configure("./config.yaml")
 
-# 或者直接修饰属性
-cqdata.settings.storage_path = "./custom_storage"
+# 或者直接修改属性
+cqdata.settings.data_dir = "./custom_data"
 
 # 1. OOP 便捷读取 (界面极简，干净清爽)
 df_kline = cqdata.ashare.kline.get(symbols="sh.600000", start_date="2024-01-01")

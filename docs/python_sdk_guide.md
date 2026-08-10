@@ -324,6 +324,17 @@ cqdata.sync(
 cqdata.configure("./config.yaml")
 ```
 
+- **配置文件格式参考 ([config.yaml.sample](file:///d:/Quant/CarrotQuant.Data/config/config.yaml.sample))**:
+  ```yaml
+  data_dir: "data"       # 数据存储根路径
+  log_dir: "logs"        # 日志输出目录
+  log_level: "INFO"      # 日志输出级别
+
+  defaults:              # OOP 访问层全局默认值
+    source: "baostock"
+    format: "parquet"
+  ```
+
 - **参数说明 (Args)**:
   - `config_path` (`str` 或 `Path`, 必填): YAML 配置文件路径。
 - **返回值 (Returns)**:
@@ -337,16 +348,16 @@ cqdata.configure("./config.yaml")
 
 ```python
 # 1. 动态查看属性
-print(cqdata.settings.storage_path)
+print(cqdata.settings.data_dir)
 print(cqdata.settings.log_level)
 
 # 2. 动态修改属性
-cqdata.settings.storage_path = "/path/to/my_storage"
+cqdata.settings.data_dir = "/path/to/my_data"
 cqdata.settings.log_level = "DEBUG"
 ```
 
 - **常用属性 (Attributes)**:
-  - `storage_path` (`str`): 本地持久化数据存储根目录 (默认 `"storage_root"`)。
+  - `data_dir` (`str`): 本地持久化数据存储根目录 (默认 `"data"`)。
   - `log_dir` (`str`): 日志存放目录 (默认 `"logs"`)。
   - `log_level` (`str`): 控制台与文件日志输出级别 (默认 `"INFO"`)。
   - `defaults` (`dict`): 加载的 YAML 默认配置字典。

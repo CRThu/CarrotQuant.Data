@@ -39,7 +39,7 @@ def test_default_config_chain():
     assert table_def.resolve_source() == "tdx"
 
 
-def test_accessor_default_args(mock_baostock, temp_storage_root):
+def test_accessor_default_args(mock_baostock, temp_data_dir):
     """测试 OOP 表的具体 get() 方法默认参数与路径拼接"""
     with patch("cqdata.entrypoints.accessors.base.read") as mock_read:
         mock_read.return_value = pl.DataFrame({"timestamp": [1704067200000], "close": [10.0]})
@@ -94,12 +94,12 @@ def test_unsupported_table_id_error():
 def test_configure_from_yaml(tmp_path):
     """测试 cqdata.configure 指定配置文件路径加载"""
     custom_yaml = tmp_path / "custom_config.yaml"
-    custom_yaml.write_text("storage_path: '/custom/storage'\ndefaults:\n  source: 'tdx'\n", encoding="utf-8")
+    custom_yaml.write_text("data_dir: '/custom/storage'\ndefaults:\n  source: 'tdx'\n", encoding="utf-8")
 
     settings = cqdata.configure(custom_yaml)
-    assert settings.storage_path == "/custom/storage"
+    assert settings.data_dir == "/custom/storage"
     assert cqdata.default.resolve_source() == "tdx"
 
     # 恢复默认设置
-    cqdata.settings.storage_path = "storage_root"
+    cqdata.settings.data_dir = "data"
     cqdata.default.source = None

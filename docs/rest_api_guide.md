@@ -35,7 +35,7 @@
 | 分类 | 端点路径 | HTTP 方法 | 功能说明 |
 | :--- | :--- | :---: | :--- |
 | **前端 UI 托管** | `/` | `GET` | 内置托管的 React Web 金融终端主界面（支持 SPA 路由） |
-| **系统探针** | `/health` | `GET` | 服务运行状态探针与 `storage_path` 探查 |
+| **系统探针** | `/health` | `GET` | 服务运行状态探针与 `data_dir` 探查 |
 | **元数据探查** | `/tables` | `GET` | 列出本地所有数据表清单（平铺对象数组，含 `category` 分类） |
 | | `/tables/{table_id}/formats` | `GET` | 获取某数据表已落地的存储格式列表 (`["parquet", "csv"]`) |
 | | `/tables/{table_id}/symbols` | `GET` | 获取某数据表已落地的证券/代码唯一清单 |
@@ -58,7 +58,7 @@
 {
   "status": "ok",
   "version": "1.1.0",
-  "storage_root": "D:\\Quant\\CarrotQuant.Data\\storage_root",
+  "data_dir": "D:\\Quant\\CarrotQuant.Data\\data",
   "active_tasks": 0
 }
 ```

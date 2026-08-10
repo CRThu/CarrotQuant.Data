@@ -89,11 +89,11 @@ class FakeEmptyProvider:
 class TestUpdateMetadataTS:
     """测试 _update_metadata 的 TS 类型逻辑"""
 
-    def test_ts_metadata_has_symbol_count_and_time_steps(self, temp_storage_root):
+    def test_ts_metadata_has_symbol_count_and_time_steps(self, temp_data_dir):
         """TS 类型元数据应包含 symbol_count 和 time_steps"""
         table_id = "test.update.ts.stats"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider(symbols=["sh.600000", "sz.000001"])
 
@@ -107,11 +107,11 @@ class TestUpdateMetadataTS:
                 assert "time_steps" in stats
                 assert stats["time_steps"] >= 1
 
-    def test_ts_metadata_structure(self, temp_storage_root):
+    def test_ts_metadata_structure(self, temp_data_dir):
         """TS 类型元数据应包含完整的元信息字段"""
         table_id = "test.update.ts.structure"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider()
 
@@ -123,6 +123,7 @@ class TestUpdateMetadataTS:
                 assert metadata["table_id"] == table_id
                 assert metadata["category"] == "timeseries"
                 assert metadata["format"] == "parquet"
+                assert metadata.get("version") == 1
                 assert "partition" in metadata
                 assert "layout" in metadata
                 assert "schema" in metadata
@@ -141,11 +142,11 @@ class TestUpdateMetadataTS:
 class TestUpdateMetadataEV:
     """测试 _update_metadata 的 EV 类型逻辑"""
 
-    def test_ev_metadata_no_symbol_count_no_time_steps(self, temp_storage_root):
+    def test_ev_metadata_no_symbol_count_no_time_steps(self, temp_data_dir):
         """EV 类型元数据不应包含 symbol_count 和 time_steps"""
         table_id = "test.update.ev.structure"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeEVProvider()
 
@@ -162,11 +163,11 @@ class TestUpdateMetadataEV:
                 assert "start_timestamp" in stats
                 assert "end_timestamp" in stats
 
-    def test_ev_metadata_structure(self, temp_storage_root):
+    def test_ev_metadata_structure(self, temp_data_dir):
         """EV 类型元数据基础字段验证"""
         table_id = "test.update.ev.basic"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeEVProvider()
 
@@ -181,11 +182,11 @@ class TestUpdateMetadataEV:
 class TestUpdateMetadataSilent:
     """测试 _update_metadata 静默拦截逻辑"""
 
-    def test_initial_sync_no_data_no_metadata(self, temp_storage_root):
+    def test_initial_sync_no_data_no_metadata(self, temp_data_dir):
         """场景 A：初次同步无数据 → 不创建 metadata.json"""
         table_id = "test.update.silent.initial"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeEmptyProvider()
 
@@ -199,15 +200,15 @@ class TestUpdateMetadataSilent:
                 path = sync_mgr.metadata_mgr._get_metadata_path(table_id, "csv")
                 assert not path.exists(), "metadata.json 文件不应存在"
 
-    def test_incremental_sync_no_data_keeps_existing(self, temp_storage_root):
+    def test_incremental_sync_no_data_keeps_existing(self, temp_data_dir):
         """场景 B：增量同步无数据但有现有元数据 → 保持不变"""
         table_id = "test.update.silent.incremental"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
 
             # 手动注入数据和元数据
-            storage = CSVStorage(str(temp_storage_root / "csv"))
+            storage = CSVStorage(str(temp_data_dir / "csv"))
             test_df = pl.DataFrame({
                 "timestamp": [1704067200000],
                 "datetime": ["2024-01-01T00:00:00.000+08:00"],
@@ -242,15 +243,15 @@ class TestUpdateMetadataSilent:
                 assert metadata_path.stat().st_mtime == initial_mtime
                 assert metadata_path.read_text(encoding="utf-8") == initial_content
 
-    def test_no_new_data_with_existing_metadata_skips_update(self, temp_storage_root):
+    def test_no_new_data_with_existing_metadata_skips_update(self, temp_data_dir):
         """无新数据写入且已有元数据 → 跳过元数据更新"""
         table_id = "test.update.silent.no_new"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
 
             # 手动注入数据和元数据
-            storage = CSVStorage(str(temp_storage_root / "csv"))
+            storage = CSVStorage(str(temp_data_dir / "csv"))
             test_df = pl.DataFrame({
                 "timestamp": [1704067200000],
                 "datetime": ["2024-01-01T00:00:00.000+08:00"],
@@ -283,11 +284,11 @@ class TestUpdateMetadataSilent:
 class TestUpdateMetadataForceRefresh:
     """测试 _update_metadata force_refresh 逻辑"""
 
-    def test_force_refresh_updates_metadata(self, temp_storage_root):
+    def test_force_refresh_updates_metadata(self, temp_data_dir):
         """force_refresh=True 时应强制更新元数据"""
         table_id = "test.update.force"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider()
 
@@ -308,11 +309,11 @@ class TestUpdateMetadataForceRefresh:
 class TestUpdateMetadataSchema:
     """测试 _update_metadata schema 提取逻辑"""
 
-    def test_schema_extracted_from_last_success_df(self, temp_storage_root):
+    def test_schema_extracted_from_last_success_df(self, temp_data_dir):
         """schema 应从最后一次成功的 DataFrame 中提取"""
         table_id = "test.update.schema"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider()
 
@@ -329,11 +330,11 @@ class TestUpdateMetadataSchema:
                 assert schema["symbol"] == "String"
                 assert schema["close"] == "Float64"
 
-    def test_schema_preserves_across_updates(self, temp_storage_root):
+    def test_schema_preserves_across_updates(self, temp_data_dir):
         """多次更新后 schema 应保持一致"""
         table_id = "test.update.schema.preserve"
 
-        with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider()
 

@@ -71,14 +71,14 @@ class FakeEVProvider(BaseProvider):
         })
 
 
-def test_metadata_and_sync_flow_csv(temp_storage_root):
+def test_metadata_and_sync_flow_csv(temp_data_dir):
     """
     测试元数据与同步流程的闭环集成（CSV 格式）
     通过 SyncManager 完整流程写入数据，验证物理统计与元数据的一致性
     """
     table_id = "test.metadata.sync.csv"
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -100,18 +100,18 @@ def test_metadata_and_sync_flow_csv(temp_storage_root):
             assert "time_steps" in stats, "TS 类型应包含 time_steps"
 
             # 验证物理统计与元数据一致
-            storage = CSVStorage(str(temp_storage_root / "csv"))
+            storage = CSVStorage(str(temp_data_dir / "csv"))
             assert storage.get_total_bars(table_id) == stats["total_bars"]
             assert len(storage.get_all_symbols(table_id)) == stats["symbol_count"]
 
 
-def test_metadata_and_sync_flow_parquet(temp_storage_root):
+def test_metadata_and_sync_flow_parquet(temp_data_dir):
     """
     测试元数据与同步流程的闭环集成（Parquet 格式）
     """
     table_id = "test.metadata.sync.parquet"
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider(symbols=["sh.600000", "sz.000001", "sz.000002"])
 
@@ -126,7 +126,7 @@ def test_metadata_and_sync_flow_parquet(temp_storage_root):
             assert "time_steps" in stats
 
             # 验证物理统计与元数据一致
-            storage = ParquetStorage(str(temp_storage_root / "parquet"))
+            storage = ParquetStorage(str(temp_data_dir / "parquet"))
             assert storage.get_total_bars(table_id) == stats["total_bars"]
             assert len(storage.get_all_symbols(table_id)) == stats["symbol_count"]
             time_range = storage.get_global_time_range(table_id)
@@ -134,13 +134,13 @@ def test_metadata_and_sync_flow_parquet(temp_storage_root):
             assert stats["end_timestamp"] == time_range[1]
 
 
-def test_metadata_physical_stats_consistency(temp_storage_root):
+def test_metadata_physical_stats_consistency(temp_data_dir):
     """
     测试元数据与物理统计的一致性
     """
     table_id = "test.metadata.consistency"
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -151,7 +151,7 @@ def test_metadata_physical_stats_consistency(temp_storage_root):
             stats = metadata["statistics"]
 
             # 重新通过物理巡检获取统计
-            storage = CSVStorage(str(temp_storage_root / "csv"))
+            storage = CSVStorage(str(temp_data_dir / "csv"))
             physical_total = storage.get_total_bars(table_id)
             physical_symbols = storage.get_all_symbols(table_id)
             physical_timestamps = storage.get_unique_timestamps(table_id)
@@ -161,13 +161,13 @@ def test_metadata_physical_stats_consistency(temp_storage_root):
             assert stats["time_steps"] == len(physical_timestamps), "元数据 time_steps 应与物理统计完全一致"
 
 
-def test_metadata_schema_validation(temp_storage_root):
+def test_metadata_schema_validation(temp_data_dir):
     """
     测试元数据 schema 字段的正确性
     """
     table_id = "test.metadata.schema"
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -189,7 +189,7 @@ def test_metadata_schema_validation(temp_storage_root):
             assert schema["close"] == "Float64"
 
 
-def test_metadata_time_range_accuracy(temp_storage_root):
+def test_metadata_time_range_accuracy(temp_data_dir):
     """
     测试元数据时间范围的准确性
     """
@@ -197,7 +197,7 @@ def test_metadata_time_range_accuracy(temp_storage_root):
     start_ts = parse_date_to_ts("2024-01-01")
     end_ts = parse_date_to_ts("2024-01-02")
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -213,26 +213,26 @@ def test_metadata_time_range_accuracy(temp_storage_root):
                 f"元数据 end_timestamp 应为 {align_to_day_end(end_ts)}，实际 {stats['end_timestamp']}"
 
 
-def test_metadata_empty_storage(temp_storage_root):
+def test_metadata_empty_storage(temp_data_dir):
     """
     测试空存储的元数据处理
     """
     table_id = "test.metadata.empty"
 
-    metadata_mgr = MetadataManager(str(temp_storage_root))
+    metadata_mgr = MetadataManager(str(temp_data_dir))
     metadata = metadata_mgr.load(table_id, "csv")
 
     assert metadata == {}, "空存储的元数据应该返回空字典"
 
 
-def test_metadata_multiple_formats_consistency(temp_storage_root):
+def test_metadata_multiple_formats_consistency(temp_data_dir):
     """
     测试多格式元数据的一致性
     同样的数据同步到 CSV 和 Parquet，验证物理统计应该一致
     """
     table_id = "test.metadata.multi_format"
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 

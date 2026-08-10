@@ -31,13 +31,13 @@ class FakeProvider(BaseProvider):
             return pl.DataFrame(data)
         return pl.DataFrame()
 
-def test_sync_full_flow(temp_storage_root):
+def test_sync_full_flow(temp_data_dir):
     """
     测试 SyncManager 全链路流程：全量下载 -> 增量下载 -> 物理巡检 -> 元数据盖章
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -72,17 +72,17 @@ def test_sync_full_flow(temp_storage_root):
 
             # --- Step 3: 验证物理巡检与元数据 1:1 匹配 ---
             from cqdata.storage.csv_storage import CSVStorage
-            storage = CSVStorage(str(temp_storage_root / "csv"))
+            storage = CSVStorage(str(temp_data_dir / "csv"))
             total_disk_bars = storage.get_total_bars(table_id)
             assert total_disk_bars == metadata["statistics"]["total_bars"]
 
-def test_sync_incremental_logic(temp_storage_root):
+def test_sync_incremental_logic(temp_data_dir):
     """
     测试增量同步逻辑：验证本地已有数据时的补丁计算
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -112,13 +112,13 @@ def test_sync_incremental_logic(temp_storage_root):
             metadata = sync_mgr.metadata_mgr.load(table_id, "csv")
             assert metadata["statistics"]["total_bars"] == 8
 
-def test_sync_force_refresh(temp_storage_root):
+def test_sync_force_refresh(temp_data_dir):
     """
     测试强制刷新模式：忽略本地水位，直接覆盖
     """
     table_id = "ashare.kline.1d.adj.baostock"
 
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
 
@@ -144,7 +144,7 @@ def test_sync_force_refresh(temp_storage_root):
             metadata = sync_mgr.metadata_mgr.load(table_id, "csv")
             assert metadata["statistics"]["total_bars"] == 4
 
-def test_sync_empty_data_defense(temp_storage_root):
+def test_sync_empty_data_defense(temp_data_dir):
     """
     测试空数据防御：无数据不创建文件夹、不更新元数据
     """
@@ -167,7 +167,7 @@ def test_sync_empty_data_defense(temp_storage_root):
         def fetch(self, table_id, symbol, start_date, end_date, **kwargs):
             return pl.DataFrame()
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         empty_provider = EmptyProvider()
         
@@ -176,5 +176,5 @@ def test_sync_empty_data_defense(temp_storage_root):
             sync_mgr.sync(table_id, "csv", "2024-01-01", "2024-01-05")
             
             # 验证表目录不存在
-            table_dir = temp_storage_root / "csv" / table_id
+            table_dir = temp_data_dir / "csv" / table_id
             assert not table_dir.exists(), "空数据不应该创建表目录"

@@ -16,7 +16,7 @@ from cqdata.service.metadata_manager import MetadataManager
 
 def _stamp_metadata(storage, table_id, df, fmt="csv", category="event"):
     """辅助函数：为测试生成元数据"""
-    meta_mgr = MetadataManager(storage.storage_root.parent)
+    meta_mgr = MetadataManager(storage.data_dir.parent)
     meta_mgr.save(table_id, fmt, {
         "table_id": table_id, "category": category, "format": fmt,
         "schema": {k: str(v) for k, v in df.schema.items()}
@@ -30,9 +30,9 @@ def _stamp_metadata(storage, table_id, df, fmt="csv", category="event"):
 class TestCSVFlat:
     """测试 CSV 平铺模式（无 timestamp 列的板块数据等）。"""
 
-    def test_flat_write_creates_data_csv(self, temp_storage_root):
+    def test_flat_write_creates_data_csv(self, temp_data_dir):
         """平铺写入应创建 {table_id}/data.csv，无 year= 分区。"""
-        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
         table_id = "test.flat.write"
         
         df = pl.DataFrame({
@@ -44,16 +44,16 @@ class TestCSVFlat:
         storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
         # 验证文件路径
-        flat_path = temp_storage_root / "csv" / table_id / "data.csv"
+        flat_path = temp_data_dir / "csv" / table_id / "data.csv"
         assert flat_path.exists(), "应创建平铺文件 data.csv"
         
         # 验证无 year= 目录
-        year_dirs = list((temp_storage_root / "csv" / table_id).glob("year=*"))
+        year_dirs = list((temp_data_dir / "csv" / table_id).glob("year=*"))
         assert len(year_dirs) == 0, "不应创建 year= 分区目录"
 
-    def test_flat_read(self, temp_storage_root):
+    def test_flat_read(self, temp_data_dir):
         """平铺读取应返回完整数据。"""
-        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
         table_id = "test.flat.read"
         
         df = pl.DataFrame({
@@ -70,9 +70,9 @@ class TestCSVFlat:
         assert len(read_df) == 2
         assert read_df["board_code"].to_list() == ["BK0001", "BK0002"]
 
-    def test_flat_incremental_merge_dedup(self, temp_storage_root):
+    def test_flat_incremental_merge_dedup(self, temp_data_dir):
         """平铺增量写入应全行去重。"""
-        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
         table_id = "test.flat.dedup"
         
         df1 = pl.DataFrame({
@@ -97,9 +97,9 @@ class TestCSVFlat:
         # BK0001+sh.600000 重复1行去重，BK0001+sz.000001 重复1行去重，BK0002 保留，BK0003 新增 = 4行
         assert len(read_df) == 4, f"期望 4 行，实际 {len(read_df)}"
 
-    def test_flat_sort_by_first_two_cols(self, temp_storage_root):
+    def test_flat_sort_by_first_two_cols(self, temp_data_dir):
         """平铺数据应按指定 sort_keys 排序。"""
-        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
         table_id = "test.flat.sort"
         
         df = pl.DataFrame({
@@ -115,9 +115,9 @@ class TestCSVFlat:
         # 默认排序：board_code, board_name, symbol
         assert read_df["board_code"].to_list() == ["BK0001", "BK0001", "BK0002"]
 
-    def test_flat_custom_sort_keys(self, temp_storage_root):
+    def test_flat_custom_sort_keys(self, temp_data_dir):
         """传入 sort_keys 时应按指定列排序。"""
-        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
         table_id = "test.flat.custom_sort"
         
         df = pl.DataFrame({
@@ -134,9 +134,9 @@ class TestCSVFlat:
         # 应按 stock_name 排序: 股票A, 股票A, 股票B
         assert read_df["stock_name"].to_list() == ["股票A", "股票A", "股票B"]
 
-    def test_flat_total_bars(self, temp_storage_root):
+    def test_flat_total_bars(self, temp_data_dir):
         """get_total_bars 应返回正确的行数。"""
-        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
         table_id = "test.flat.bars"
         
         df = pl.DataFrame({
@@ -149,9 +149,9 @@ class TestCSVFlat:
         
         assert storage.get_total_bars(table_id) == 3
 
-    def test_flat_global_time_range_returns_zero(self, temp_storage_root):
+    def test_flat_global_time_range_returns_zero(self, temp_data_dir):
         """无 timestamp 的平铺数据 get_global_time_range 应返回 (0, 0)。"""
-        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
         table_id = "test.flat.timerange"
         
         df = pl.DataFrame({
@@ -164,9 +164,9 @@ class TestCSVFlat:
         
         assert storage.get_global_time_range(table_id) == (0, 0)
 
-    def test_flat_unique_timestamps_returns_empty(self, temp_storage_root):
+    def test_flat_unique_timestamps_returns_empty(self, temp_data_dir):
         """无 timestamp 的平铺数据 get_unique_timestamps 应返回空列表。"""
-        storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+        storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
         table_id = "test.flat.timesteps"
         
         df = pl.DataFrame({
@@ -187,9 +187,9 @@ class TestCSVFlat:
 class TestParquetFlat:
     """测试 Parquet 平铺模式（无 timestamp 列的板块数据等）。"""
 
-    def test_flat_write_creates_data_parquet(self, temp_storage_root):
+    def test_flat_write_creates_data_parquet(self, temp_data_dir):
         """平铺写入应创建 {table_id}/data.parquet，无 year= 分区。"""
-        storage = ParquetStorage(str(temp_storage_root / "parquet"), category="event")
+        storage = ParquetStorage(str(temp_data_dir / "parquet"), category="event")
         table_id = "test.parquet.flat.write"
         
         df = pl.DataFrame({
@@ -200,15 +200,15 @@ class TestParquetFlat:
         })
         storage.write_event(table_id, df, mode="overwrite", sort_keys=["board_code", "board_name", "symbol"])
         
-        flat_path = temp_storage_root / "parquet" / table_id / "data.parquet"
+        flat_path = temp_data_dir / "parquet" / table_id / "data.parquet"
         assert flat_path.exists(), "应创建平铺文件 data.parquet"
         
-        year_dirs = list((temp_storage_root / "parquet" / table_id).glob("year=*"))
+        year_dirs = list((temp_data_dir / "parquet" / table_id).glob("year=*"))
         assert len(year_dirs) == 0, "不应创建 year= 分区目录"
 
-    def test_flat_read(self, temp_storage_root):
+    def test_flat_read(self, temp_data_dir):
         """平铺读取应返回完整数据。"""
-        storage = ParquetStorage(str(temp_storage_root / "parquet"), category="event")
+        storage = ParquetStorage(str(temp_data_dir / "parquet"), category="event")
         table_id = "test.parquet.flat.read"
         
         df = pl.DataFrame({
@@ -224,9 +224,9 @@ class TestParquetFlat:
         assert len(read_df) == 2
         assert read_df["board_code"].to_list() == ["BK0001", "BK0002"]
 
-    def test_flat_incremental_merge_dedup(self, temp_storage_root):
+    def test_flat_incremental_merge_dedup(self, temp_data_dir):
         """平铺增量写入应全行去重。"""
-        storage = ParquetStorage(str(temp_storage_root / "parquet"), category="event")
+        storage = ParquetStorage(str(temp_data_dir / "parquet"), category="event")
         table_id = "test.parquet.flat.dedup"
         
         df1 = pl.DataFrame({
@@ -249,9 +249,9 @@ class TestParquetFlat:
         read_df = storage.read_event(table_id)
         assert len(read_df) == 4, f"期望 4 行，实际 {len(read_df)}"
 
-    def test_flat_total_bars(self, temp_storage_root):
+    def test_flat_total_bars(self, temp_data_dir):
         """get_total_bars 应返回正确的行数。"""
-        storage = ParquetStorage(str(temp_storage_root / "parquet"), category="event")
+        storage = ParquetStorage(str(temp_data_dir / "parquet"), category="event")
         table_id = "test.parquet.flat.bars"
         
         df = pl.DataFrame({
@@ -264,9 +264,9 @@ class TestParquetFlat:
         
         assert storage.get_total_bars(table_id) == 3
 
-    def test_flat_global_time_range_returns_zero(self, temp_storage_root):
+    def test_flat_global_time_range_returns_zero(self, temp_data_dir):
         """无 timestamp 的平铺数据 get_global_time_range 应返回 (0, 0)。"""
-        storage = ParquetStorage(str(temp_storage_root / "parquet"), category="event")
+        storage = ParquetStorage(str(temp_data_dir / "parquet"), category="event")
         table_id = "test.parquet.flat.timerange"
         
         df = pl.DataFrame({
@@ -279,9 +279,9 @@ class TestParquetFlat:
         
         assert storage.get_global_time_range(table_id) == (0, 0)
 
-    def test_flat_unique_timestamps_returns_empty(self, temp_storage_root):
+    def test_flat_unique_timestamps_returns_empty(self, temp_data_dir):
         """无 timestamp 的平铺数据 get_unique_timestamps 应返回空列表。"""
-        storage = ParquetStorage(str(temp_storage_root / "parquet"), category="event")
+        storage = ParquetStorage(str(temp_data_dir / "parquet"), category="event")
         table_id = "test.parquet.flat.timesteps"
         
         df = pl.DataFrame({

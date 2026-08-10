@@ -23,15 +23,15 @@ class DataReader:
     处理跨年份切片、按列投影、条件下推与动态类型对齐
     """
 
-    def __init__(self, storage_root: Optional[Union[str, Path]] = None):
+    def __init__(self, data_dir: Optional[Union[str, Path]] = None):
         """
         初始化 DataReader
         
         Args:
-            storage_root: 自定义存储根目录，未指定时使用全局 settings.storage_path
+            data_dir: 自定义数据存储根目录，未指定时使用全局 settings.data_dir
         """
-        self.storage_root = Path(storage_root) if storage_root else Path(settings.storage_path)
-        self.meta_mgr = MetadataManager(str(self.storage_root))
+        self.data_dir = Path(data_dir) if data_dir else Path(settings.data_dir)
+        self.meta_mgr = MetadataManager(str(self.data_dir))
 
     def _determine_format(self, table_id: str, requested_format: str) -> str:
         """确定实际使用的存储格式。如果 requested_format 为 'auto'，优先选 parquet，其次选 csv。"""
@@ -39,12 +39,12 @@ class DataReader:
             return requested_format.lower()
 
         # 检查 parquet
-        parquet_dir = self.storage_root / "parquet" / table_id
+        parquet_dir = self.data_dir / "parquet" / table_id
         if parquet_dir.exists() and (self.meta_mgr._get_metadata_path(table_id, "parquet").exists() or any(parquet_dir.glob("**/*"))):
             return "parquet"
 
         # 检查 csv
-        csv_dir = self.storage_root / "csv" / table_id
+        csv_dir = self.data_dir / "csv" / table_id
         if csv_dir.exists() and (self.meta_mgr._get_metadata_path(table_id, "csv").exists() or any(csv_dir.glob("**/*"))):
             return "csv"
 
@@ -171,7 +171,7 @@ class DataReader:
         # 4. 获取 Storage Manager 实例
         storage = StorageFactory.get_storage(
             storage_format=fmt,
-            storage_root=str(self.storage_root),
+            data_dir=str(self.data_dir),
             category=category
         )
 
@@ -187,7 +187,7 @@ class DataReader:
 
         # 如果无法从日期推导年份，扫描磁盘获取存在数据的年份
         if years is None:
-            base_dir = self.storage_root / fmt / table_id
+            base_dir = self.data_dir / fmt / table_id
             if base_dir.exists():
                 year_dirs = [d.name for d in base_dir.glob("year=*") if d.is_dir()]
                 found_years = []
@@ -273,10 +273,10 @@ def read_series(
     end_date: Optional[str] = None,
     columns: Optional[Union[str, List[str]]] = None,
     format: str = "auto",
-    storage_root: Optional[Union[str, Path]] = None
+    data_dir: Optional[Union[str, Path]] = None
 ):
     """读取时间序列数据的快捷函数"""
-    reader = DataReader(storage_root=storage_root)
+    reader = DataReader(data_dir=data_dir)
     return reader.read_series(
         table_id=table_id,
         symbols=symbols,
@@ -294,10 +294,10 @@ def read_events(
     end_date: Optional[str] = None,
     columns: Optional[Union[str, List[str]]] = None,
     format: str = "auto",
-    storage_root: Optional[Union[str, Path]] = None
+    data_dir: Optional[Union[str, Path]] = None
 ):
     """读取事件/静态数据的快捷函数"""
-    reader = DataReader(storage_root=storage_root)
+    reader = DataReader(data_dir=data_dir)
     return reader.read_events(
         table_id=table_id,
         symbols=symbols,

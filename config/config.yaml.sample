@@ -1,16 +1,21 @@
-# CarrotQuant.Data 配置指南
-# 配置文件候选加载顺序 (优先级从高到低):
-# 1. 环境变量 CQDATA_STORAGE_ROOT="your/path" (最优先)
-# 2. 环境变量 CQDATA_CONFIG="/path/to/custom_config.yaml"
-# 3. 当前工作目录 ./config/config.yaml 或 ./config.yaml
-# 4. 用户主目录 ~/.cqdata/config.yaml
-# 5. 源码/默认路径 storage_root
+# CarrotQuant.Data 全局配置文件示例
+# 配置文件加载与优先级 (从高到低):
+# 1. 代码程序化修改 cqdata.settings.data_dir 或 cqdata.configure("/path/to/config.yaml") (最高优先级)
+# 2. 环境变量 CQDATA_DATA_DIR (覆盖数据存储路径 data_dir)
+# 3. 环境变量 CQDATA_CONFIG_PATH (显式指定自定义 YAML 配置文件路径)
+# 4. 内置默认值 (data_dir="data", log_dir="logs", log_level="INFO")
 
-# 存储根目录配置
-storage_root: "storage_root"
-default_format: "csv"
+# 数据存储根目录 (默认: "data")
+data_dir: "data"
 
-# 日志配置
-logging:
-  level: "INFO"
-  file: "logs/app.log"
+# 日志输出目录 (默认: "logs")
+log_dir: "logs"
+
+# 日志输出级别 (默认: "INFO"，可选: "DEBUG", "INFO", "WARNING", "ERROR")
+log_level: "INFO"
+
+# OOP 访问层默认配置链 (全局默认)
+defaults:
+  source: "baostock"
+  format: "parquet"
+

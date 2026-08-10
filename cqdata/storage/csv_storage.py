@@ -8,17 +8,17 @@ from ..service.metadata_manager import MetadataManager
 class CSVStorage(StorageManager):
     """
     CSV 存储实现类，支持 Hive 分区样式的存储格式。
-    TS 路径规则：storage_root/csv/{table_id}/year={yyyy}/{symbol}.csv
-    EV 路径规则：storage_root/csv/{table_id}/year={yyyy}/data.csv
+    TS 路径规则：data_dir/csv/{table_id}/year={yyyy}/{symbol}.csv
+    EV 路径规则：data_dir/csv/{table_id}/year={yyyy}/data.csv
     """
 
-    def __init__(self, storage_root: str = "storage_root/csv", category: str = "timeseries", partition: str = None, layout: str = "hive"):
+    def __init__(self, data_dir: str = "data/csv", category: str = "timeseries", partition: str = None, layout: str = "hive"):
         # 逻辑纠偏：如果是 EV，partition 默认为 "none"；如果是 TS，默认为 "symbol"
         if partition is None:
             partition = "none" if category == "event" else "symbol"
             
         super().__init__(category=category)
-        self.storage_root = Path(storage_root)
+        self.data_dir = Path(data_dir)
         self._partition = partition
         self._layout = layout
 
@@ -36,11 +36,11 @@ class CSVStorage(StorageManager):
 
     def _get_series_path(self, table_id: str, symbol: str, year: int) -> Path:
         """获取 TS 数据文件的完整路径。"""
-        return self.storage_root / table_id / f"year={year}" / f"{symbol}.csv"
+        return self.data_dir / table_id / f"year={year}" / f"{symbol}.csv"
 
     def _get_event_path(self, table_id: str, year: int) -> Path:
         """获取 EV 数据文件的完整路径。文件名固定为 data。"""
-        return self.storage_root / table_id / f"year={year}" / "data.csv"
+        return self.data_dir / table_id / f"year={year}" / "data.csv"
 
     def _read_with_schema(self, table_id: str, path: Path, schema_override: dict = None) -> pl.DataFrame:
         """辅助方法：使用元数据中的 Schema 强锁类型读取 CSV"""
@@ -49,8 +49,8 @@ class CSVStorage(StorageManager):
             return pl.read_csv(path, schema=schema_override)
 
         # 2. 加载元数据
-        # self.storage_root 传入时已是 storage_root/csv，MetadataManager 需要 base_root
-        meta_mgr = MetadataManager(self.storage_root.parent)
+        # self.data_dir 传入时已是 data_dir/csv，MetadataManager 需要 base_dir
+        meta_mgr = MetadataManager(self.data_dir.parent)
         metadata = meta_mgr.load(table_id, "csv")
         
         schema_dict = metadata.get("schema")
@@ -88,7 +88,7 @@ class CSVStorage(StorageManager):
 
     def _get_flat_event_path(self, table_id: str) -> Path:
         """获取平铺 EV 数据文件路径（无 Hive 分区）。"""
-        return self.storage_root / table_id / "data.csv"
+        return self.data_dir / table_id / "data.csv"
 
     def _is_flat_event(self, table_id: str) -> bool:
         """判断该表是否使用平铺布局（无 timestamp 列的板块数据等）。"""
@@ -156,7 +156,7 @@ class CSVStorage(StorageManager):
 
         if "timestamp" not in df.columns:
             # 平铺模式：无 Hive 分区，文件路径为 {root}/{table_id}/data.csv
-            path = self.storage_root / table_id / "data.csv"
+            path = self.data_dir / table_id / "data.csv"
             
             if mode == "append" and path.exists():
                 old_df = self._read_with_schema(table_id, path, schema_override=df.schema)
@@ -207,7 +207,7 @@ class CSVStorage(StorageManager):
         if self.category == "event":
             return []
             
-        table_dir = self.storage_root / table_id
+        table_dir = self.data_dir / table_id
         if not table_dir.exists():
             return []
         
@@ -225,9 +225,9 @@ class CSVStorage(StorageManager):
             path = self._get_flat_event_path(table_id)
             return pl.scan_csv(str(path)).select(pl.len()).collect().item()
         # Hive 分区模式
-        pattern = self.storage_root / table_id / "year=*" / "*.csv"
+        pattern = self.data_dir / table_id / "year=*" / "*.csv"
         # 显式路径检查，避免 scan_csv 报错
-        if not any(self.storage_root.glob(f"{table_id}/year=*/*.csv")):
+        if not any(self.data_dir.glob(f"{table_id}/year=*/*.csv")):
             return 0
             
         # 强制指定 timestamp 的 schema_overrides 以确保推断类型正确
@@ -242,8 +242,8 @@ class CSVStorage(StorageManager):
         if self._is_flat_event(table_id):
             return (0, 0)
         # Hive 分区模式
-        pattern = self.storage_root / table_id / "year=*" / "*.csv"
-        if not any(self.storage_root.glob(f"{table_id}/year=*/*.csv")):
+        pattern = self.data_dir / table_id / "year=*" / "*.csv"
+        if not any(self.data_dir.glob(f"{table_id}/year=*/*.csv")):
             return (0, 0)
             
         res = pl.scan_csv(
@@ -265,8 +265,8 @@ class CSVStorage(StorageManager):
         if self._is_flat_event(table_id):
             return []
         # Hive 分区模式
-        pattern = self.storage_root / table_id / "year=*" / "*.csv"
-        if not any(self.storage_root.glob(f"{table_id}/year=*/*.csv")):
+        pattern = self.data_dir / table_id / "year=*" / "*.csv"
+        if not any(self.data_dir.glob(f"{table_id}/year=*/*.csv")):
             return []
             
         df = pl.scan_csv(

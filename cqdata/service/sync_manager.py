@@ -15,10 +15,10 @@ class SyncManager:
     支持单次抓取、多格式并行落地。
     """
 
-    def __init__(self, storage_root: str = None):
+    def __init__(self, data_dir: str = None):
         # 内部自治实例化：基于配置中心
-        self.storage_root = storage_root or settings.storage_path
-        self.metadata_mgr = MetadataManager(self.storage_root)
+        self.data_dir = data_dir or settings.data_dir
+        self.metadata_mgr = MetadataManager(self.data_dir)
         self.planner = TaskPlanner(self.metadata_mgr)
         self.provider_mgr = ProviderManager()
 
@@ -66,7 +66,7 @@ class SyncManager:
         category = provider.get_table_category(table_id)
         
         # 2. 获取所有目标存储引擎
-        storages = {fmt: StorageFactory.get_storage(fmt, self.storage_root, category=category) for fmt in formats}
+        storages = {fmt: StorageFactory.get_storage(fmt, self.data_dir, category=category) for fmt in formats}
         for storage in storages.values():
             storage.category = category
         
@@ -189,7 +189,7 @@ class SyncManager:
         category = storage.category
         
         # 动态判断 layout：平铺文件存在时为 "flat"，否则为 "hive"
-        table_path = Path(self.storage_root) / format / table_id
+        table_path = Path(self.data_dir) / format / table_id
         flat_csv = table_path / "data.csv"
         flat_pq = table_path / "data.parquet"
         layout = "flat" if flat_csv.exists() or flat_pq.exists() else "hive"
@@ -246,7 +246,7 @@ def sync(
     force_refresh: bool = False,
     batch_size: int = 100,
     symbol_limit: int = None,
-    storage_root: str = None,
+    data_dir: str = None,
     provider_kwargs: dict = None
 ):
     """
@@ -260,10 +260,10 @@ def sync(
         force_refresh: 是否强制全量覆盖刷新
         batch_size: 批处理数量
         symbol_limit: 限制处理的证券数
-        storage_root: 自定义存储根目录
+        data_dir: 自定义数据存储根目录
         provider_kwargs: 传递给 Provider 的选项字典
     """
-    sm = SyncManager(storage_root=storage_root)
+    sm = SyncManager(data_dir=data_dir)
     return sm.sync(
         table_ids=table_ids,
         formats=formats,

@@ -33,13 +33,13 @@ class FakeProvider(BaseProvider):
             return pl.DataFrame(data)
         return pl.DataFrame()
 
-def test_sync_multi_storage_consistency(temp_storage_root):
+def test_sync_multi_storage_consistency(temp_data_dir):
     """
     测试多存储格式一致性：单次 fetch 调用后，磁盘上两个格式目录的数据一致
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -56,22 +56,22 @@ def test_sync_multi_storage_consistency(temp_storage_root):
             assert csv_metadata["statistics"]["symbol_count"] == parquet_metadata["statistics"]["symbol_count"]
             
             # 验证两种格式的物理数据一致
-            csv_storage = CSVStorage(str(temp_storage_root / "csv"))
-            parquet_storage = ParquetStorage(str(temp_storage_root / "parquet"))
+            csv_storage = CSVStorage(str(temp_data_dir / "csv"))
+            parquet_storage = ParquetStorage(str(temp_data_dir / "parquet"))
             
             csv_total = csv_storage.get_total_bars(table_id)
             parquet_total = parquet_storage.get_total_bars(table_id)
             
             assert csv_total == parquet_total, f"CSV 总行数 {csv_total}，Parquet 总行数 {parquet_total}"
 
-def test_sync_multi_storage_watermark(temp_storage_root):
+def test_sync_multi_storage_watermark(temp_data_dir):
     """
     测试多存储格式水位计算：木桶原理（取最小结束时间）
     """
     from datetime import datetime, timezone, timedelta
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -95,13 +95,13 @@ def test_sync_multi_storage_watermark(temp_storage_root):
             expected_start = int(datetime(2024, 1, 3, tzinfo=timezone(timedelta(hours=8))).timestamp() * 1000)
             assert task["start"] == expected_start
 
-def test_sync_multi_storage_incremental(temp_storage_root):
+def test_sync_multi_storage_incremental(temp_data_dir):
     """
     测试多存储格式增量同步
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -115,8 +115,8 @@ def test_sync_multi_storage_incremental(temp_storage_root):
             sync_mgr.sync(table_id, "parquet", "2024-01-01", "2024-01-05")
             
             # 验证两种格式的最终数据量一致
-            csv_storage = CSVStorage(str(temp_storage_root / "csv"))
-            parquet_storage = ParquetStorage(str(temp_storage_root / "parquet"))
+            csv_storage = CSVStorage(str(temp_data_dir / "csv"))
+            parquet_storage = ParquetStorage(str(temp_data_dir / "parquet"))
             
             csv_total = csv_storage.get_total_bars(table_id)
             parquet_total = parquet_storage.get_total_bars(table_id)
@@ -126,7 +126,7 @@ def test_sync_multi_storage_incremental(temp_storage_root):
             assert parquet_total == 4
             assert csv_total == parquet_total
 
-def test_sync_multi_storage_symbol_consistency(temp_storage_root):
+def test_sync_multi_storage_symbol_consistency(temp_data_dir):
     """
     测试多存储格式 symbol 列表一致性
     """
@@ -157,7 +157,7 @@ def test_sync_multi_storage_symbol_consistency(temp_storage_root):
                 return pl.DataFrame(data)
             return pl.DataFrame()
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         multi_provider = MultiSymbolProvider()
         
@@ -167,8 +167,8 @@ def test_sync_multi_storage_symbol_consistency(temp_storage_root):
             sync_mgr.sync(table_id, "parquet", "2024-01-01", "2024-01-02")
             
             # 验证两种格式的 symbol 列表一致
-            csv_storage = CSVStorage(str(temp_storage_root / "csv"))
-            parquet_storage = ParquetStorage(str(temp_storage_root / "parquet"))
+            csv_storage = CSVStorage(str(temp_data_dir / "csv"))
+            parquet_storage = ParquetStorage(str(temp_data_dir / "parquet"))
             
             csv_symbols = set(csv_storage.get_all_symbols(table_id))
             parquet_symbols = set(parquet_storage.get_all_symbols(table_id))
@@ -176,13 +176,13 @@ def test_sync_multi_storage_symbol_consistency(temp_storage_root):
             assert csv_symbols == parquet_symbols
             assert len(csv_symbols) == 3
 
-def test_sync_multi_storage_timestamp_alignment(temp_storage_root):
+def test_sync_multi_storage_timestamp_alignment(temp_data_dir):
     """
     测试多存储格式 timestamp 对齐：毫秒级对齐
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -192,8 +192,8 @@ def test_sync_multi_storage_timestamp_alignment(temp_storage_root):
             sync_mgr.sync(table_id, "parquet", "2024-01-01", "2024-01-02")
             
             # 验证两种格式的 timestamp 集合一致
-            csv_storage = CSVStorage(str(temp_storage_root / "csv"))
-            parquet_storage = ParquetStorage(str(temp_storage_root / "parquet"))
+            csv_storage = CSVStorage(str(temp_data_dir / "csv"))
+            parquet_storage = ParquetStorage(str(temp_data_dir / "parquet"))
             
             csv_timestamps = set(csv_storage.get_unique_timestamps(table_id))
             parquet_timestamps = set(parquet_storage.get_unique_timestamps(table_id))
@@ -202,13 +202,13 @@ def test_sync_multi_storage_timestamp_alignment(temp_storage_root):
             assert len(csv_timestamps) == 2  # 2024-01-01 和 2024-01-02
 
 
-def test_sync_multi_storage_atomic_fetch(temp_storage_root):
+def test_sync_multi_storage_atomic_fetch(temp_data_dir):
     """
     测试多格式同步的原子性抓取：Provider.fetch 仅被调用一次（原子性抓取）
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         
         # 创建带有 fetch 计数的 Provider
@@ -253,13 +253,13 @@ def test_sync_multi_storage_atomic_fetch(temp_storage_root):
                 f"Provider.fetch 应该被调用 2 次，实际被调用 {counting_provider.fetch_count} 次"
 
 
-def test_sync_multi_storage_file_generation(temp_storage_root):
+def test_sync_multi_storage_file_generation(temp_data_dir):
     """
     测试多格式同步的文件生成：验证磁盘上同时生成了不同格式的文件以及各自对应的 metadata.json
     """
     table_id = "ashare.kline.1d.adj.baostock"
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         fake_provider = FakeProvider()
         
@@ -269,14 +269,14 @@ def test_sync_multi_storage_file_generation(temp_storage_root):
             sync_mgr.sync(table_id, "parquet", "2024-01-01", "2024-01-02")
             
             # 验证 CSV 格式的文件存在
-            csv_table_dir = temp_storage_root / "csv" / table_id
+            csv_table_dir = temp_data_dir / "csv" / table_id
             assert csv_table_dir.exists(), "CSV 表目录应该存在"
             
             csv_metadata = csv_table_dir / "metadata.json"
             assert csv_metadata.exists(), "CSV metadata.json 应该存在"
             
             # 验证 Parquet 格式的文件存在
-            parquet_table_dir = temp_storage_root / "parquet" / table_id
+            parquet_table_dir = temp_data_dir / "parquet" / table_id
             assert parquet_table_dir.exists(), "Parquet 表目录应该存在"
             
             parquet_metadata = parquet_table_dir / "metadata.json"
@@ -295,7 +295,7 @@ def test_sync_multi_storage_file_generation(temp_storage_root):
             assert parquet_data_file.exists(), "Parquet 数据文件应该存在"
 
 
-def test_sync_multi_storage_concurrent_formats(temp_storage_root):
+def test_sync_multi_storage_concurrent_formats(temp_data_dir):
     """
     测试多格式同步的一致性：验证同时同步多种格式时数据一致性
     """
@@ -327,7 +327,7 @@ def test_sync_multi_storage_concurrent_formats(temp_storage_root):
                 return pl.DataFrame(data)
             return pl.DataFrame()
     
-    with patch("cqdata.config.settings.settings.storage_path", str(temp_storage_root)):
+    with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
         sync_mgr = SyncManager()
         multi_provider = MultiSymbolProvider()
         
@@ -355,8 +355,8 @@ def test_sync_multi_storage_concurrent_formats(temp_storage_root):
                 "CSV 和 Parquet 的 end_timestamp 应该一致"
             
             # 验证物理数据一致性
-            csv_storage = CSVStorage(str(temp_storage_root / "csv"))
-            parquet_storage = ParquetStorage(str(temp_storage_root / "parquet"))
+            csv_storage = CSVStorage(str(temp_data_dir / "csv"))
+            parquet_storage = ParquetStorage(str(temp_data_dir / "parquet"))
             
             # 验证每个 symbol 的数据量一致
             for symbol in ["sh.600000", "sz.000001"]:

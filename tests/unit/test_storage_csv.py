@@ -7,19 +7,19 @@ from cqdata.service.metadata_manager import MetadataManager
 
 def _stamp_metadata(storage, table_id, df, category="timeseries"):
     """辅助函数：为测试生成元数据"""
-    meta_mgr = MetadataManager(storage.storage_root.parent)
+    meta_mgr = MetadataManager(storage.data_dir.parent)
     meta_mgr.save(table_id, "csv", {
         "table_id": table_id, "category": category, "format": "csv",
         "schema": {k: str(v) for k, v in df.schema.items()}
     })
 
 
-def test_csv_storage_timestamp_merge(temp_storage_root):
+def test_csv_storage_timestamp_merge(temp_data_dir):
     """
     测试 CSV 存储层的增量覆盖逻辑（Keep Last）
     当写入的数据中包含已有时间戳但数值不同时，旧数据应被新数据覆盖
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.timestamp_merge"
     
     # 第一次写入
@@ -52,12 +52,12 @@ def test_csv_storage_timestamp_merge(temp_storage_root):
     assert row_0102["close"][0] == 99.9, "应该保留最后一次写入的数据（Keep Last）"
 
 
-def test_csv_storage_cross_year_partition(temp_storage_root):
+def test_csv_storage_cross_year_partition(temp_data_dir):
     """
     测试 CSV 存储层的跨年分区写入
     验证是否正确根据 Hive 分区规则（year=YYYY）分拆到不同的文件夹
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.cross_year"
     
     # 写入跨年数据
@@ -72,22 +72,22 @@ def test_csv_storage_cross_year_partition(temp_storage_root):
     _stamp_metadata(storage, table_id, df)
     
     # 验证 2024 年目录和文件
-    year_2024_dir = temp_storage_root / "csv" / table_id / "year=2024"
+    year_2024_dir = temp_data_dir / "csv" / table_id / "year=2024"
     assert year_2024_dir.exists(), "2024 年目录应该存在"
     assert (year_2024_dir / "sh.600000.csv").exists(), "2024 年的 sh.600000.csv 文件应该存在"
     
     # 验证 2025 年目录和文件
-    year_2025_dir = temp_storage_root / "csv" / table_id / "year=2025"
+    year_2025_dir = temp_data_dir / "csv" / table_id / "year=2025"
     assert year_2025_dir.exists(), "2025 年目录应该存在"
     assert (year_2025_dir / "sh.600000.csv").exists(), "2025 年的 sh.600000.csv 文件应该存在"
 
 
-def test_csv_storage_metadata_stats(temp_storage_root):
+def test_csv_storage_metadata_stats(temp_data_dir):
     """
     测试 CSV 存储引擎的统计接口
     验证在多分区文件夹（2024, 2025）存在的情况下，能正确汇总计算全局的股票总数和总行数
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.metadata_stats"
     
     # 写入 2024 年的数据
@@ -124,11 +124,11 @@ def test_csv_storage_metadata_stats(temp_storage_root):
     assert time_range[1] == 1735776000000, "最大时间戳应该是 2025-01-02"
 
 
-def test_csv_storage_write_read(temp_storage_root):
+def test_csv_storage_write_read(temp_data_dir):
     """
     测试 CSV 存储层的基本写入和读取功能
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.write_read"
     
     # 写入数据
@@ -147,7 +147,7 @@ def test_csv_storage_write_read(temp_storage_root):
     _stamp_metadata(storage, table_id, df)
     
     # 验证文件系统中是否生成了 year=2023/sh.600000.csv 这种结构的路径
-    year_dir = temp_storage_root / "csv" / table_id / "year=2023"
+    year_dir = temp_data_dir / "csv" / table_id / "year=2023"
     assert year_dir.exists(), "2023 年目录应该存在"
     
     csv_file = year_dir / "sh.600000.csv"
@@ -162,11 +162,11 @@ def test_csv_storage_write_read(temp_storage_root):
     assert timestamps == sorted(timestamps), "数据应该按 timestamp 升序排列"
 
 
-def test_csv_storage_multiple_symbols(temp_storage_root):
+def test_csv_storage_multiple_symbols(temp_data_dir):
     """
     测试 CSV 存储层的多 symbol 支持
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.multi_symbols"
     
     # 写入多个 symbol 的数据
@@ -191,11 +191,11 @@ def test_csv_storage_multiple_symbols(temp_storage_root):
         assert symbol_df["symbol"][0] == symbol
 
 
-def test_csv_storage_empty_write(temp_storage_root):
+def test_csv_storage_empty_write(temp_data_dir):
     """
     测试 CSV 存储层的空数据写入拦截
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.empty"
     
     # 写入空 DataFrame
@@ -203,15 +203,15 @@ def test_csv_storage_empty_write(temp_storage_root):
     storage.write_series(table_id, empty_df)
     
     # 验证不应该创建表目录
-    table_dir = temp_storage_root / "csv" / table_id
+    table_dir = temp_data_dir / "csv" / table_id
     assert not table_dir.exists(), "空数据不应该创建表目录"
 
 
-def test_csv_storage_incremental_update(temp_storage_root):
+def test_csv_storage_incremental_update(temp_data_dir):
     """
     测试 CSV 存储层的增量更新能力
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.incremental"
     
     # 第一次写入
@@ -242,11 +242,11 @@ def test_csv_storage_incremental_update(temp_storage_root):
     assert timestamps == sorted(timestamps), "数据应该按 timestamp 升序排列"
 
 
-def test_csv_storage_deduplication(temp_storage_root):
+def test_csv_storage_deduplication(temp_data_dir):
     """
     测试 CSV 存储层的幂等/去重能力
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.dedup"
     
     # 写入包含重复 timestamp 的数据
@@ -277,11 +277,11 @@ def test_csv_storage_deduplication(temp_storage_root):
     assert duplicate_row["close"][0] == 99.9, "应该保留最后写入的数据"
 
 
-def test_csv_storage_sorting(temp_storage_root):
+def test_csv_storage_sorting(temp_data_dir):
     """
     测试 CSV 存储层的排序能力
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.sorting"
     
     # 写入乱序数据
@@ -302,11 +302,11 @@ def test_csv_storage_sorting(temp_storage_root):
     assert timestamps == [1672531200000, 1672617600000, 1672704000000]
 
 
-def test_csv_storage_global_time_range(temp_storage_root):
+def test_csv_storage_global_time_range(temp_data_dir):
     """
     测试 CSV 存储层的全局时间范围计算
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.time_range"
     
     # 写入跨年数据
@@ -326,12 +326,12 @@ def test_csv_storage_global_time_range(temp_storage_root):
     assert time_range[1] == 1735689600000, "最大时间戳应该是 2025-01-01"
 
 
-def test_csv_storage_ev_no_symbol(temp_storage_root):
+def test_csv_storage_ev_no_symbol(temp_data_dir):
     """
     测试 CSV 存储对无 symbol 列 EV 数据的处理
     验证系统能够正确处理没有 symbol 列的宏观数据（如利率、指数成分变动）
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"), category="event")
+    storage = CSVStorage(str(temp_data_dir / "csv"), category="event")
     table_id = "test.csv.ev_no_symbol"
     
     # 创建测试数据：没有 symbol 列，只有 timestamp 和 value
@@ -345,14 +345,14 @@ def test_csv_storage_ev_no_symbol(temp_storage_root):
     _stamp_metadata(storage, table_id, df, category="event")
     
     # 手动补齐元数据
-    meta_mgr = MetadataManager(storage.storage_root.parent)
+    meta_mgr = MetadataManager(storage.data_dir.parent)
     meta_mgr.save(table_id, "csv", {
         "table_id": table_id, "category": "event", "format": "csv",
         "schema": {k: str(v) for k, v in df.schema.items()}
     })
     
     # 验证文件创建
-    table_dir = temp_storage_root / "csv" / table_id
+    table_dir = temp_data_dir / "csv" / table_id
     data_file = table_dir / "year=2024" / "data.csv"
     
     assert data_file.exists(), "数据文件未创建"
@@ -390,16 +390,16 @@ def test_csv_storage_ev_no_symbol(temp_storage_root):
     assert symbols == [], f"期望返回空列表，实际得到 {symbols}"
 
 
-def test_csv_read_without_metadata_raises(temp_storage_root):
+def test_csv_read_without_metadata_raises(temp_data_dir):
     """
     测试 CSV 读取无 metadata.json 时应抛出 RuntimeError
     """
     import os
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.no_metadata"
 
     # 手动创建 CSV 文件但不创建 metadata.json
-    year_dir = temp_storage_root / "csv" / table_id / "year=2024"
+    year_dir = temp_data_dir / "csv" / table_id / "year=2024"
     year_dir.mkdir(parents=True, exist_ok=True)
     csv_file = year_dir / "sh.600000.csv"
 
@@ -418,11 +418,11 @@ def test_csv_read_without_metadata_raises(temp_storage_root):
     assert "Metadata not found" in str(exc_info.value)
 
 
-def test_csv_read_with_schema_override(temp_storage_root):
+def test_csv_read_with_schema_override(temp_data_dir):
     """
     测试 CSV 读取支持 schema_override 参数（跳过 metadata 加载）
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.schema_override"
 
     df = pl.DataFrame({
@@ -441,11 +441,11 @@ def test_csv_read_with_schema_override(temp_storage_root):
     assert read_df["close"][0] == 10.0
 
 
-def test_csv_write_series_with_schema_cast(temp_storage_root):
+def test_csv_write_series_with_schema_cast(temp_data_dir):
     """
     测试 CSV 写入后的数据类型一致性
     """
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.csv.schema_cast"
 
     df = pl.DataFrame({

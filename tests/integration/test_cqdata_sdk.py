@@ -14,7 +14,7 @@ from cqdata.utils.time_utils import parse_date_to_ts, ts_to_iso
 
 
 @pytest.fixture
-def mock_sdk_env(temp_storage_root):
+def mock_sdk_env(temp_data_dir):
     """初始化端到端集成测试数据环境"""
     ts_table = "ashare.kline.1d.raw.baostock"
     ev_table = "ashare.dragon_tiger.eastmoney"
@@ -30,10 +30,10 @@ def mock_sdk_env(temp_storage_root):
         "close": [10.5, 15.5]
     })
 
-    pq_ts = StorageFactory.get_storage("parquet", str(temp_storage_root), "timeseries")
+    pq_ts = StorageFactory.get_storage("parquet", str(temp_data_dir), "timeseries")
     pq_ts.write_series(ts_table, df_ts)
 
-    meta_mgr = MetadataManager(str(temp_storage_root))
+    meta_mgr = MetadataManager(str(temp_data_dir))
     meta_mgr.save(ts_table, "parquet", {
         "category": "timeseries",
         "schema": {
@@ -55,12 +55,12 @@ def mock_sdk_env(temp_storage_root):
     return ts_table, ev_table
 
 
-def test_sdk_full_flow(mock_sdk_env, temp_storage_root):
+def test_sdk_full_flow(mock_sdk_env, temp_data_dir):
     """验证 import cqdata 的完整工作流程"""
     ts_table, _ = mock_sdk_env
 
     # 通过全局 settings 显式设置测试存储路径
-    cqdata.settings.storage_path = str(temp_storage_root)
+    cqdata.settings.data_dir = str(temp_data_dir)
 
     # 1. 探查列表
     tables = cqdata.list_tables()

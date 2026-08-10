@@ -37,7 +37,7 @@ def test_storage_factory_case_sensitive():
     with pytest.raises(ValueError):
         StorageFactory.get_storage("Parquet", "/tmp/test_root")
 
-def test_storage_factory_storage_root_path():
+def test_storage_factory_data_dir_path():
     """
     测试存储根目录路径正确传递
     """
@@ -45,8 +45,8 @@ def test_storage_factory_storage_root_path():
     
     csv_storage = StorageFactory.get_storage("csv", test_root)
     # CSVStorage 应该在根目录下创建 csv 子目录
-    assert hasattr(csv_storage, 'storage_root')
+    assert hasattr(csv_storage, 'data_dir')
     
     parquet_storage = StorageFactory.get_storage("parquet", test_root)
     # ParquetStorage 应该在根目录下创建 parquet 子目录
-    assert hasattr(parquet_storage, 'storage_root')
+    assert hasattr(parquet_storage, 'data_dir')

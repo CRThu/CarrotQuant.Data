@@ -76,7 +76,7 @@ def test_baostock_index_unsupported_freq():
     
     assert "is not supported by BaostockProvider" in str(exc_info.value)
 
-def test_sync_manager_initial_silent(temp_storage_root, mock_baostock):
+def test_sync_manager_initial_silent(temp_data_dir, mock_baostock):
     """
     测试初次同步静默：无数据不创建文件夹
     """
@@ -93,10 +93,10 @@ def test_sync_manager_initial_silent(temp_storage_root, mock_baostock):
     sync_mgr.sync(table_id, "csv", "1990-01-01", "1990-01-02")
     
     # 验证表目录不存在
-    table_dir = temp_storage_root / "csv" / table_id
+    table_dir = temp_data_dir / "csv" / table_id
     assert not table_dir.exists(), "初次同步无数据不应该创建表目录"
 
-def test_sync_manager_incremental_silent(temp_storage_root, mock_baostock):
+def test_sync_manager_incremental_silent(temp_data_dir, mock_baostock):
     """
     测试增量同步防写：无数据不更新元数据
     """
@@ -105,7 +105,7 @@ def test_sync_manager_incremental_silent(temp_storage_root, mock_baostock):
     format = "csv"
     
     # 1. 手动注入数据
-    storage = CSVStorage(str(temp_storage_root / "csv"))
+    storage = CSVStorage(str(temp_data_dir / "csv"))
     test_df = pl.DataFrame({
         "timestamp": [1704067200000], 
         "datetime": ["2024-01-01T00:00:00.000"],
@@ -115,7 +115,7 @@ def test_sync_manager_incremental_silent(temp_storage_root, mock_baostock):
     storage.write_series(table_id, test_df)
     
     # 创建初始元数据
-    metadata_mgr = MetadataManager(str(temp_storage_root))
+    metadata_mgr = MetadataManager(str(temp_data_dir))
     metadata_mgr.save(table_id, "csv", {"table_id": table_id, "format": "csv", "schema": {k: str(v) for k, v in test_df.schema.items()}})
     initial_metadata = {
         "table_id": table_id,
@@ -126,7 +126,7 @@ def test_sync_manager_incremental_silent(temp_storage_root, mock_baostock):
     metadata_mgr.save(table_id, format, initial_metadata)
     
     # 记录初始元数据修改时间
-    metadata_path = Path(temp_storage_root) / format / table_id / "metadata.json"
+    metadata_path = Path(temp_data_dir) / format / table_id / "metadata.json"
     initial_mtime = metadata_path.stat().st_mtime
     initial_content = metadata_path.read_text()
     
@@ -143,23 +143,23 @@ def test_sync_manager_incremental_silent(temp_storage_root, mock_baostock):
     assert metadata_path.stat().st_mtime == initial_mtime
     assert metadata_path.read_text() == initial_content
 
-def test_storage_empty_write_interception(temp_storage_root):
+def test_storage_empty_write_interception(temp_data_dir):
     """
     测试存储层空拦截：空 DataFrame 不写入文件
     """
     # CSV
-    csv_root = temp_storage_root / "csv"
+    csv_root = temp_data_dir / "csv"
     csv_storage = CSVStorage(str(csv_root))
     csv_storage.write_series("test.table", pl.DataFrame())
     assert not (csv_root / "test.table").exists(), "空数据不应该创建表目录"
 
     # Parquet
-    pq_root = temp_storage_root / "parquet"
+    pq_root = temp_data_dir / "parquet"
     pq_storage = ParquetStorage(str(pq_root))
     pq_storage.write_series("test.table", pl.DataFrame())
     assert not (pq_root / "test.table").exists(), "空数据不应该创建表目录"
 
-def test_sync_manager_provider_exception(temp_storage_root):
+def test_sync_manager_provider_exception(temp_data_dir):
     """
     测试 SyncManager 异常中断：Provider 抛出异常时应该中断同步
     """
@@ -188,10 +188,10 @@ def test_sync_manager_provider_exception(temp_storage_root):
         assert "模拟网络异常" in str(exc_info.value)
         
         # 验证表目录不存在（异常中断不应该创建）
-        table_dir = temp_storage_root / "csv" / table_id
+        table_dir = temp_data_dir / "csv" / table_id
         assert not table_dir.exists(), "异常中断不应该创建表目录"
 
-def test_sync_manager_partial_failure(temp_storage_root):
+def test_sync_manager_partial_failure(temp_data_dir):
     """
     测试 SyncManager Fail-Fast 策略：一个 symbol 失败应该中断整个同步
     """
@@ -230,17 +230,17 @@ def test_sync_manager_partial_failure(temp_storage_root):
         assert "第二个 symbol 失败" in str(exc_info.value)
         
         # Fail-Fast 策略：失败时不写入任何数据
-        csv_storage = CSVStorage(str(temp_storage_root / "csv"))
+        csv_storage = CSVStorage(str(temp_data_dir / "csv"))
         symbols = csv_storage.get_all_symbols(table_id)
         # 由于是批量写入，第一个symbol成功后会立即写入，但第二个失败会中断
         # 实际行为取决于批量大小，这里验证没有数据写入也是合理的
         assert len(symbols) == 0, "Fail-Fast 策略下，失败时不应该写入数据"
 
-def test_storage_duplicate_timestamp_handling(temp_storage_root):
+def test_storage_duplicate_timestamp_handling(temp_data_dir):
     """
     测试存储层重复 timestamp 处理：毫秒级对齐和 unique 排序
     """
-    csv_storage = CSVStorage(str(temp_storage_root / "csv"))
+    csv_storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.duplicate"
     
     # 写入包含重复 timestamp 的数据
@@ -259,7 +259,7 @@ def test_storage_duplicate_timestamp_handling(temp_storage_root):
     })
     
     csv_storage.write_series(table_id, df1)
-    metadata_mgr = MetadataManager(str(temp_storage_root))
+    metadata_mgr = MetadataManager(str(temp_data_dir))
     metadata_mgr.save(table_id, "csv", {"table_id": table_id, "format": "csv", "schema": {k: str(v) for k, v in df1.schema.items()}})
     csv_storage.write_series(table_id, df2)
     
@@ -271,11 +271,11 @@ def test_storage_duplicate_timestamp_handling(temp_storage_root):
     duplicate_row = read_df.filter(pl.col("timestamp") == 1704153600000)
     assert duplicate_row["close"][0] == 99.9, "应该保留最后写入的数据"
 
-def test_storage_cross_year_partition(temp_storage_root):
+def test_storage_cross_year_partition(temp_data_dir):
     """
     测试存储层跨年分区：验证年份目录创建
     """
-    csv_storage = CSVStorage(str(temp_storage_root / "csv"))
+    csv_storage = CSVStorage(str(temp_data_dir / "csv"))
     table_id = "test.cross.year"
     
     # 写入跨年数据
@@ -289,8 +289,8 @@ def test_storage_cross_year_partition(temp_storage_root):
     csv_storage.write_series(table_id, df)
     
     # 验证年份目录存在
-    year_2024_dir = temp_storage_root / "csv" / table_id / "year=2024"
-    year_2025_dir = temp_storage_root / "csv" / table_id / "year=2025"
+    year_2024_dir = temp_data_dir / "csv" / table_id / "year=2024"
+    year_2025_dir = temp_data_dir / "csv" / table_id / "year=2025"
     
     assert year_2024_dir.exists(), "2024 年目录应该存在"
     assert year_2025_dir.exists(), "2025 年目录应该存在"

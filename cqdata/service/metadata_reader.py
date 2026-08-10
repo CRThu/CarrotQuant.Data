@@ -21,15 +21,15 @@ class MetadataReader:
     用于探测本地物理存储结构与元数据信息
     """
 
-    def __init__(self, storage_root: Optional[Union[str, Path]] = None):
+    def __init__(self, data_dir: Optional[Union[str, Path]] = None):
         """
         初始化 MetadataReader
         
         Args:
-            storage_root: 存储根目录 (未指定时默认使用 settings.storage_path)
+            data_dir: 数据存储根目录 (未指定时默认使用 settings.data_dir)
         """
-        self.storage_root = Path(storage_root) if storage_root else Path(settings.storage_path)
-        self.meta_mgr = MetadataManager(str(self.storage_root))
+        self.data_dir = Path(data_dir) if data_dir else Path(settings.data_dir)
+        self.meta_mgr = MetadataManager(str(self.data_dir))
 
     def _determine_format(self, table_id: str, requested_format: str = "auto") -> str:
         """根据本地磁盘文件存在情况智能判断实际存储格式"""
@@ -37,12 +37,12 @@ class MetadataReader:
             return requested_format.lower()
 
         # 检查 parquet
-        parquet_dir = self.storage_root / "parquet" / table_id
+        parquet_dir = self.data_dir / "parquet" / table_id
         if parquet_dir.exists() and (self.meta_mgr._get_metadata_path(table_id, "parquet").exists() or any(parquet_dir.glob("**/*"))):
             return "parquet"
 
         # 检查 csv
-        csv_dir = self.storage_root / "csv" / table_id
+        csv_dir = self.data_dir / "csv" / table_id
         if csv_dir.exists() and (self.meta_mgr._get_metadata_path(table_id, "csv").exists() or any(csv_dir.glob("**/*"))):
             return "csv"
 
@@ -72,7 +72,7 @@ class MetadataReader:
         """
         formats = []
         for fmt in ["parquet", "csv"]:
-            fmt_dir = self.storage_root / fmt / table_id
+            fmt_dir = self.data_dir / fmt / table_id
             if fmt_dir.exists() and (self.meta_mgr._get_metadata_path(table_id, fmt).exists() or any(fmt_dir.glob("**/*"))):
                 formats.append(fmt)
         return formats
@@ -107,7 +107,7 @@ class MetadataReader:
         found_tables = set()
 
         for fmt in target_formats:
-            fmt_dir = self.storage_root / fmt
+            fmt_dir = self.data_dir / fmt
             if not fmt_dir.exists():
                 continue
 
@@ -136,7 +136,7 @@ class MetadataReader:
         category = self._get_table_category(table_id, fmt)
         storage = StorageFactory.get_storage(
             storage_format=fmt,
-            storage_root=str(self.storage_root),
+            data_dir=str(self.data_dir),
             category=category
         )
         return storage.get_all_symbols(table_id)
@@ -168,7 +168,7 @@ class MetadataReader:
         category = self._get_table_category(table_id, fmt)
         storage = StorageFactory.get_storage(
             storage_format=fmt,
-            storage_root=str(self.storage_root),
+            data_dir=str(self.data_dir),
             category=category
         )
         min_ts, max_ts = storage.get_global_time_range(table_id)
@@ -214,50 +214,50 @@ class MetadataReader:
         category = self._get_table_category(table_id, fmt)
         storage = StorageFactory.get_storage(
             storage_format=fmt,
-            storage_root=str(self.storage_root),
+            data_dir=str(self.data_dir),
             category=category
         )
         return storage.get_total_bars(table_id)
 
 
 # 快捷导出的单例/包装函数
-def list_series_tables(format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> List[str]:
+def list_series_tables(format: str = "auto", data_dir: Optional[Union[str, Path]] = None) -> List[str]:
     """列出本地所有【时间序列 (TimeSeries)】表 ID"""
-    mr = MetadataReader(storage_root=storage_root)
+    mr = MetadataReader(data_dir=data_dir)
     return mr.list_series_tables(format=format)
 
 
-def list_event_tables(format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> List[str]:
+def list_event_tables(format: str = "auto", data_dir: Optional[Union[str, Path]] = None) -> List[str]:
     """列出本地所有【事件/静态 (Event)】表 ID"""
-    mr = MetadataReader(storage_root=storage_root)
+    mr = MetadataReader(data_dir=data_dir)
     return mr.list_event_tables(format=format)
 
 
-def list_formats(table_id: str, storage_root: Optional[Union[str, Path]] = None) -> List[str]:
+def list_formats(table_id: str, data_dir: Optional[Union[str, Path]] = None) -> List[str]:
     """列出某表本地存在的所有存储格式"""
-    mr = MetadataReader(storage_root=storage_root)
+    mr = MetadataReader(data_dir=data_dir)
     return mr.list_formats(table_id=table_id)
 
 
-def list_symbols(table_id: str, format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> List[str]:
+def list_symbols(table_id: str, format: str = "auto", data_dir: Optional[Union[str, Path]] = None) -> List[str]:
     """列出某表已下载的股票/指数代码列表"""
-    mr = MetadataReader(storage_root=storage_root)
+    mr = MetadataReader(data_dir=data_dir)
     return mr.list_symbols(table_id=table_id, format=format)
 
 
-def get_time_range(table_id: str, format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> Tuple[str, str]:
+def get_time_range(table_id: str, format: str = "auto", data_dir: Optional[Union[str, Path]] = None) -> Tuple[str, str]:
     """获取某表的起止 ISO 时间 tuple"""
-    mr = MetadataReader(storage_root=storage_root)
+    mr = MetadataReader(data_dir=data_dir)
     return mr.get_time_range(table_id=table_id, format=format)
 
 
-def get_schema(table_id: str, format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> Dict[str, str]:
+def get_schema(table_id: str, format: str = "auto", data_dir: Optional[Union[str, Path]] = None) -> Dict[str, str]:
     """获取某表字段名称及数据类型字典"""
-    mr = MetadataReader(storage_root=storage_root)
+    mr = MetadataReader(data_dir=data_dir)
     return mr.get_schema(table_id=table_id, format=format)
 
 
-def get_row_count(table_id: str, format: str = "auto", storage_root: Optional[Union[str, Path]] = None) -> int:
+def get_row_count(table_id: str, format: str = "auto", data_dir: Optional[Union[str, Path]] = None) -> int:
     """获取某表在物理存储中的总记录行数"""
-    mr = MetadataReader(storage_root=storage_root)
+    mr = MetadataReader(data_dir=data_dir)
     return mr.get_row_count(table_id=table_id, format=format)

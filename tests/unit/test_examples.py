@@ -19,7 +19,7 @@ import polars as pl
     "05_export_pandas.py",
     "06_metadata_inspection.py"
 ])
-def test_example_scripts_import_and_execution(example_name, temp_storage_root):
+def test_example_scripts_import_and_execution(example_name, temp_data_dir):
     """测试 examples 脚本能被成功加载与运行 (Mock 模拟数据 IO)"""
     example_path = Path(__file__).parent.parent.parent / "examples" / example_name
     assert example_path.exists(), f"Example script {example_name} not found"

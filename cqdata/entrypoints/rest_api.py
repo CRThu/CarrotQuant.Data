@@ -76,7 +76,7 @@ async def api_health_check():
     return {
         "status": "ok",
         "version": __version__,
-        "storage_root": str(settings.storage_path),
+        "data_dir": str(settings.data_dir),
         "active_tasks": len(ACTIVE_SYNC_TASKS)
     }
 

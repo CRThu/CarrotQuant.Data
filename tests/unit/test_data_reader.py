@@ -15,7 +15,7 @@ from cqdata.utils.time_utils import parse_date_to_ts, ts_to_iso
 
 
 @pytest.fixture
-def mock_stored_data(temp_storage_root):
+def mock_stored_data(temp_data_dir):
     """构建模拟数据场景"""
     ts_table = "ashare.kline.1d.raw.baostock"
     ev_table = "ashare.dragon_tiger.eastmoney"
@@ -39,11 +39,11 @@ def mock_stored_data(temp_storage_root):
         "close": [11.0, 16.0]
     })
 
-    pq_storage = StorageFactory.get_storage("parquet", str(temp_storage_root), "timeseries")
+    pq_storage = StorageFactory.get_storage("parquet", str(temp_data_dir), "timeseries")
     pq_storage.write_series(ts_table, df_ts1)
     pq_storage.write_series(ts_table, df_ts2)
 
-    meta_mgr = MetadataManager(str(temp_storage_root))
+    meta_mgr = MetadataManager(str(temp_data_dir))
     meta_mgr.save(ts_table, "parquet", {
         "category": "timeseries",
         "schema": {
@@ -61,7 +61,7 @@ def mock_stored_data(temp_storage_root):
         "stock_name": ["浦发银行", "平安银行"],
         "buy_amount": [100.0, 200.0]
     })
-    ev_storage = StorageFactory.get_storage("parquet", str(temp_storage_root), "event")
+    ev_storage = StorageFactory.get_storage("parquet", str(temp_data_dir), "event")
     ev_storage.write_event(ev_table, df_ev, mode="overwrite", sort_keys=["symbol"])
     meta_mgr.save(ev_table, "parquet", {
         "category": "event",
@@ -75,25 +75,25 @@ def mock_stored_data(temp_storage_root):
     return ts_table, ev_table
 
 
-def test_read_series_basic(mock_stored_data, temp_storage_root):
+def test_read_series_basic(mock_stored_data, temp_data_dir):
     """测试常规全量时序数据读取"""
     ts_table, _ = mock_stored_data
-    df = read_series(ts_table, storage_root=temp_storage_root)
+    df = read_series(ts_table, data_dir=temp_data_dir)
     assert len(df) == 4
     assert set(df["symbol"].to_list()) == {"sh.600000", "sz.000001"}
 
 
-def test_read_series_columns_selection(mock_stored_data, temp_storage_root):
+def test_read_series_columns_selection(mock_stored_data, temp_data_dir):
     """测试 columns 按需列挑选 (列投影)"""
     ts_table, _ = mock_stored_data
 
     # 只挑选 timestamp 和 close 字段
-    df = read_series(ts_table, columns=["timestamp", "close"], storage_root=temp_storage_root)
+    df = read_series(ts_table, columns=["timestamp", "close"], data_dir=temp_data_dir)
     assert df.columns == ["timestamp", "close"]
     assert len(df) == 4
 
 
-def test_read_series_symbol_and_date_filter(mock_stored_data, temp_storage_root):
+def test_read_series_symbol_and_date_filter(mock_stored_data, temp_data_dir):
     """测试 symbol 和 start_date/end_date 切片过滤"""
     ts_table, _ = mock_stored_data
 
@@ -102,18 +102,18 @@ def test_read_series_symbol_and_date_filter(mock_stored_data, temp_storage_root)
         symbols="sh.600000",
         start_date="2024-01-01",
         end_date="2024-12-31",
-        storage_root=temp_storage_root
+        data_dir=temp_data_dir
     )
     assert len(df) == 1
     assert df["symbol"][0] == "sh.600000"
     assert "2024-01-15" in df["datetime"][0]
 
 
-def test_read_events_basic(mock_stored_data, temp_storage_root):
+def test_read_events_basic(mock_stored_data, temp_data_dir):
     """测试读取事件数据及列筛选"""
     _, ev_table = mock_stored_data
 
-    df = read_events(ev_table, columns=["symbol", "buy_amount"], storage_root=temp_storage_root)
+    df = read_events(ev_table, columns=["symbol", "buy_amount"], data_dir=temp_data_dir)
     assert df.columns == ["symbol", "buy_amount"]
     assert len(df) == 2
 

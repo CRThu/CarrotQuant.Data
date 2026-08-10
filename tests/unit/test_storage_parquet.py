@@ -7,7 +7,7 @@ from cqdata.service.metadata_manager import MetadataManager
 
 def _stamp_metadata(storage, table_id, df, category="timeseries"):
     """辅助函数：为测试生成元数据，绕过物理巡检"""
-    meta_mgr = MetadataManager(storage.storage_root.parent)
+    meta_mgr = MetadataManager(storage.data_dir.parent)
     meta_mgr.save(table_id, "parquet", {
         "table_id": table_id, 
         "category": category, 
@@ -16,11 +16,11 @@ def _stamp_metadata(storage, table_id, df, category="timeseries"):
     })
 
 
-def test_parquet_storage_write_read(temp_storage_root):
+def test_parquet_storage_write_read(temp_data_dir):
     """
     测试 Parquet 的 Hive 分区写入（按年/月分区）
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.write_read"
     
     # 写入 2023 年 1 月的数据
@@ -39,7 +39,7 @@ def test_parquet_storage_write_read(temp_storage_root):
     _stamp_metadata(storage, table_id, df)
     
     # 验证文件系统中是否生成了 year=2023/data.parquet 这种结构的路径
-    year_dir = temp_storage_root / "parquet" / table_id / "year=2023"
+    year_dir = temp_data_dir / "parquet" / table_id / "year=2023"
     assert year_dir.exists(), "2023 年目录应该存在"
     
     parquet_file = year_dir / "data.parquet"
@@ -58,12 +58,12 @@ def test_parquet_storage_write_read(temp_storage_root):
     assert read_df["close"].to_list() == [10.2, 10.8]
 
 
-def test_parquet_storage_deduplication(temp_storage_root):
+def test_parquet_storage_deduplication(temp_data_dir):
     """
     测试 Parquet 存储层的幂等/去重能力
     写入两条具有相同 symbol 和 timestamp 但数值不同的数据，验证读取时应仅保留最新的一条
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.dedup"
     
     # 第一次写入
@@ -96,12 +96,12 @@ def test_parquet_storage_deduplication(temp_storage_root):
     assert row_0102["close"][0] == 99.9, "应该保留最后一次写入的数据"
 
 
-def test_parquet_storage_sorting(temp_storage_root):
+def test_parquet_storage_sorting(temp_data_dir):
     """
     测试 Parquet 存储层的排序能力
     写入乱序的股票数据，验证物理磁盘上的 Parquet 文件内部是否已按照 timestamp 和 symbol 升序排列
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.sorting"
     
     # 写入乱序数据
@@ -121,7 +121,7 @@ def test_parquet_storage_sorting(temp_storage_root):
     assert symbols == sorted(symbols), "symbol 列表应该按字母顺序排列"
     
     # 验证物理存储的排序（直接读取 Parquet 文件）
-    parquet_file = temp_storage_root / "parquet" / table_id / "year=2023" / "data.parquet"
+    parquet_file = temp_data_dir / "parquet" / table_id / "year=2023" / "data.parquet"
     assert parquet_file.exists(), "Parquet 文件应该存在"
     
     # 直接读取物理文件验证排序
@@ -141,11 +141,11 @@ def test_parquet_storage_sorting(temp_storage_root):
             f"Symbol {symbol} 的 timestamp 应该按升序排列"
 
 
-def test_parquet_storage_cross_year(temp_storage_root):
+def test_parquet_storage_cross_year(temp_data_dir):
     """
     测试 Parquet 存储层的跨年分区能力
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.cross_year"
     
     # 写入跨年数据
@@ -160,21 +160,21 @@ def test_parquet_storage_cross_year(temp_storage_root):
     _stamp_metadata(storage, table_id, df)
     
     # 验证 2024 年目录和文件
-    year_2024_dir = temp_storage_root / "parquet" / table_id / "year=2024"
+    year_2024_dir = temp_data_dir / "parquet" / table_id / "year=2024"
     assert year_2024_dir.exists(), "2024 年目录应该存在"
     assert (year_2024_dir / "data.parquet").exists(), "data.parquet 文件应该存在"
     
     # 验证 2025 年目录和文件
-    year_2025_dir = temp_storage_root / "parquet" / table_id / "year=2025"
+    year_2025_dir = temp_data_dir / "parquet" / table_id / "year=2025"
     assert year_2025_dir.exists(), "2025 年目录应该存在"
     assert (year_2025_dir / "data.parquet").exists(), "data.parquet 文件应该存在"
 
 
-def test_parquet_storage_multiple_symbols(temp_storage_root):
+def test_parquet_storage_multiple_symbols(temp_data_dir):
     """
     测试 Parquet 存储层的多 symbol 支持
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.multi_symbols"
     
     # 写入多个 symbol 的数据
@@ -199,11 +199,11 @@ def test_parquet_storage_multiple_symbols(temp_storage_root):
         assert symbol_df["symbol"][0] == symbol
 
 
-def test_parquet_storage_empty_write(temp_storage_root):
+def test_parquet_storage_empty_write(temp_data_dir):
     """
     测试 Parquet 存储层的空数据写入拦截
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.empty"
     
     # 写入空 DataFrame
@@ -211,15 +211,15 @@ def test_parquet_storage_empty_write(temp_storage_root):
     storage.write_series(table_id, empty_df)
     
     # 验证不应该创建表目录
-    table_dir = temp_storage_root / "parquet" / table_id
+    table_dir = temp_data_dir / "parquet" / table_id
     assert not table_dir.exists(), "空数据不应该创建表目录"
 
 
-def test_parquet_storage_metadata_stats(temp_storage_root):
+def test_parquet_storage_metadata_stats(temp_data_dir):
     """
     测试 Parquet 存储层的统计接口
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.stats"
     
     # 写入跨年、多 symbol 的数据
@@ -248,12 +248,12 @@ def test_parquet_storage_metadata_stats(temp_storage_root):
     assert time_range[1] == 1735689600000, "最大时间戳应该是 2025-01-01"
 
 
-def test_parquet_storage_ev_no_symbol(temp_storage_root):
+def test_parquet_storage_ev_no_symbol(temp_data_dir):
     """
     测试 Parquet 存储对无 symbol 列 EV 数据的处理
     验证系统能够正确处理没有 symbol 列的宏观数据（如利率、指数成分变动）
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"), category="event")
+    storage = ParquetStorage(str(temp_data_dir / "parquet"), category="event")
     table_id = "test.parquet.ev_no_symbol"
     
     # 创建测试数据：没有 symbol 列，只有 timestamp 和 value
@@ -267,7 +267,7 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
     _stamp_metadata(storage, table_id, df, category="event")
     
     # 验证文件创建
-    table_dir = temp_storage_root / "parquet" / table_id
+    table_dir = temp_data_dir / "parquet" / table_id
     data_file = table_dir / "year=2024" / "data.parquet"
     
     assert data_file.exists(), "数据文件未创建"
@@ -304,15 +304,15 @@ def test_parquet_storage_ev_no_symbol(temp_storage_root):
     assert symbols == [], f"期望返回空列表，实际得到 {symbols}"
 
 
-def test_parquet_read_without_metadata_raises(temp_storage_root):
+def test_parquet_read_without_metadata_raises(temp_data_dir):
     """
     测试 Parquet 读取无 metadata.json 时应抛出 RuntimeError
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.no_metadata"
 
     # 手动创建 Parquet 文件但不创建 metadata.json
-    year_dir = temp_storage_root / "parquet" / table_id / "year=2024"
+    year_dir = temp_data_dir / "parquet" / table_id / "year=2024"
     year_dir.mkdir(parents=True, exist_ok=True)
     parquet_file = year_dir / "data.parquet"
 
@@ -330,11 +330,11 @@ def test_parquet_read_without_metadata_raises(temp_storage_root):
     assert "Metadata not found" in str(exc_info.value)
 
 
-def test_parquet_read_with_schema_override(temp_storage_root):
+def test_parquet_read_with_schema_override(temp_data_dir):
     """
     测试 Parquet 读取支持 schema_override 参数
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.schema_override"
 
     df = pl.DataFrame({
@@ -353,11 +353,11 @@ def test_parquet_read_with_schema_override(temp_storage_root):
     assert read_df["close"][0] == 10.0
 
 
-def test_parquet_write_series_with_schema_cast(temp_storage_root):
+def test_parquet_write_series_with_schema_cast(temp_data_dir):
     """
     测试 Parquet 写入后的数据类型一致性
     """
-    storage = ParquetStorage(str(temp_storage_root / "parquet"))
+    storage = ParquetStorage(str(temp_data_dir / "parquet"))
     table_id = "test.parquet.schema_cast"
 
     df = pl.DataFrame({

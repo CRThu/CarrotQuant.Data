@@ -31,7 +31,7 @@ CarrotQuant.Data/
 │   │   ├── python_api.py         # Python SDK 底层切片与探查 API
 │   │   ├── cli.py                # Typer CLI 控制台主入口 (cqdata sync/server/info/tables)
 │   │   └── rest_api.py           # FastAPI REST HTTP 服务
-│   ├── config/                   # 配置管理 (支持 CQDATA_STORAGE_PATH 环境变量与 YAML)
+│   ├── config/                   # 配置管理 (支持 CQDATA_DATA_DIR 环境变量与 YAML)
 │   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
 │   ├── service/                  # 业务逻辑层 (SyncManager, DataReader, MetadataReader, TaskPlanner, MetadataManager)
 │   ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
@@ -144,11 +144,13 @@ SyncManager.sync()
 
 ## 4. 核心模块与类职责
 
-### 4.1 接入层 (Gateway)
+### 4.1 接入层与配置 (Gateway & Config)
+- **`config/settings.py`**: 全局 `Settings` 配置管理，支持通过 `cqdata.configure()` 加载 YAML 配置，或优先使用环境变量 `CQDATA_DATA_DIR` 和 `CQDATA_CONFIG_PATH`。完整 YAML 配置示例见 [config.yaml.sample](file:///d:/Quant/CarrotQuant.Data/config/config.yaml.sample)。
 - **`accessors/` 包**: 提供 OOP 便捷访问层子包（`ashare.kline`, `aindex.kline` 等）与 `DefaultConfig` 三层链式继承解析器，支持极其直观的 `.get()` 参数补全与智能默认值支持。
 - **`python_api.py`**: 提供 SDK 高阶 API (`read`, `list_tables`, `sync`, `configure`, `get_schema`, `get_time_range` 等)，以磁盘物理 `metadata.json` 为单事实来源直接高效路由。
 - **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata server`, `cqdata wizard`)，支持通过 `cqdata server --open` 自动唤醒系统浏览器访问内置 Web 终端。
 - **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，并内置托管 `cqdata/static/` 前端 SPA 静态资源。
+
 
 
 ### 4.2 业务服务层 (Service)
@@ -197,8 +199,10 @@ SyncManager.sync()
 
 ### 6.1 Hive 分区存储结构
 
+### 6.1 Hive 分区存储结构
+
 ```
-storage_root/
+data/
 ├── csv/
 │   └── {table_id}/
 │       ├── year={yyyy}/{symbol}.csv   # TS (TimeSeries) 模式
@@ -223,7 +227,7 @@ storage_root/
 
 ### 6.3 元数据规范 (metadata.json)
 
-每个表及格式维护独立的 `metadata.json`，记载 `schema` 与 `statistics`（包括起止时间戳、ISO时间与 `total_bars`）。
+每个表及格式维护独立的 `metadata.json`，包含了顶层显式版本号 `"version": 1`、`schema` 与 `statistics`（包括起止时间戳、ISO时间与 `total_bars`）。
 > **EV 表性能优化**：EV 表的 `metadata.json` 严禁包含 `symbol_count` 和 `time_steps` 字段，巡检时跳过大文件全量扫描。
 > **复权因子说明**：仅保留后复权因子 `back_adj_factor`，剔除可变的历史前复权因子，防止历史数据变更污染增量水位线。
 

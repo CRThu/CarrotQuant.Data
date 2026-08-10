@@ -22,7 +22,7 @@ from cqdata.utils.time_utils import parse_date_to_ts, ts_to_iso
 
 
 @pytest.fixture
-def mock_storage_env(temp_storage_root):
+def mock_storage_env(temp_data_dir):
     """在临时目录初始化模拟元数据与数据文件"""
     ts_table = "ashare.kline.1d.raw.baostock"
     ev_table = "ashare.dragon_tiger.eastmoney"
@@ -38,10 +38,10 @@ def mock_storage_env(temp_storage_root):
         "close": [10.0, 12.5]
     })
     
-    pq_ts = StorageFactory.get_storage("parquet", str(temp_storage_root), "timeseries")
+    pq_ts = StorageFactory.get_storage("parquet", str(temp_data_dir), "timeseries")
     pq_ts.write_series(ts_table, df_ts)
 
-    meta_mgr = MetadataManager(str(temp_storage_root))
+    meta_mgr = MetadataManager(str(temp_data_dir))
     meta_mgr.save(ts_table, "parquet", {
         "category": "timeseries",
         "schema": {
@@ -65,7 +65,7 @@ def mock_storage_env(temp_storage_root):
         "stock_name": ["浦发银行"],
         "buy_amount": [1000000.0]
     })
-    pq_ev = StorageFactory.get_storage("parquet", str(temp_storage_root), "event")
+    pq_ev = StorageFactory.get_storage("parquet", str(temp_data_dir), "event")
     pq_ev.write_event(ev_table, df_ev, mode="overwrite", sort_keys=["symbol"])
 
     meta_mgr.save(ev_table, "parquet", {
@@ -83,52 +83,52 @@ def mock_storage_env(temp_storage_root):
     return ts_table, ev_table
 
 
-def test_list_series_tables(mock_storage_env, temp_storage_root):
+def test_list_series_tables(mock_storage_env, temp_data_dir):
     """测试探查时序表列表"""
     ts_table, _ = mock_storage_env
-    tables = list_series_tables(storage_root=temp_storage_root)
+    tables = list_series_tables(data_dir=temp_data_dir)
     assert ts_table in tables
 
 
-def test_list_event_tables(mock_storage_env, temp_storage_root):
+def test_list_event_tables(mock_storage_env, temp_data_dir):
     """测试探查事件表列表"""
     _, ev_table = mock_storage_env
-    tables = list_event_tables(storage_root=temp_storage_root)
+    tables = list_event_tables(data_dir=temp_data_dir)
     assert ev_table in tables
 
 
-def test_list_formats(mock_storage_env, temp_storage_root):
+def test_list_formats(mock_storage_env, temp_data_dir):
     """测试获取表支持的格式"""
     ts_table, _ = mock_storage_env
-    formats = list_formats(ts_table, storage_root=temp_storage_root)
+    formats = list_formats(ts_table, data_dir=temp_data_dir)
     assert "parquet" in formats
 
 
-def test_list_symbols(mock_storage_env, temp_storage_root):
+def test_list_symbols(mock_storage_env, temp_data_dir):
     """测试获取 symbol 唯一列表"""
     ts_table, _ = mock_storage_env
-    symbols = list_symbols(ts_table, storage_root=temp_storage_root)
+    symbols = list_symbols(ts_table, data_dir=temp_data_dir)
     assert set(symbols) == {"sh.600000", "sz.000001"}
 
 
-def test_get_time_range(mock_storage_env, temp_storage_root):
+def test_get_time_range(mock_storage_env, temp_data_dir):
     """测试获取起止 ISO 时间 tuple"""
     ts_table, _ = mock_storage_env
-    start_dt, end_dt = get_time_range(ts_table, storage_root=temp_storage_root)
+    start_dt, end_dt = get_time_range(ts_table, data_dir=temp_data_dir)
     assert "2023-01-01" in start_dt
     assert "2024-06-30" in end_dt
 
 
-def test_get_schema(mock_storage_env, temp_storage_root):
+def test_get_schema(mock_storage_env, temp_data_dir):
     """测试获取 Schema"""
     ts_table, _ = mock_storage_env
-    schema = get_schema(ts_table, storage_root=temp_storage_root)
+    schema = get_schema(ts_table, data_dir=temp_data_dir)
     assert schema.get("close") == "Float64"
     assert schema.get("symbol") == "String"
 
 
-def test_get_row_count(mock_storage_env, temp_storage_root):
+def test_get_row_count(mock_storage_env, temp_data_dir):
     """测试获取物理行数"""
     ts_table, ev_table = mock_storage_env
-    assert get_row_count(ts_table, storage_root=temp_storage_root) == 2
-    assert get_row_count(ev_table, storage_root=temp_storage_root) == 1
+    assert get_row_count(ts_table, data_dir=temp_data_dir) == 2
+    assert get_row_count(ev_table, data_dir=temp_data_dir) == 1

@@ -3,7 +3,7 @@ cqdata/config/settings.py
 
 全局配置管理模块。
 纯 Python 实现轻量 Settings，支持显式配置加载与程序化动态修改：
-1. 环境变量 CQDATA_CONFIG_PATH / CQDATA_STORAGE_PATH (显式指定)
+1. 环境变量 CQDATA_CONFIG_PATH / CQDATA_DATA_DIR (显式指定)
 2. 显式 configure(config_path) 加载 YAML 配置文件
 3. 显式修改 cqdata.settings 属性
 """
@@ -21,7 +21,7 @@ class Settings:
 
     def __init__(self):
         # 核心配置字段默认值
-        self.storage_path: str = "storage_root"
+        self.data_dir: str = "data"
         self.log_dir: str = "logs"
         self.log_level: str = "INFO"
         self.defaults: Dict[str, Any] = {}
@@ -34,7 +34,7 @@ class Settings:
         按优先级规则初始化加载配置：
         1. 内置默认值
         2. 环境变量 CQDATA_CONFIG_PATH 显式指定配置文件
-        3. 环境变量 CQDATA_STORAGE_PATH 显式覆盖 storage_path
+        3. 环境变量 CQDATA_DATA_DIR 显式覆盖 data_dir
         """
         # 1. 环境变量 CQDATA_CONFIG_PATH 显式指定 YAML 配置文件
         config_path_env = os.getenv("CQDATA_CONFIG_PATH")
@@ -43,9 +43,9 @@ class Settings:
             if path.exists():
                 self.load_from_file(path)
 
-        # 2. 环境变量 CQDATA_STORAGE_PATH 显式覆盖 storage_path
-        if os.getenv("CQDATA_STORAGE_PATH"):
-            self.storage_path = os.getenv("CQDATA_STORAGE_PATH")
+        # 2. 环境变量 CQDATA_DATA_DIR 显式覆盖 data_dir
+        if os.getenv("CQDATA_DATA_DIR"):
+            self.data_dir = os.getenv("CQDATA_DATA_DIR")
 
     def load_from_file(self, config_path: Union[str, Path]) -> "Settings":
         """
@@ -59,11 +59,8 @@ class Settings:
             config_data = yaml.safe_load(f)
 
         if isinstance(config_data, dict):
-            if "storage_path" in config_data:
-                self.storage_path = str(config_data["storage_path"])
-            elif "storage_root" in config_data:
-                # 兼容 YAML 中的 storage_root 字段写全名
-                self.storage_path = str(config_data["storage_root"])
+            if "data_dir" in config_data:
+                self.data_dir = str(config_data["data_dir"])
 
             if "log_dir" in config_data:
                 self.log_dir = str(config_data["log_dir"])
