@@ -310,9 +310,10 @@ type_map = {
 - **日志与输出**:
   - 系统日志使用 Loguru，输出挂载至 `stderr` 及 `logs/{prefix}_{YYYYMMDD_HHMMSS}.log`。
   - 核心驱动层调第三方库（如 Baostock）必须使用 `SuppressOutput` 包裹，防止垃圾 `print` 污染 CLI 控台。
-- **测试与运行**:
-  - 所有命令使用 `uv run` 前缀（如 `uv run pytest tests/ -v`）。
-  - 实现新功能或修改 Bug 时必须同步补充/修改对应的单元测试。
+- **测试覆盖与质量约束**:
+  - **全层级测试同步**：更新代码、重构逻辑或增加新功能时，必须同步补充与修改对应的**单元测试 (Unit Test)**、**集成测试 (Integration Test)** 以及 **端到端测试 (E2E Test)** 代码。
+  - **边界与异常防御**：必须深入分析并合理考虑**边界条件**（如空 DataFrame、极值起止时间戳、重复主键去重、缺失字段、物理盘未落盘状态）与**异常情况**（如网络中断重连、格式解析失败、第三方 API 崩溃、未定义市场代码），增加针对性的防错校验与断言测试。
+  - **后端与前端自动化运行**：后端测试统一使用 `uv run pytest tests/ -v` 命令；前端与 E2E 测试使用 Bun 工具链（`bun run test:unit` / `bun run test:e2e`）。
 - **Git 提交**:
   - 消息语言为中文，遵从 Conventional Commits 规范（如 `feat:` / `fix:` / `refactor:`）。
   - 未经用户明确确认，禁止自动执行 `git add/commit/push` 操作。
@@ -334,17 +335,26 @@ type_map = {
 
 ### 10.1 测试目录结构
 ```
-tests/
-├── conftest.py                    # 全局 fixtures (temp_storage_root, mock_baostock)
-├── unit/                          # 工具、Provider、Storage、Service 及 Entrypoints 单元测试 (mock IO)
-└── integration/                   # 真实 API 与全流程同步测试 (包含全量/增量/防封/空数据测试)
+CarrotQuant.Data/
+├── tests/                         # 后端 Python 测试集
+│   ├── conftest.py                # 全局 fixtures (temp_storage_root, mock_baostock)
+│   ├── unit/                      # 工具、Provider、Storage、Service 及 Entrypoints 单元测试 (mock IO)
+│   └── integration/               # 真实 API 与全流程同步测试 (包含全量/增量/防封/空数据测试)
+└── web/                           # 前端 React / Web 终端测试集
+    ├── src/__tests__/             # 前端 Component、Hook、Service 单元测试 (Vitest)
+    └── e2e/                       # 端到端 API 与 UI 自动化测试 (Playwright)
 ```
 
 ### 10.2 常用测试命令
 ```bash
-uv run pytest tests/ -v                                   # 运行全部测试
+# 后端 pytest 测试
+uv run pytest tests/ -v                                   # 运行全部后端测试 (单元 + 集成)
 uv run pytest tests/unit/ -v                              # 仅运行单元测试
-uv run pytest tests/unit/test_utils_time.py -v            # 运行指定测试文件
+uv run pytest tests/integration/ -v                       # 仅运行集成测试
+
+# 前端与 E2E 测试
+cd web && bun run test:unit                                # 运行前端单元测试 (Vitest)
+cd web && bun run test:e2e                                 # 运行前端与 UI 端到端测试 (Playwright)
 ```
 
 ---

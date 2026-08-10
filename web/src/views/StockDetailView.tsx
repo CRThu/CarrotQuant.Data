@@ -3,7 +3,7 @@ import { useMarketData } from '../hooks/useMarketData';
 import { TradingViewKLineChart } from '../components/TradingViewKLineChart';
 import { DataTable } from '../components/DataTable';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { BarChart2, Table, RefreshCw, AlertCircle } from 'lucide-react';
+import { BarChart2, Table, RefreshCw, AlertCircle, Search } from 'lucide-react';
 import type { ColorMode } from '../types/api';
 
 interface StockDetailViewProps {
@@ -16,6 +16,7 @@ interface StockDetailViewProps {
 export const StockDetailView: React.FC<StockDetailViewProps> = ({
   currentTableId,
   selectedSymbol,
+  onSymbolChange,
   colorMode = 'redUpGreenDown',
 }) => {
   const {
@@ -38,6 +39,14 @@ export const StockDetailView: React.FC<StockDetailViewProps> = ({
   } = useMarketData(currentTableId, selectedSymbol, colorMode);
 
   const [showMatrixTable, setShowMatrixTable] = useState<boolean>(false);
+  const [symbolInput, setSymbolInput] = useState<string>(selectedSymbol);
+
+  const handleSymbolSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (symbolInput.trim() && onSymbolChange) {
+      onSymbolChange(symbolInput.trim().toLowerCase());
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -60,8 +69,20 @@ export const StockDetailView: React.FC<StockDetailViewProps> = ({
           </div>
         </div>
 
-        {/* 控制选项: 切换股票、刷新、查看 2D 矩阵 */}
+        {/* 控制选项: 工作区 Context 标的搜索框、刷新、查看 2D 矩阵 */}
         <div className="flex items-center space-x-3">
+          {/* 工作区 Context 标的快捷搜索框 */}
+          <form onSubmit={handleSymbolSubmit} className="relative flex items-center">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={symbolInput}
+              onChange={(e) => setSymbolInput(e.target.value)}
+              placeholder="输入代码回车 (如 sh.600000)"
+              className="bg-slate-950/80 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500 transition-colors w-48 sm:w-56"
+            />
+          </form>
+
           <button
             onClick={() => setShowMatrixTable(!showMatrixTable)}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
@@ -115,3 +136,4 @@ export const StockDetailView: React.FC<StockDetailViewProps> = ({
     </div>
   );
 };
+

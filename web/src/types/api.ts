@@ -246,3 +246,20 @@ export interface LogMessage {
   time_raw?: number;
 }
 
+// 文件系统探查节点对象
+export interface FileSystemItem {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+  updated_at: string;
+}
+
+export interface FileSystemListResponse {
+  path: string;
+  exists: boolean;
+  is_dir: boolean;
+  total: number;
+  items: FileSystemItem[];
+}
+

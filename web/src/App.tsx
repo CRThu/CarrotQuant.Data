@@ -8,6 +8,7 @@ import { StockListView } from './views/StockListView';
 import { ConceptIndustryView } from './views/ConceptIndustryView';
 import { StockDetailView } from './views/StockDetailView';
 import { DataManagementView } from './views/DataManagementView';
+import { SettingsView } from './views/SettingsView';
 import { FloatingSyncWidget } from './components/FloatingSyncWidget';
 import { SyncModal } from './components/SyncModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -16,7 +17,7 @@ export const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('stock_detail');
   const [currentTableId, setCurrentTableId] = useState<string>(DATA_SOURCE_OPTIONS[0].table_id);
   const [selectedSymbol, setSelectedSymbol] = useState<string>('sh.600000');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
   const [activeTaskCount, setActiveTaskCount] = useState<number>(0);
@@ -39,10 +40,21 @@ export const App: React.FC = () => {
         const res = await apiClient.getSyncStatus();
         setActiveTaskCount((res.active_tasks || []).length);
 
-        const foundRunning = Object.values(res.statuses || {}).find(
-          (s) => s.status === 'running' || s.status === 'failed' || s.status === 'success'
-        );
-        setRunningStatus(foundRunning || null);
+        const allStatuses = Object.values(res.statuses || {});
+        // 1. 优先选 status === 'running' 的任务 (若有多个，按 start_time 倒序选最新发起的)
+        const runningTask = allStatuses
+          .filter((s) => s.status === 'running')
+          .sort((a, b) => (b.start_time || 0) - (a.start_time || 0))[0];
+
+        if (runningTask) {
+          setRunningStatus(runningTask);
+        } else {
+          // 2. 无正在运行的任务时，选最近完成或失败的任务 (按 end_time/start_time 倒序)
+          const finishedTask = allStatuses
+            .filter((s) => s.status === 'success' || s.status === 'failed')
+            .sort((a, b) => (b.end_time || b.start_time || 0) - (a.end_time || a.start_time || 0))[0];
+          setRunningStatus(finishedTask || null);
+        }
       } catch (e) {
         // 静默
       }
@@ -53,7 +65,7 @@ export const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const { serverOnline } = useTables();
+  const { serverOnline, latency, version, healthInfo } = useTables();
 
   // 从股票列表或板块成分股中选择某个代码，自动打通跳转到 3-Pane K 线详情页
   const handleSelectStock = (symbol: string) => {
@@ -63,28 +75,19 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary fallbackTitle="应用顶层组件渲染拦截">
-      <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans relative">
-        {/* 顶部 HeaderBar (Logo、数据源切换器、状态指示、搜索、配色设置与数据管理按钮) */}
-        <HeaderBar
-          currentTableId={currentTableId}
-          onTableChange={setCurrentTableId}
-          serverOnline={serverOnline}
-          onOpenSyncModal={() => setCurrentView('data_management')}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          colorMode={colorMode}
-          onColorModeChange={setColorMode}
-          activeTaskCount={activeTaskCount}
-        />
+      <div className="h-screen max-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans overflow-hidden relative">
+        {/* 顶部 HeaderBar (极简 HUD: Logo、版本号与在线延迟) */}
+        <HeaderBar serverOnline={serverOnline} latency={latency} version={version} />
 
         {/* 主界面: 左侧侧边栏 + 右侧中央工作区 */}
         <div className="flex-1 flex overflow-hidden">
-          {/* 左侧可折叠 Sidebar */}
+          {/* 左侧可折叠 Sidebar (含左下角 ⚙️ 系统设置按钮) */}
           <SidebarNav
             currentView={currentView}
             onViewChange={setCurrentView}
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+            activeTaskCount={activeTaskCount}
           />
 
           {/* 中央工作区 (带 ErrorBoundary 防白屏) */}
@@ -117,6 +120,18 @@ export const App: React.FC = () => {
               {currentView === 'data_management' && (
                 <DataManagementView onSyncStatusChange={setActiveTaskCount} />
               )}
+
+              {currentView === 'settings' && (
+                <SettingsView
+                  currentTableId={currentTableId}
+                  onTableChange={setCurrentTableId}
+                  colorMode={colorMode}
+                  onColorModeChange={setColorMode}
+                  serverOnline={serverOnline}
+                  latency={latency}
+                  healthInfo={healthInfo}
+                />
+              )}
             </ErrorBoundary>
           </main>
         </div>
@@ -135,3 +150,4 @@ export const App: React.FC = () => {
 };
 
 export default App;
+

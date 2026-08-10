@@ -1,21 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '../services/apiClient';
-import { TrendingUp, ArrowRight } from 'lucide-react';
+import { TrendingUp, ArrowRight, Search } from 'lucide-react';
 
 interface StockListViewProps {
   currentTableId: string;
   onSelectStock: (symbol: string) => void;
-  searchQuery: string;
+  searchQuery?: string;
 }
 
 export const StockListView: React.FC<StockListViewProps> = ({
   currentTableId,
   onSelectStock,
-  searchQuery,
+  searchQuery = '',
 }) => {
   const [symbols, setSymbols] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [localSearch, setLocalSearch] = useState<string>('');
 
   // 初始化拉取当前数据表中的全量 Symbol 清单
   useEffect(() => {
@@ -39,23 +40,25 @@ export const StockListView: React.FC<StockListViewProps> = ({
 
   const [displayLimit, setDisplayLimit] = useState<number>(180);
 
+  const effectiveQuery = localSearch || searchQuery;
+
   // 根据搜索关键字过滤股票
   const filteredSymbols = useMemo(() => {
-    if (!searchQuery.trim()) return symbols;
-    const q = searchQuery.toLowerCase().trim();
+    if (!effectiveQuery.trim()) return symbols;
+    const q = effectiveQuery.toLowerCase().trim();
     return symbols.filter((s) => s.toLowerCase().includes(q));
-  }, [symbols, searchQuery]);
+  }, [symbols, effectiveQuery]);
 
   // 按 displayLimit 进行 DOM 呈现切片，保障极致流畅度
   const visibleSymbols = useMemo(() => {
-    if (searchQuery.trim()) return filteredSymbols; // 有搜索词时直接呈现搜索结果
+    if (effectiveQuery.trim()) return filteredSymbols; // 有搜索词时直接呈现搜索结果
     return filteredSymbols.slice(0, displayLimit);
-  }, [filteredSymbols, displayLimit, searchQuery]);
+  }, [filteredSymbols, displayLimit, effectiveQuery]);
 
   return (
     <div className="space-y-4">
-      {/* 视图页头说明 */}
-      <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+      {/* 视图页头说明与工作区搜索框 */}
+      <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <div className="p-2.5 bg-cyan-950/60 rounded-xl border border-cyan-800/50 text-cyan-400">
             <TrendingUp className="w-5 h-5" />
@@ -67,8 +70,23 @@ export const StockListView: React.FC<StockListViewProps> = ({
             </p>
           </div>
         </div>
-        <div className="text-xs font-mono text-slate-400 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
-          已包含 <span className="text-cyan-400 font-bold">{symbols.length}</span> 只证券代码
+
+        <div className="flex items-center space-x-3">
+          {/* 工作区专属代码搜索框 */}
+          <div className="relative flex items-center">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              placeholder="搜索股票代码 (如 sh.600000)..."
+              className="bg-slate-950/80 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500 transition-colors w-56"
+            />
+          </div>
+
+          <div className="text-xs font-mono text-slate-400 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800 shrink-0">
+            已查获 <span className="text-cyan-400 font-bold">{symbols.length}</span> 只标的
+          </div>
         </div>
       </div>
 
@@ -108,7 +126,7 @@ export const StockListView: React.FC<StockListViewProps> = ({
           </div>
 
           {/* 大列表加载更多控制按钮 */}
-          {!searchQuery.trim() && displayLimit < filteredSymbols.length && (
+          {!effectiveQuery.trim() && displayLimit < filteredSymbols.length && (
             <div className="text-center pt-2">
               <button
                 onClick={() => setDisplayLimit((prev) => prev + 300)}
@@ -123,3 +141,5 @@ export const StockListView: React.FC<StockListViewProps> = ({
     </div>
   );
 };
+
+export default StockListView;

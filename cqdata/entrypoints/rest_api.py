@@ -8,6 +8,7 @@ FastAPI RESTful HTTP API 接入面模块。
 
 import math
 import importlib.resources
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Union, Dict, Any
 import polars as pl
@@ -551,6 +552,80 @@ async def api_tdx_download(request: TdxDownloadRequest, background_tasks: Backgr
         "vipdoc_dir": request.vipdoc_dir,
         "message": "TDX hsjday.zip download started in background."
     }
+
+
+# ==================== 本地文件系统探查 Endpoints ====================
+
+def _scan_directory(target_path: Path) -> Dict[str, Any]:
+    """安全扫描目录内容并输出标准化文件/文件夹元数据列表"""
+    if not target_path.exists():
+        return {
+            "path": str(target_path),
+            "exists": False,
+            "is_dir": False,
+            "total": 0,
+            "items": []
+        }
+
+    if not target_path.is_dir():
+        stat = target_path.stat()
+        mtime_iso = datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat()
+        return {
+            "path": str(target_path),
+            "exists": True,
+            "is_dir": False,
+            "total": 1,
+            "items": [
+                {
+                    "name": target_path.name,
+                    "path": str(target_path),
+                    "is_dir": False,
+                    "size": stat.st_size,
+                    "updated_at": mtime_iso,
+                }
+            ]
+        }
+
+    items = []
+    try:
+        for child in sorted(target_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+            try:
+                stat = child.stat()
+                mtime_iso = datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat()
+                items.append({
+                    "name": child.name,
+                    "path": str(child),
+                    "is_dir": child.is_dir(),
+                    "size": stat.st_size if child.is_file() else 0,
+                    "updated_at": mtime_iso,
+                })
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning(f"[REST API] 扫描目录 {target_path} 异常: {e}")
+
+    return {
+        "path": str(target_path.resolve()),
+        "exists": True,
+        "is_dir": True,
+        "total": len(items),
+        "items": items
+    }
+
+
+@app.get("/api/v1/filesystem/list")
+async def api_filesystem_list(
+    path: Optional[str] = Query(None, description="要查看的本地目录或文件路径，默认指向数据目录")
+):
+    """
+    通用本地文件系统探查 API。
+    用于极速查看文件夹/文件内容、层级探查与本地文件浏览器 Modal 渲染。
+    """
+    try:
+        target = Path(path or settings.data_dir).expanduser().resolve()
+        return _scan_directory(target)
+    except Exception as e:
+        handle_endpoint_exception(e, "GET filesystem list")
 
 
 # ==================== 静态前端 UI 托管 (SPA 标准挂载) ====================

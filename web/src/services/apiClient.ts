@@ -7,6 +7,7 @@ import type {
   TableDetailedMeta,
   SyncStatusResponse,
   TdxCheckResponse,
+  FileSystemListResponse,
 } from '../types/api';
 
 /**
@@ -137,6 +138,14 @@ export const apiClient = {
    */
   async downloadTdxZip(vipdoc_dir: string = 'C:\\new_tdx\\vipdoc') {
     const res = await api.post('/tdx/download', { vipdoc_dir });
+    return res.data;
+  },
+
+  /**
+   * 通用本地文件系统探查，获取指定路径下的文件与子目录列表
+   */
+  async getDirectoryContents(path?: string): Promise<FileSystemListResponse> {
+    const res = await api.get('/filesystem/list', { params: path ? { path } : {} });
     return res.data;
   },
 

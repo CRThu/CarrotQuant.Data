@@ -89,7 +89,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({ onSyncSt
             <span>本地数据中心与同步管理</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            监控本地 Parquet / CSV 物理存储格式与水位线，全自动增量拉取并补全 A 股数据
+            监控本地 Parquet / CSV 物理存储格式与数据起止范围，全自动增量拉取并补全 A 股数据
           </p>
         </div>
 

@@ -195,3 +195,41 @@ def test_spa_static_serving():
     response = client.get("/api/v1/non_existent_endpoint")
     assert response.status_code == 404
 
+
+def test_filesystem_list(tmp_path):
+    """验证 GET /api/v1/filesystem/list 本地文件系统探查 API 单元测试"""
+    # 建立测试目录与文件
+    test_dir = tmp_path / "test_vipdoc"
+    test_dir.mkdir()
+    sub_dir = test_dir / "sh"
+    sub_dir.mkdir()
+    sample_file = test_dir / "readme.txt"
+    sample_file.write_text("hello tdx")
+
+    # 1. 扫描文件夹路径
+    resp = client.get("/api/v1/filesystem/list", params={"path": str(test_dir)})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["exists"] is True
+    assert data["is_dir"] is True
+    assert data["total"] == 2
+    names = [item["name"] for item in data["items"]]
+    assert "sh" in names
+    assert "readme.txt" in names
+
+    # 2. 扫描具体文件路径
+    resp_file = client.get("/api/v1/filesystem/list", params={"path": str(sample_file)})
+    assert resp_file.status_code == 200
+    data_file = resp_file.json()
+    assert data_file["exists"] is True
+    assert data_file["is_dir"] is False
+    assert data_file["items"][0]["name"] == "readme.txt"
+
+    # 3. 扫描不存在路径
+    resp_non = client.get("/api/v1/filesystem/list", params={"path": str(tmp_path / "non_existent")})
+    assert resp_non.status_code == 200
+    data_non = resp_non.json()
+    assert data_non["exists"] is False
+    assert data_non["total"] == 0
+
+

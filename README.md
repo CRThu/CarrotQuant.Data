@@ -274,6 +274,7 @@ cqdata server --port 8888 --open
 | `/api/v1/query` | GET | 统一切片查询接口（支持 `symbols`, `start_date`, `end_date`, `columns`, `page`, `page_size`），按 `table_id` 自动智能路由，输出 `columns` 表头与 `data` 二维 List 矩阵 |
 | `/api/v1/sync` | POST | 异步触发后台数据同步任务 |
 | `/api/v1/tasks` | GET | 查询活跃同步任务状态 |
+| `/api/v1/filesystem/list` | GET | 通用本地文件与目录探查接口 (为 Web 文件探查器 Modal 提供支持) |
 
 ### 方式五：前端 UI 开发与热重载调试 (`web/`)
 

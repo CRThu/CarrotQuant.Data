@@ -1,13 +1,14 @@
 import React from 'react';
-import { TrendingUp, Layers, BarChart2, ChevronLeft, ChevronRight, Database } from 'lucide-react';
+import { TrendingUp, Layers, BarChart2, ChevronLeft, ChevronRight, Database, Settings } from 'lucide-react';
 
-export type ViewType = 'stock_list' | 'concept_industry' | 'stock_detail' | 'data_management';
+export type ViewType = 'stock_list' | 'concept_industry' | 'stock_detail' | 'data_management' | 'settings';
 
 interface SidebarNavProps {
   currentView: ViewType;
   onViewChange: (view: ViewType) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  activeTaskCount?: number;
 }
 
 export const SidebarNav: React.FC<SidebarNavProps> = ({
@@ -15,6 +16,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   onViewChange,
   collapsed,
   onToggleCollapse,
+  activeTaskCount = 0,
 }) => {
   const navItems = [
     {
@@ -39,9 +41,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       id: 'data_management' as ViewType,
       label: '数据管理中心',
       icon: Database,
-      desc: '格式水位线、增量同步与 Terminal 日志',
+      desc: '格式范围、增量同步与 Terminal 日志',
+      badge: activeTaskCount,
     },
   ];
+
+  const isSettingsActive = currentView === 'settings';
 
   return (
     <aside
@@ -59,7 +64,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               key={item.id}
               onClick={() => onViewChange(item.id)}
               title={collapsed ? `${item.label} - ${item.desc}` : undefined}
-              className={`w-full flex items-center px-3 py-2.5 rounded-xl transition-all group ${
+              className={`w-full flex items-center px-3 py-2.5 rounded-xl transition-all group cursor-pointer ${
                 isActive
                   ? 'bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 font-semibold shadow-lg shadow-cyan-950/40'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
@@ -67,9 +72,16 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             >
               <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-cyan-400' : 'group-hover:text-cyan-300'}`} />
               {!collapsed && (
-                <div className="ml-3 text-left overflow-hidden">
-                  <div className="text-xs tracking-wide">{item.label}</div>
-                  <div className="text-[10px] text-slate-500 truncate">{item.desc}</div>
+                <div className="ml-3 text-left overflow-hidden flex-1 flex items-center justify-between">
+                  <div className="overflow-hidden">
+                    <div className="text-xs tracking-wide truncate">{item.label}</div>
+                    <div className="text-[10px] text-slate-500 truncate">{item.desc}</div>
+                  </div>
+                  {item.badge && item.badge > 0 ? (
+                    <span className="ml-1 px-1.5 py-0.2 text-[10px] font-mono bg-cyan-400 text-slate-950 rounded-full font-bold animate-pulse">
+                      {item.badge}
+                    </span>
+                  ) : null}
                 </div>
               )}
             </button>
@@ -77,16 +89,44 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         })}
       </div>
 
-      {/* 底部折叠收起按钮 */}
-      <div className="p-2 border-t border-slate-800 flex justify-end">
+      {/* 底部系统设置与折叠收起按钮区 (左下角 ⚙️ 系统设置) */}
+      <div className="p-2 border-t border-slate-800 flex items-center justify-between gap-1">
         <button
-          onClick={onToggleCollapse}
-          className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-          title={collapsed ? '展开导航栏' : '收起导航栏'}
+          onClick={() => onViewChange('settings')}
+          title={collapsed ? '系统设置' : undefined}
+          className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+            collapsed ? 'justify-center w-full' : 'flex-1'
+          } ${
+            isSettingsActive
+              ? 'bg-cyan-500/20 text-cyan-400 font-semibold border border-cyan-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+          }`}
         >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          <Settings className={`w-4 h-4 shrink-0 ${isSettingsActive ? 'text-cyan-400' : ''}`} />
+          {!collapsed && <span>系统设置</span>}
         </button>
+
+        {!collapsed && (
+          <button
+            onClick={onToggleCollapse}
+            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer shrink-0"
+            title="收起导航栏"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+        )}
+
+        {collapsed && (
+          <button
+            onClick={onToggleCollapse}
+            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer shrink-0 mt-1"
+            title="展开导航栏"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </aside>
   );
 };
+

@@ -49,6 +49,7 @@
 | | `/tasks` | `GET` | 获取当前正在后台运行的同步任务列表 |
 | | `/sync/status` | `GET` | 获取全局同步任务精准进度、百分比与处理 Symbol 字典 |
 | | `/sync/stream` | `GET` | **【SSE】** Server-Sent Events 日志与进度实时推送流 |
+| **文件系统探查** | `/filesystem/list` | `GET` | 通用本地文件/目录列表探查 API（为 Web 端文件浏览器 Modal 提供支持） |
 
 
 ---

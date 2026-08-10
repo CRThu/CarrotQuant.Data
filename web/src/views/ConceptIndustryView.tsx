@@ -76,10 +76,10 @@ export const ConceptIndustryView: React.FC<ConceptIndustryViewProps> = ({
         </div>
       </div>
 
-      {/* 主布局: 左侧板块列表 + 右侧成分股明细 */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-[500px]">
-        {/* 左侧 (4列): 板块搜索与紧凑列表 */}
-        <div className="lg:col-span-4 bg-slate-900/80 rounded-xl border border-slate-800 p-2.5 flex flex-col space-y-2">
+      {/* 主布局: 左侧板块列表 (常驻固定屏幕) + 右侧成分股明细 */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+        {/* 左侧 (4列): 板块搜索与紧凑列表 (常驻屏幕 sticky，内部独立滚动) */}
+        <div className="lg:col-span-4 bg-slate-900/80 rounded-xl border border-slate-800 p-2.5 flex flex-col space-y-2 lg:sticky lg:top-2 lg:self-start h-[calc(100vh-125px)]">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-300">板块列表</span>
             <span className="text-[10px] font-mono text-slate-500">{boards.length} 个板块</span>
@@ -95,11 +95,11 @@ export const ConceptIndustryView: React.FC<ConceptIndustryViewProps> = ({
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索板块名称或代码..."
               aria-label="搜索板块名称或代码"
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-sans"
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto max-h-[550px] space-y-1 pr-0.5">
+          <div className="flex-1 overflow-y-auto space-y-1 pr-0.5 min-h-0">
             {loading ? (
               <div className="p-4 text-center text-xs text-slate-400 animate-pulse">
                 加载板块列表中...
@@ -122,7 +122,7 @@ export const ConceptIndustryView: React.FC<ConceptIndustryViewProps> = ({
                     }`}
                   >
                     <div>
-                      <div className="text-xs font-bold">{board.board_name}</div>
+                      <div className="text-xs font-bold font-sans">{board.board_name}</div>
                       <div className="text-[10px] font-mono text-slate-500">{board.board_code}</div>
                     </div>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
@@ -136,18 +136,18 @@ export const ConceptIndustryView: React.FC<ConceptIndustryViewProps> = ({
         </div>
 
         {/* 右侧 (8列): 成分股列表 */}
-        <div className="lg:col-span-8 bg-slate-900/80 rounded-xl border border-slate-800 p-3.5 flex flex-col space-y-3">
+        <div className="lg:col-span-8 bg-slate-900/80 rounded-xl border border-slate-800 p-3.5 flex flex-col space-y-3 h-[calc(100vh-125px)] min-h-[450px]">
           {currentBoard ? (
             <>
               {/* 板块 Header */}
-              <div className="pb-2 border-b border-slate-800 flex items-center justify-between">
+              <div className="pb-2 border-b border-slate-800 flex items-center justify-between shrink-0">
                 <div className="flex items-center space-x-2">
                   <Building2 className="w-4 h-4 text-cyan-400" />
                   <h3 className="text-sm font-bold text-slate-100">{currentBoard.board_name}</h3>
                   <span className="text-[10px] font-mono text-cyan-400 px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800">
                     {currentBoard.board_code}
                   </span>
-                  <span className="text-xs text-slate-400">
+                  <span className="text-xs text-slate-400 font-sans">
                     ({currentBoard.stock_count} 只成分股)
                   </span>
                 </div>
@@ -159,7 +159,7 @@ export const ConceptIndustryView: React.FC<ConceptIndustryViewProps> = ({
                   正在加载成分股...
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 overflow-y-auto max-h-[500px] pr-0.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 overflow-y-auto flex-1 pr-0.5 min-h-0">
                   {currentBoard.stocks.map((stock) => (
                     <div
                       key={stock.symbol}
@@ -167,7 +167,7 @@ export const ConceptIndustryView: React.FC<ConceptIndustryViewProps> = ({
                       className="px-2.5 py-2 bg-slate-950/60 border border-slate-800 hover:border-cyan-500/60 hover:bg-cyan-950/20 rounded-lg cursor-pointer transition-all group flex items-center justify-between"
                     >
                       <div>
-                        <div className="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">
+                        <div className="text-xs font-bold text-slate-200 group-hover:text-cyan-400 transition-colors font-sans">
                           {stock.stock_name}
                         </div>
                         <div className="text-[10px] font-mono text-slate-500">{stock.symbol}</div>
