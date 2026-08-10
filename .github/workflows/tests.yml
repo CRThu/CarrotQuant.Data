@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Run Pytest
+    name: Fullstack CI Tests
     runs-on: windows-latest
     strategy:
       matrix:
@@ -18,18 +18,30 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Setup Bun Environment
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Frontend Dependencies, Run Unit Tests & Build UI
+        run: |
+          cd web
+          bun install
+          bun run test:unit
+          bun run build
+        shell: pwsh
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          # Install a specific version of uv, or "latest".
           version: "latest"
           enable-cache: true
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Install Dependencies
+      - name: Install Python Dependencies
         run: uv sync --all-extras --dev
 
-      - name: Run Tests
+      - name: Run Pytest (Backend)
         run: uv run pytest -m "not network"
