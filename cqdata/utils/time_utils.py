@@ -12,7 +12,7 @@ def ts_to_str(ts_ms: int, fmt: str = "%Y-%m-%d", display_tz: str = "Asia/Shangha
         fmt: 时间格式字符串
         display_tz: 目标时区名称 (IANA 格式，默认 Asia/Shanghai)
     """
-    if not ts_ms:
+    if ts_ms is None:
         return ""
     try:
         dt = datetime.fromtimestamp(ts_ms / 1000, tz=ZoneInfo(display_tz))
@@ -22,7 +22,7 @@ def ts_to_str(ts_ms: int, fmt: str = "%Y-%m-%d", display_tz: str = "Asia/Shangha
             return result[:-3]
         return result
     except (ValueError, OSError, OverflowError):
-        return ""
+        return "1970-01-01"
 
 def ts_to_iso(ts_ms: int, display_tz: str = "Asia/Shanghai") -> str:
     """
@@ -35,7 +35,7 @@ def ts_to_iso(ts_ms: int, display_tz: str = "Asia/Shanghai") -> str:
     Returns:
         ISO8601 字符串，如 "2024-01-01T08:00:00.000+08:00"
     """
-    if not ts_ms:
+    if ts_ms is None:
         return ""
     try:
         dt = datetime.fromtimestamp(ts_ms / 1000, tz=ZoneInfo(display_tz))
@@ -88,9 +88,12 @@ def parse_date_to_ts(date_val: Any, source_tz: str = "Asia/Shanghai") -> int:
         UTC 0 毫秒戳
     """
     if isinstance(date_val, int):
-        return date_val
+        return max(0, date_val)
     if isinstance(date_val, str):
+        if not date_val.strip():
+            return 0
         # 假定 yyyy-mm-dd，视为指定时区的挂钟时间
         dt = datetime.strptime(date_val, "%Y-%m-%d").replace(tzinfo=ZoneInfo(source_tz))
-        return int(dt.timestamp() * 1000)
+        ts = int(dt.timestamp() * 1000)
+        return max(0, ts)
     raise ValueError(f"Unsupported date format: {date_val}")

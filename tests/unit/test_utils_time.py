@@ -176,12 +176,22 @@ def test_ts_to_str_custom_format():
     datetime_utc = ts_to_str(ts, fmt="%Y-%m-%d %H:%M:%S", display_tz="UTC")
     assert datetime_utc == "2024-01-01 00:00:00"
 
-def test_ts_to_str_empty_input():
+def test_ts_to_str_zero_and_none_input():
     """
-    测试空输入返回空字符串
+    测试 ts=0 返回 1970-01-01，None 返回空字符串
     """
-    assert ts_to_str(0) == ""
+    assert ts_to_str(0) == "1970-01-01"
     assert ts_to_str(None) == ""
+    assert ts_to_iso(0) == "1970-01-01T08:00:00.000+08:00"
+    assert ts_to_iso(None) == ""
+
+def test_parse_date_to_ts_pre_1970():
+    """
+    测试早于 1970 年的日期（如 1900-01-01 或空字符串）自动规正/下限截断为 ts=0
+    """
+    assert parse_date_to_ts("1900-01-01") == 0
+    assert parse_date_to_ts("") == 0
+    assert parse_date_to_ts(0) == 0
 
 def test_cross_timezone_verification():
     """

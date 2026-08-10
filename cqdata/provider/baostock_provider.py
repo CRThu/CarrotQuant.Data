@@ -174,10 +174,10 @@ class BaostockProvider(BaseProvider):
         if isinstance(end_date, int):
             end_date = ts_to_str(end_date)
 
-        # 2. None 日期默认值
-        if start_date is None:
-            start_date = "2020-01-01"
-        if end_date is None:
+        # 2. 空日期防御与 1970-01-01 起始兜底
+        if not start_date:
+            start_date = "1970-01-01"
+        if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
 
         # 3. 路由逻辑：解析 table_id 中间的部分 (如 kline, adj_factor)

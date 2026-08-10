@@ -6,7 +6,7 @@ from cqdata.utils.time_utils import parse_date_to_ts, align_to_day_end, align_to
 
 def test_plan_no_local_data_no_start_date():
     """
-    测试本地无数据 + 无 start_date → 默认回退至 2020-01-01
+    测试本地无数据 + 无 start_date → 默认起点为 1970-01-01
     """
     metadata_mgr = MagicMock()
     metadata_mgr.load.return_value = {"statistics": {}}
@@ -15,7 +15,7 @@ def test_plan_no_local_data_no_start_date():
     
     tasks = planner.plan("test.table", ["csv"], ["sh.600000"])
     assert len(tasks) == 1
-    assert tasks[0]["start"] == parse_date_to_ts("2020-01-01")
+    assert tasks[0]["start"] == parse_date_to_ts("1970-01-01")
     assert tasks[0]["symbol"] == "sh.600000"
 
 def test_plan_local_data_no_start_date():

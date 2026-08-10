@@ -460,10 +460,10 @@ class EastMoneyProvider(BaseProvider):
         """批量拉取龙虎榜数据，返回标准化 Polars DataFrame。"""
         code = kwargs.get("code")
 
-        if end_date is None:
+        if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        if start_date is None:
-            start_date = "2020-01-01"
+        if not start_date:
+            start_date = "1970-01-01"
 
         code_filter = ""
         if code:
@@ -529,10 +529,10 @@ class EastMoneyProvider(BaseProvider):
         """批量拉取机构买卖每日统计，返回标准化 Polars DataFrame。"""
         code = kwargs.get("code")
 
-        if end_date is None:
+        if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
-        if start_date is None:
-            start_date = "2020-01-01"
+        if not start_date:
+            start_date = "1970-01-01"
 
         code_filter = ""
         if code:

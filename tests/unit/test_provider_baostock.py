@@ -32,11 +32,11 @@ def provider(mock_baostock):
 class TestNoneDateDefaults:
     """测试 None 日期默认值处理。"""
 
-    def test_fetch_none_start_date_defaults_to_2020(self, provider, mock_baostock):
-        """start_date=None 时应默认为 2020-01-01。"""
+    def test_fetch_none_start_date_defaults_to_1970(self, provider, mock_baostock):
+        """start_date=None 时应默认为 1970-01-01。"""
         provider.fetch("ashare.kline.1d.raw.baostock", "sh.600000", None, "2024-01-05")
         call_args = mock_baostock.query_history_k_data_plus.call_args
-        assert call_args[1]["start_date"] == "2020-01-01"
+        assert call_args[1]["start_date"] == "1970-01-01"
 
     def test_fetch_none_end_date_defaults_to_today(self, provider, mock_baostock):
         """end_date=None 时应默认为今天日期。"""
@@ -51,7 +51,7 @@ class TestNoneDateDefaults:
         from datetime import datetime
         provider.fetch("ashare.kline.1d.raw.baostock", "sh.600000", None, None)
         call_args = mock_baostock.query_history_k_data_plus.call_args
-        assert call_args[1]["start_date"] == "2020-01-01"
+        assert call_args[1]["start_date"] == "1970-01-01"
         today = datetime.now().strftime("%Y-%m-%d")
         assert call_args[1]["end_date"] == today
 

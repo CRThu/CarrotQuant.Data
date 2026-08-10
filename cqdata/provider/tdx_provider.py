@@ -119,9 +119,9 @@ class TDXProvider(BaseProvider):
             start_date = ts_to_str(start_date)
         if isinstance(end_date, int):
             end_date = ts_to_str(end_date)
-        if start_date is None:
-            start_date = "1990-01-01" if self._mode == "local" else "2020-01-01"
-        if end_date is None:
+        if not start_date:
+            start_date = "1970-01-01"
+        if not end_date:
             end_date = datetime.now().strftime("%Y-%m-%d")
 
         parts = table_id.split('.')

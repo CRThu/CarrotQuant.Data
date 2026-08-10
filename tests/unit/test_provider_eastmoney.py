@@ -364,7 +364,7 @@ class TestDragonTigerFetch:
         with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_lhb_data) as mock:
             provider._fetch_dragon_tiger(None, None)
             args = mock.call_args
-            assert args[0][2] == "2020-01-01"
+            assert args[0][2] == "1970-01-01"
             assert isinstance(args[0][3], str)
 
 
@@ -409,7 +409,7 @@ class TestInstTradeFetch:
         with patch.object(provider, "_fetch_datacenter_paginated", return_value=sample_inst_data) as mock:
             provider._fetch_inst_trade(None, None)
             args = mock.call_args
-            assert args[0][2] == "2020-01-01"
+            assert args[0][2] == "1970-01-01"
             assert isinstance(args[0][3], str)
 
 
@@ -505,3 +505,23 @@ class TestEmptyDataDefense:
             assert df.schema["close_price"] == pl.Float64
             assert df.schema["buy_amount"] == pl.Float64
             assert df.schema["net_buy_amount"] == pl.Float64
+
+    def test_dragon_tiger_empty_string_start_date_uses_default(self, provider):
+        """当 start_date 为空字符串 '' 或 0 时，应自动降级为 1970-01-01，不触发 strptime 崩溃。"""
+        with patch.object(provider, "_fetch_datacenter_paginated", return_value=[]) as mock:
+            df = provider._fetch_dragon_tiger("", "")
+            assert df.is_empty()
+            args = mock.call_args
+            assert args[0][2] == "1970-01-01"
+
+    def test_fetch_with_ts_zero_converts_to_epoch_date(self, provider):
+        """当传入 int 0 时间戳时，fetch 应将其转换为 '1970-01-01'。"""
+        empty_df = pl.DataFrame(schema={
+            "symbol": pl.String, "stock_name": pl.String,
+            "datetime": pl.String, "timestamp": pl.Int64,
+        })
+        with patch.object(provider, "_fetch_dragon_tiger", return_value=empty_df) as mock:
+            provider.fetch("ashare.dragon_tiger.eastmoney", "_ALL_", 0, 1781712000000)
+            args = mock.call_args
+            assert args[0][0] == "1970-01-01"
+

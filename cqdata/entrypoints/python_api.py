@@ -5,7 +5,7 @@ Python SDK API 接入面模块。
 为 Python 量化脚本与交互环境提供干净、专一、直观的高阶函数调用。
 """
 
-from typing import List, Tuple, Dict, Union, Optional
+from typing import List, Tuple, Dict, Union, Optional, Any
 from pathlib import Path
 import polars as pl
 
