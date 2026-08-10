@@ -10,7 +10,7 @@ import type {
  * Axios API 客户端，封装与 CarrotQuant.Data FastAPI 后端的交互
  */
 const api = axios.create({
-  baseURL: typeof window !== 'undefined' ? '/api/v1' : 'http://localhost:8000/api/v1',
+  baseURL: typeof window !== 'undefined' ? '/api/v1' : 'http://localhost:8888/api/v1',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',

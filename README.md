@@ -237,16 +237,19 @@ cqdata sync -t ashare.kline.1d.raw.tdx
 cqdata wizard
 ```
 
-### 方式四：启动 REST API 服务 (支持 -c 加载配置文件)
+### 方式四：一键启动服务器与 Web 终端 (支持 --open / -o 自动打开浏览器)
 ```bash
-cqdata server --port 8000 -c ./config.yaml
-# (也可使用兼容别名: cqdata serve)
+# 启动后端 API 服务并自动调起系统浏览器打开 Web 终端
+cqdata server --port 8888 --open
+
+# (也可使用 -c 指定配置文件: cqdata server -p 8888 -c ./config.yaml -o)
 ```
 
-启动后提供基于 FastAPI 的 RESTful HTTP 接口（全量端点汇总）：
+启动后内置托管 React Web 终端并提供基于 FastAPI 的 RESTful HTTP 接口（全量端点汇总）：
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
+| `/` | GET | 内置托管的 React Web 金融终端主界面 |
 | `/api/v1/health` | GET | 系统健康检查与服务运行状态探针 |
 | `/api/v1/tables` | GET | 列出本地所有数据表总览 (平铺列表，含 `category` 属性) |
 | `/api/v1/tables/{table_id}/formats` | GET | 获取指定表已存储的物理格式列表 (`['parquet', 'csv']`) |
@@ -258,20 +261,24 @@ cqdata server --port 8000 -c ./config.yaml
 | `/api/v1/sync` | POST | 异步触发后台数据同步任务 |
 | `/api/v1/tasks` | GET | 查询活跃同步任务状态 |
 
-### 方式五：启动 React Web 极速金融终端 (`web/`)
+### 方式五：前端 UI 开发与热重载调试 (`web/`)
+
+进行前端界面开发或组件调试时，可启动 Vite 热重载服务：
 
 ```bash
 # 1. 启动后端 REST API 服务
-cqdata server --port 8000
+cqdata server --port 8888
 
-# 2. 启动 React 前端服务
+
+# 2. 在另一个终端启动 Vite 开发调试服务 (支持 HMR 热更新)
 cd web
 bun install
 bun dev
 ```
 
-打开浏览器访问 `http://localhost:5173/` 体验 TradingView 3-Pane K线强同步与概念/行业板块 0 延时穿透。
+打开浏览器访问 `http://localhost:5173/` 体验 Vite HMR 极速实时编译调试。
 详细使用指南与架构说明请参阅 [docs/web_terminal_guide.md](docs/web_terminal_guide.md)。
+
 
 ## 📚 相关文档 (Documentation)
 

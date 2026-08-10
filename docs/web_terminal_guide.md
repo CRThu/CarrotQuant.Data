@@ -17,27 +17,33 @@
 
 ## 2. 快速启动指南
 
-### 2.1 启动后端 REST API 服务
-在根目录下运行：
+### 2.1 方式一：一键内置托管启动 (用户开箱即用 - 推荐)
+
+打包或开发完成静态前端后，无需安装 Node.js 或 Bun，直接运行命令：
 
 ```bash
-uv run cqdata server --port 8000
-```
-或直接使用 uvicorn:
-```bash
-uv run uvicorn cqdata.entrypoints.rest_api:app --host 127.0.0.1 --port 8000
+cqdata server --port 8888 --open
 ```
 
-### 2.2 启动 Web 前端服务
-在 `web/` 目录下运行：
+该命令会启动 FastAPI API 服务，内置托管前端 UI 界面，并自动调起系统默认浏览器访问 `http://localhost:8888/`。
 
-```bash
-cd web
-bun install
-bun dev
-```
+### 2.2 方式二：前端 UI 开发与热重载调试 (开发者)
 
-打开浏览器访问 `http://localhost:5173/`。
+如果需要修改 UI 组件或进行前端增量调试：
+
+1. **启动后端服务**：
+   ```bash
+   cqdata server --port 8888
+   ```
+2. **启动 Vite 热重载服务**（在 `web/` 目录下）：
+   ```bash
+   cd web
+   bun install
+   bun dev
+   ```
+
+打开浏览器访问 `http://localhost:5173/` 享受 0.1s Vite HMR 极速实时热更新。
+
 
 ---
 

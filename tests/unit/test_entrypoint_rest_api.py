@@ -184,3 +184,14 @@ def test_post_sync_and_active_tasks():
         # 验证 active_tasks
         resp_tasks = client.get("/api/v1/tasks")
         assert resp_tasks.status_code == 200
+
+
+def test_spa_static_serving():
+    """验证静态前端 SPA 页面托管与 API 404 回退"""
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+
+    response = client.get("/api/v1/non_existent_endpoint")
+    assert response.status_code == 404
+

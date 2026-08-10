@@ -36,8 +36,16 @@ cqdata = "cqdata.entrypoints.cli:app"
 [tool.uv]
 package = true
 
+[tool.hatch.build]
+artifacts = [
+    "cqdata/static/**",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["cqdata"]
+
+
+
 
 [tool.pytest.ini_options]
 addopts = "--ignore=demo"

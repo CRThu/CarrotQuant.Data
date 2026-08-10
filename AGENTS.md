@@ -147,8 +147,9 @@ SyncManager.sync()
 ### 4.1 接入层 (Gateway)
 - **`accessors/` 包**: 提供 OOP 便捷访问层子包（`ashare.kline`, `aindex.kline` 等）与 `DefaultConfig` 三层链式继承解析器，支持极其直观的 `.get()` 参数补全与智能默认值支持。
 - **`python_api.py`**: 提供 SDK 高阶 API (`read`, `list_tables`, `sync`, `configure`, `get_schema`, `get_time_range` 等)，以磁盘物理 `metadata.json` 为单事实来源直接高效路由。
-- **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata server`, `cqdata wizard`)。
-- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，输出 `columns` 表头 + 二维矩阵 (`df.rows()`)。
+- **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata server`, `cqdata wizard`)，支持通过 `cqdata server --open` 自动唤醒系统浏览器访问内置 Web 终端。
+- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，并内置托管 `cqdata/static/` 前端 SPA 静态资源。
+
 
 ### 4.2 业务服务层 (Service)
 - **`SyncManager`**: 数据同步总调度器，贯穿 Provider 拉取、批处理、Storage 写入与元数据盖章。

@@ -73,22 +73,34 @@ def sync_cmd(
 @app.command(name="server")
 def server_cmd(
     host: str = typer.Option("0.0.0.0", "--host", "-h", help="监听地址"),
-    port: int = typer.Option(8000, "--port", "-p", help="监听端口"),
-    reload: bool = typer.Option(True, "--reload", help="是否开启热重载"),
+    port: int = typer.Option(8888, "--port", "-p", help="监听端口"),
+    reload: bool = typer.Option(False, "--reload", help="是否开启热重载"),
+    open_browser: bool = typer.Option(False, "--open", "-o", help="服务启动后自动调起系统默认浏览器访问 Web 终端"),
     config: Optional[str] = typer.Option(None, "--config", "-c", help="加载指定 YAML 配置文件路径"),
-    storage_path: Optional[str] = typer.Option(None, "--storage-path", "-o", help="指定存储根目录")
+    storage_path: Optional[str] = typer.Option(None, "--storage-path", help="指定存储根目录")
 ):
     """
-    启动 FastAPI REST API HTTP 服务 (例如 cqdata server -p 8000 -c ./config.yaml)
+    启动 FastAPI REST API HTTP 服务与 React Web 终端 (例如 cqdata server -p 8888 --open)
     """
+
+    import threading
+    import webbrowser
+
     from cqdata.config import settings
     if config:
         settings.configure(config)
     if storage_path:
         settings.storage_path = storage_path
 
+    if open_browser:
+        display_host = "localhost" if host in ("0.0.0.0", "127.0.0.1") else host
+        url = f"http://{display_host}:{port}"
+        typer.echo(f"[+] 正在准备自动唤醒默认浏览器打开 Web 终端: {url}")
+        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+
     typer.echo(f"[+] Starting cqdata REST API server on http://{host}:{port} (storage_path: {settings.storage_path})")
     uvicorn.run("cqdata.entrypoints.rest_api:app", host=host, port=port, reload=reload)
+
 
 
 @app.command(name="wizard")

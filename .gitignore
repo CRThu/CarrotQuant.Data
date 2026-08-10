@@ -23,3 +23,6 @@ htmlcov/
 *.egg-info/
 dist/
 build/
+cqdata/static/
+web/dist/
+web/node_modules/

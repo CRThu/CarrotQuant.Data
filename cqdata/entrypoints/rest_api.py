@@ -7,12 +7,43 @@ FastAPI RESTful HTTP API 接入面模块。
 """
 
 import math
+import importlib.resources
+from pathlib import Path
 from typing import List, Optional, Union
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 from loguru import logger
 from cqdata.config import settings
+
+
+class SPAStaticFiles(StaticFiles):
+    """
+    FastAPI / Starlette 标准 SPA 静态文件托管支持：
+    - 已存在的静态文件 (JS/CSS/Font/Icon)：提供高性能异步流响应并支持 ETag 304 缓存
+    - 前端 SPA 页面路由：文件不存在时自动回退渲染 index.html
+    - /api/* 端点：未匹配时保持标准的 404 HTTP 异常
+    """
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as ex:
+            if ex.status_code == 404:
+                norm_path = path.replace("\\", "/")
+                if norm_path.startswith("api/"):
+                    raise StarletteHTTPException(status_code=404, detail=f"API endpoint '/{norm_path}' not found")
+                return await super().get_response("index.html", scope)
+            raise ex
+
+
+
+
+
+
+
+
 
 from cqdata.entrypoints.python_api import (
     read,
@@ -273,3 +304,17 @@ async def api_sync_data(request: SyncRequest, background_tasks: BackgroundTasks)
 async def api_get_active_tasks():
     """获取正在运行的后台同步任务"""
     return {"active_tasks": list(ACTIVE_SYNC_TASKS)}
+
+
+# ==================== 静态前端 UI 托管 (SPA 标准挂载) ====================
+
+try:
+    STATIC_DIR = Path(importlib.resources.files("cqdata") / "static")
+except Exception:
+    STATIC_DIR = Path(__file__).parent.parent / "static"
+
+if STATIC_DIR.exists() and (STATIC_DIR / "index.html").exists():
+    logger.info(f"[REST API] 已挂载静态前端 UI 托管: {STATIC_DIR}")
+    app.mount("/", SPAStaticFiles(directory=STATIC_DIR, html=True), name="static")
+
+
