@@ -96,7 +96,7 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose }) => {
     try {
       const payload: any = {
         table_ids: selectedTables,
-        formats: ['parquet', 'csv'],
+        formats: ['parquet'],
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         force_refresh: forceRefresh,

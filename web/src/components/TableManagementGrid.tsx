@@ -88,7 +88,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
 
   const toggleFormatSelect = (tableId: string, format: 'parquet' | 'csv') => {
     setSelectedFormats((prev) => {
-      const current = prev[tableId] || { parquet: true, csv: true };
+      const current = prev[tableId] || { parquet: true, csv: false };
       return {
         ...prev,
         [tableId]: {
@@ -236,7 +236,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
               <th className="py-3 px-3 w-10 text-center">选择</th>
               <th className="py-3 px-3 w-56">数据源 / 表 ID</th>
               <th className="py-3 px-3 min-w-[240px]">物理存储格式与数据范围</th>
-              <th className="py-3 px-3 w-44">当前状态</th>
+              <th className="py-3 px-3 w-60">当前状态</th>
               <th className="py-3 px-3 w-36 text-right">操作</th>
             </tr>
           </thead>
@@ -245,7 +245,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
               const isSelected = selectedTables.includes(item.table_id);
               const isExpanded = expandedRows[item.table_id] ?? false;
               const statusObj = statuses[item.table_id];
-              const fmtSelected = selectedFormats[item.table_id] || { parquet: true, csv: true };
+              const fmtSelected = selectedFormats[item.table_id] || { parquet: true, csv: false };
               const isTdx = item.table_id.includes('.tdx');
               const curMode = getTdxMode(item.table_id);
               const curDir = getVipdocDir(item.table_id);
@@ -394,7 +394,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
                           title={statusObj.message || ''}
                         >
                           <Clock className="w-3 h-3 animate-spin text-cyan-400 shrink-0" />
-                          <span className="truncate max-w-[130px]">
+                          <span className="truncate max-w-[210px]">
                             {statusObj.percentage.toFixed(0)}% - {statusObj.message || statusObj.current_symbol}
                           </span>
                         </div>
@@ -404,7 +404,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
                           title={statusObj.message || '已成功同步完成'}
                         >
                           <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                          <span className="font-sans truncate max-w-[130px]">{statusObj.message || '已完成'}</span>
+                          <span className="font-sans truncate max-w-[210px]">{statusObj.message || '已完成'}</span>
                         </div>
                       ) : statusObj?.status === 'failed' ? (
                         <div
@@ -412,7 +412,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
                           title={statusObj.message || statusObj.error_msg || '未知同步失败'}
                         >
                           <ShieldAlert className="w-3 h-3 text-red-400 shrink-0" />
-                          <span className="font-sans truncate max-w-[120px]">{statusObj.message || statusObj.error_msg || '同步失败'}</span>
+                          <span className="font-sans truncate max-w-[200px]">{statusObj.message || statusObj.error_msg || '同步失败'}</span>
                         </div>
                       ) : (
                         <span className="text-slate-500 text-[11px] font-sans">就绪</span>

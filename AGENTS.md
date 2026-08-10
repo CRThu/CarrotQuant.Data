@@ -316,6 +316,7 @@ type_map = {
   - **后端与前端自动化运行**：后端测试统一使用 `uv run pytest tests/ -v` 命令；前端与 E2E 测试使用 Bun 工具链（`bun run test:unit` / `bun run test:e2e`）。
 - **Git 提交**:
   - 消息语言为中文，遵从 Conventional Commits 规范（如 `feat:` / `fix:` / `refactor:`）。
+  - **默认生成完整多行 Commit 消息**：包含首行简短 Summary（如 `feat(web): ...`）以及详细的多点 List 说明（`- ...`），供用户审核确认。
   - 未经用户明确确认，禁止自动执行 `git add/commit/push` 操作。
 - **版本发布与 bump 规范**:
   - 项目在 `pyproject.toml` 中配置了 `[tool.bumpversion]` 自动化关联，将 `pyproject.toml` 和 `cqdata/__init__.py` 的版本号保持强同步。
