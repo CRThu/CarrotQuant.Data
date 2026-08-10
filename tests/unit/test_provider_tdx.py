@@ -274,3 +274,81 @@ class TestFetchData:
     def test_fetch_int_timestamp_converted(self, provider):
         df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", 1704038400000, 1704211200000)
         assert isinstance(df, pl.DataFrame)
+
+
+# ---------------------------------------------------------------------------
+# _safe_tcp_call 异常处理与 None 拦截测试
+# ---------------------------------------------------------------------------
+
+class TestSafeTcpCall:
+    """测试 _safe_tcp_call 的网络故障拦截与异常重试逻辑。"""
+
+    def test_safe_tcp_call_success(self):
+        from cqdata.provider.tdx_utils import _safe_tcp_call
+        mock_fn = MagicMock(return_value=[{"date": "2024-01-01"}])
+        res = _safe_tcp_call(mock_fn)
+        assert res == [{"date": "2024-01-01"}]
+
+    def test_safe_tcp_call_empty_list_allowed(self):
+        from cqdata.provider.tdx_utils import _safe_tcp_call
+        mock_fn = MagicMock(return_value=[])
+        res = _safe_tcp_call(mock_fn)
+        assert res == []
+
+    def test_safe_tcp_call_none_reconnects_and_raises(self):
+        from cqdata.provider.tdx_utils import _safe_tcp_call
+        mock_fn = MagicMock(return_value=None)
+        with patch("cqdata.provider.tdx_utils._reconnect_tdx_api") as mock_reconnect:
+            with pytest.raises(Exception):
+                _safe_tcp_call(mock_fn)
+            assert mock_reconnect.called
+
+    def test_safe_tcp_call_reraises_runtime_error_on_disconnect(self):
+        from cqdata.provider.tdx_utils import _safe_tcp_call
+        mock_fn = MagicMock(side_effect=RuntimeError("TDX 服务器全部不可用，请检查网络"))
+        with pytest.raises(RuntimeError, match="检查网络"):
+            _safe_tcp_call(mock_fn)
+
+    def test_safe_tcp_call_cached_api_none_reconnects_properly(self):
+        import cqdata.provider.tdx_utils as tdx_utils
+        tdx_utils._cached_api = None
+        mock_api = MagicMock()
+        mock_api.get_security_bars.return_value = [{"date": "2024-01-01"}]
+
+        def _mock_connect():
+            tdx_utils._cached_api = mock_api
+            return mock_api
+
+        with patch("cqdata.provider.tdx_utils._connect_tdx_api", side_effect=_mock_connect) as mock_connect:
+            fn = lambda: tdx_utils._cached_api.get_security_bars(0, 0, "600000", 0, 10)
+            res = tdx_utils._safe_tcp_call(fn)
+            assert mock_connect.called
+            assert res == [{"date": "2024-01-01"}]
+
+
+# ---------------------------------------------------------------------------
+# TDX Provider kwargs 与 Local 模式探针测试
+# ---------------------------------------------------------------------------
+
+class TestTDXProviderKwargs:
+    """测试 ProviderManager 正确传递 provider_kwargs 并实例化 TDXProvider。"""
+
+    def test_provider_manager_passes_kwargs_to_tdx(self):
+        pm = ProviderManager()
+        provider = pm.get_provider("ashare.kline.1d.raw.tdx", mode="local", vipdoc_dir="C:/custom_test_path")
+        assert isinstance(provider, TDXProvider)
+        assert provider._mode == "local"
+        assert str(provider._vipdoc_dir).replace("\\", "/") == "C:/custom_test_path"
+
+
+class TestTDXLocalModeMock:
+    """测试 TDX Local 模式下的探针与数据解析。"""
+
+    def test_local_fetch_empty_dir_returns_empty_kline(self, tmp_path):
+        provider = TDXProvider(mode="local", vipdoc_dir=str(tmp_path))
+        df = provider.fetch("ashare.kline.1d.raw.tdx", "sh.600000", "2024-01-01", "2024-01-10")
+        assert isinstance(df, pl.DataFrame)
+        assert df.is_empty()
+        assert list(df.columns) == ["symbol", "datetime", "timestamp", "open", "high", "low", "close", "volume", "amount"]
+
+

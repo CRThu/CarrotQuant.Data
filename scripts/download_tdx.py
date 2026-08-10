@@ -29,15 +29,18 @@ _EXTRACT_PREFIXES = ("sh/lday/", "sz/lday/", "bj/lday/")
 import time
 
 
-def download_and_extract(output_dir: Path):
-    """下载 hsjday.zip 并解压到 vipdoc 目录。"""
+def download_and_extract(output_dir: Path, task_id: str = "tdx.download.hsjday"):
+    """下载 hsjday.zip 并解压到 vipdoc 目录，同时向 sync_tracker 注册并更新进度。"""
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    from cqdata.service.sync_tracker import sync_tracker
+    sync_tracker.start_task(task_id, message="正在准备从官方服务器下载通达信全量日线包 hsjday.zip...")
 
     last_log_time = 0.0
     last_downloaded = 0
 
     def progress_reporthook(block_num: int, block_size: int, total_size: int):
-        """每秒平滑刷新一次下载百分比与实时速度日志。"""
+        """每秒平滑刷新一次下载百分比与实时速度日志，并同步给 sync_tracker。"""
         nonlocal last_log_time, last_downloaded
         now = time.time()
         downloaded = block_num * block_size
@@ -52,29 +55,45 @@ def download_and_extract(output_dir: Path):
             if total_size > 0:
                 total_mb = total_size / (1024 * 1024)
                 pct = min(100.0, downloaded / total_size * 100)
-                logger.info(f"[下载中] {pct:5.1f}% | {downloaded_mb:5.1f}/{total_mb:.1f} MB | 速度: {speed_mb:5.2f} MB/s")
+                msg = f"[下载中] {pct:5.1f}% | {downloaded_mb:5.1f}/{total_mb:.1f} MB | 速度: {speed_mb:5.2f} MB/s"
+                logger.info(msg)
+                sync_tracker.update_progress(task_id, current=downloaded, total=total_size, message=msg)
             else:
-                logger.info(f"[下载中] {downloaded_mb:5.1f} MB | 速度: {speed_mb:5.2f} MB/s")
+                msg = f"[下载中] {downloaded_mb:5.1f} MB | 速度: {speed_mb:5.2f} MB/s"
+                logger.info(msg)
+                sync_tracker.update_progress(task_id, current=downloaded, total=downloaded, message=msg)
 
             last_log_time = now
             last_downloaded = downloaded
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        zip_path = Path(tmp_dir) / "hsjday.zip"
+    try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            zip_path = Path(tmp_dir) / "hsjday.zip"
 
-        logger.info("正在下载: %s", TDX_DAILY_URL)
-        urlretrieve(TDX_DAILY_URL, str(zip_path), reporthook=progress_reporthook)
-        logger.info("下载完成: %s", zip_path)
+            logger.info("正在下载: %s", TDX_DAILY_URL)
+            urlretrieve(TDX_DAILY_URL, str(zip_path), reporthook=progress_reporthook)
+            logger.info("下载完成: %s", zip_path)
 
-        logger.info("正在解压到: %s", output_dir)
-        extracted = 0
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            for info in zf.infolist():
-                if any(info.filename.startswith(p) for p in _EXTRACT_PREFIXES):
+            logger.info("正在解压到: %s", output_dir)
+            sync_tracker.update_progress(task_id, current=1, total=1, message=f"正在解压至 {output_dir}...")
+            extracted = 0
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                info_list = [i for i in zf.infolist() if any(i.filename.startswith(p) for p in _EXTRACT_PREFIXES)]
+                total_info = len(info_list)
+                for idx, info in enumerate(info_list):
                     zf.extract(info, str(output_dir))
                     extracted += 1
+                    if idx % 500 == 0 or idx == total_info - 1:
+                        sync_tracker.update_progress(task_id, current=idx + 1, total=total_info, message=f"正在解压行情包 ({idx + 1}/{total_info})...")
 
-        logger.info("解压完成: %d 个文件", extracted)
+            success_msg = f"解压完成: 共部署 {extracted} 个代码的日线行情"
+            logger.info(success_msg)
+            sync_tracker.finish_task(task_id, success=True, message=success_msg)
+    except Exception as e:
+        error_msg = f"下载解压失败: {e}"
+        logger.error(error_msg)
+        sync_tracker.finish_task(task_id, success=False, message=error_msg, error_msg=str(e))
+        raise e
 
 
 def verify_vipdoc(vipdoc_dir: Path):

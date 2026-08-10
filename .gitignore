@@ -5,8 +5,8 @@ __pycache__/
 
 
 # Project specific
-storage_root/
-test_*_root*/
+data/
+test_*data*/
 logs/
 tdx_data/
 
@@ -25,4 +25,4 @@ dist/
 build/
 cqdata/static/
 web/dist/
-web/node_modules/
+web/node_modules/

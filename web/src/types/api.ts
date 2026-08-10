@@ -164,6 +164,14 @@ export interface SyncRequestPayload {
   force_refresh?: boolean;
   batch_size?: number;
   symbol_limit?: number;
+  provider_kwargs?: Record<string, any>;
+}
+
+export interface TdxCheckResponse {
+  path: string;
+  exists: boolean;
+  symbol_count: number;
+  valid: boolean;
 }
 
 export interface SyncTaskResponse {
@@ -187,3 +195,54 @@ export const getUpDownColors = (mode: ColorMode = 'redUpGreenDown'): UpDownColor
   }
   return { upColor: '#ef4444', downColor: '#22c55e' };
 };
+
+// 单格式 (Parquet / CSV) 的独立物理数据信息
+export interface FormatDetailInfo {
+  exists: boolean;
+  updated_at: string | null;
+  start_datetime: string | null;
+  end_datetime: string | null;
+  total_bars: number;
+  symbol_count: number;
+}
+
+// 详细数据表元数据定义 (/api/v1/tables/detailed)
+export interface TableDetailedMeta {
+  table_id: string;
+  name: string;
+  category: 'timeseries' | 'event';
+  source: string;
+  description: string;
+  formats: {
+    parquet: FormatDetailInfo;
+    csv: FormatDetailInfo;
+  };
+}
+
+// 详细同步任务精准状态
+export interface SyncStatusItem {
+  table_id: string;
+  status: 'idle' | 'running' | 'success' | 'failed';
+  current: number;
+  total: number;
+  percentage: number;
+  current_symbol: string;
+  message?: string;
+  start_time: number | null;
+  end_time: number | null;
+  error_msg: string | null;
+}
+
+export interface SyncStatusResponse {
+  active_tasks: string[];
+  statuses: Record<string, SyncStatusItem>;
+}
+
+// SSE / Log 视窗日志项
+export interface LogMessage {
+  timestamp: string;
+  level: 'INFO' | 'DEBUG' | 'WARNING' | 'ERROR';
+  message: string;
+  time_raw?: number;
+}
+

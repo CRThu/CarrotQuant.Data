@@ -12,6 +12,7 @@ export interface UseConceptDataReturn {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   loading: boolean;
+  stockLoading: boolean;
   error: string | null;
   refreshConceptData: () => void;
 }
@@ -20,76 +21,45 @@ export const useConceptData = (): UseConceptDataReturn => {
   const [conceptTableId, setConceptTableId] = useState<string>('ashare.concept.eastmoney');
   const [allBoards, setAllBoards] = useState<ConceptBoardItem[]>([]);
   const [selectedBoardCode, setSelectedBoardCode] = useState<string | null>(null);
+  const [currentBoardStocks, setCurrentBoardStocks] = useState<{ symbol: string; stock_name: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [stockLoading, setStockLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 方案 A：初始化批量获取全量板块成分股，并在前端快速构建索引树
-  const fetchConceptData = useCallback(async () => {
+  // 阶段 1：极速拉取板块列表 (仅 20KB 5ms)
+  const fetchBoards = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiClient.queryData({
+      const res = await apiClient.getConceptBoards({
         table_id: conceptTableId,
-        page: 1,
-        page_size: 50000, // 批量拉取全量
+        page_size: 1000,
       });
 
-      if (!res || !res.columns || !res.data) {
+      if (!res || !res.boards) {
         setAllBoards([]);
         return;
       }
 
-      const colMap = new Map<string, number>();
-      res.columns.forEach((col, idx) => colMap.set(col.toLowerCase(), idx));
+      const boardItems: ConceptBoardItem[] = res.boards.map((b) => ({
+        board_code: b.board_code,
+        board_name: b.board_name,
+        stock_count: b.stock_count,
+        stocks: [],
+      }));
 
-      const idxBoardCode = colMap.get('board_code') ?? -1;
-      const idxBoardName = colMap.get('board_name') ?? -1;
-      const idxSymbol = colMap.get('symbol') ?? -1;
-      const idxStockName = colMap.get('stock_name') ?? -1;
+      setAllBoards(boardItems);
 
-      if (idxBoardCode === -1 || idxSymbol === -1) {
-        setAllBoards([]);
-        return;
-      }
-
-      const boardMap = new Map<string, ConceptBoardItem>();
-
-      for (const row of res.data) {
-        const boardCode = String(row[idxBoardCode] || '');
-        const boardName = idxBoardName !== -1 ? String(row[idxBoardName] || '') : boardCode;
-        const symbol = String(row[idxSymbol] || '');
-        const stockName = idxStockName !== -1 ? String(row[idxStockName] || '') : symbol;
-
-        if (!boardCode || !symbol) continue;
-
-        if (!boardMap.has(boardCode)) {
-          boardMap.set(boardCode, {
-            board_code: boardCode,
-            board_name: boardName,
-            stock_count: 0,
-            stocks: [],
-          });
-        }
-
-        const item = boardMap.get(boardCode)!;
-        item.stocks.push({ symbol, stock_name: stockName });
-        item.stock_count += 1;
-      }
-
-      const boardList = Array.from(boardMap.values()).sort((a, b) => b.stock_count - a.stock_count);
-      setAllBoards(boardList);
-
-      // 智能选中：若当前 selectedBoardCode 为空或在新列表中不存在，则默认重置选中第 1 个板块
-      if (boardList.length > 0) {
+      if (boardItems.length > 0) {
         setSelectedBoardCode((prev) => {
-          const exists = boardList.some((b) => b.board_code === prev);
-          return exists ? prev : boardList[0].board_code;
+          const exists = boardItems.some((b) => b.board_code === prev);
+          return exists ? prev : boardItems[0].board_code;
         });
       }
     } catch (err: any) {
       console.error('Failed to fetch concept boards:', err);
-      setError(err?.response?.data?.detail || err?.message || '获取板块成分股失败');
+      setError(err?.response?.data?.detail || err?.message || '获取板块列表失败');
       setAllBoards([]);
     } finally {
       setLoading(false);
@@ -97,26 +67,77 @@ export const useConceptData = (): UseConceptDataReturn => {
   }, [conceptTableId]);
 
   useEffect(() => {
-    fetchConceptData();
-  }, [fetchConceptData]);
+    fetchBoards();
+  }, [fetchBoards]);
 
-  // 根据搜索关键字过滤板块列表
+  // 阶段 2：当选中的 selectedBoardCode 变更时，按需切片加载成分股
+  useEffect(() => {
+    if (!selectedBoardCode) {
+      setCurrentBoardStocks([]);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchStocks = async () => {
+      setStockLoading(true);
+      try {
+        const res = await apiClient.queryData({
+          table_id: conceptTableId,
+          board_code: selectedBoardCode,
+          page: 1,
+          page_size: 1000,
+        });
+
+        if (!isMounted) return;
+
+        if (res && res.columns && res.data) {
+          const colMap = new Map<string, number>();
+          res.columns.forEach((col, idx) => colMap.set(col.toLowerCase(), idx));
+          const idxSymbol = colMap.get('symbol') ?? -1;
+          const idxStockName = colMap.get('stock_name') ?? -1;
+
+          if (idxSymbol !== -1) {
+            const stocks = res.data.map((row) => ({
+              symbol: String(row[idxSymbol] || ''),
+              stock_name: idxStockName !== -1 ? String(row[idxStockName] || '') : String(row[idxSymbol] || ''),
+            }));
+            setCurrentBoardStocks(stocks);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch stocks for board:', err);
+      } finally {
+        if (isMounted) setStockLoading(false);
+      }
+    };
+
+    fetchStocks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [conceptTableId, selectedBoardCode]);
+
+  // 搜索关键字过滤
   const filteredBoards = useMemo(() => {
     if (!searchQuery.trim()) return allBoards;
     const q = searchQuery.toLowerCase().trim();
     return allBoards.filter(
-      (b) =>
-        b.board_name.toLowerCase().includes(q) ||
-        b.board_code.toLowerCase().includes(q) ||
-        b.stocks.some((s) => s.stock_name.toLowerCase().includes(q) || s.symbol.toLowerCase().includes(q))
+      (b) => b.board_name.toLowerCase().includes(q) || b.board_code.toLowerCase().includes(q)
     );
   }, [allBoards, searchQuery]);
 
-  // 当前选中的板块实体
+  // 构建组装当前选中的板块与动态按需拉取到的成分股
   const currentBoard = useMemo(() => {
     if (!selectedBoardCode) return null;
-    return allBoards.find((b) => b.board_code === selectedBoardCode) || null;
-  }, [allBoards, selectedBoardCode]);
+    const base = allBoards.find((b) => b.board_code === selectedBoardCode);
+    if (!base) return null;
+    return {
+      ...base,
+      stocks: currentBoardStocks,
+      stock_count: currentBoardStocks.length || base.stock_count,
+    };
+  }, [allBoards, selectedBoardCode, currentBoardStocks]);
 
   return {
     conceptTableId,
@@ -128,7 +149,8 @@ export const useConceptData = (): UseConceptDataReturn => {
     searchQuery,
     setSearchQuery,
     loading,
+    stockLoading,
     error,
-    refreshConceptData: fetchConceptData,
+    refreshConceptData: fetchBoards,
   };
 };

@@ -27,22 +27,22 @@ cqdata server --port 8888 --open
 
 该命令会启动 FastAPI API 服务，内置托管前端 UI 界面，并自动调起系统默认浏览器访问 `http://localhost:8888/`。
 
-### 2.2 方式二：前端 UI 开发与热重载调试 (开发者)
+### 2.2 方式二：全栈热重载开发调试 (开发者 - 推荐)
 
-如果需要修改 UI 组件或进行前端增量调试：
+如果需要修改代码或进行前后端联动调试：
 
-1. **启动后端服务**：
-   ```bash
-   cqdata server --port 8888
-   ```
-2. **启动 Vite 热重载服务**（在 `web/` 目录下）：
-   ```bash
-   cd web
-   bun install
-   bun dev
-   ```
+- **Windows 用户一键启动 (推荐)**：
+  在项目根目录下双击或在终端运行：
+  ```cmd
+  .\dev.bat
+  ```
+  该脚本会自动在两个独立的窗口中同时拉起 Python 后端热重载服务 (`uv run cqdata server -p 8888 -r`) 与 React 前端热重载服务 (`cd web && bun dev`)。
 
-打开浏览器访问 `http://localhost:5173/` 享受 0.1s Vite HMR 极速实时热更新。
+- **手动分窗口启动**：
+  1. **窗口 1 (Python 后端热重载)**：`uv run cqdata server --port 8888 --reload`
+  2. **窗口 2 (React 前端热重载)**：`cd web && bun dev`
+
+打开浏览器访问 `http://localhost:5173/` 即可享受前后端全栈无缝热重载开发体验。
 
 
 ---
@@ -65,6 +65,12 @@ cqdata server --port 8888 --open
 - **时间轴强同步**：三窗格通过 `subscribeVisibleLogicalRangeChange` 双向强绑定，滚轮缩放与拖拽无缝联动。
 - **手势 Bar 限制**：支持快捷切换 250Bars、500Bars、1000Bars 或 ALL 全量切片。
 - **2D 矩阵切片**：点击“查看 2D 矩阵”，可直观查看原始 Polars 二维切片数据。
+
+### 3.4 视图 4：数据管理中心 (`DataManagementView`)
+- **独立格式水位线表格 (`TableManagementGrid`)**：展开数据表后，独立显示 `Parquet` 与 `CSV` 各在物理磁盘上的水位线起止时间、总记录行数与独立复选框。
+- **快捷“同步至最新”**：默认自动以当前时间为终点增量补全数据，支持自定义起止日期与“强制全量刷新”开关。
+- **命令行式动态提示**：表格行与右下角 **悬浮 Widget (`FloatingSyncWidget`)** 实时展示动态、可读的命令行式提示信息（如：`🟡 45% - 正在抓取 sh.600000 (45/100)`）。
+- **右下角悬浮 Widget**：切去查看 K 线或股票列表时，后台同步不受中断， Widget 会在右下角提供精简下载进度，支持一键缩小为 `⏳ 45%` 的环形呼吸灯图标。
 
 ---
 

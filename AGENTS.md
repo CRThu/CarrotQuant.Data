@@ -12,11 +12,11 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 - 支持 Baostock（日线/5分线/复权因子）、东方财富（概念/行业板块/龙虎榜/机构交易）、通达信（日线/5分/1分线）
 - 支持 CSV 和 Parquet 两种存储格式
 - 基于时间戳水位线的增量同步与断点续接
-- 四种入口：Python SDK (OOP `cqdata.ashare.kline.get()` / 统一 `cqdata.read()`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API、**极速 React Web 终端 (`web/` TradingView 3-Pane 图表 + 方案 A 概念穿透)**
+- 四种入口：Python SDK (OOP `cqdata.ashare.kline.get()` / 统一 `cqdata.read()`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API、**极速 React Web 终端 (`web/` TradingView 3-Pane 图表 + 方案 A 概念穿透 + 独立格式水位线数据管理中心与 SSE Terminal 日志流)**
 
 **技术栈**：
 - **后端**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, PyYAML
-- **前端**：Bun, React 19, Vite 6, TypeScript 7, Tailwind CSS v4, TradingView Lightweight Charts (v4 3-Pane 时间轴强同步)
+- **前端**：Bun, React 19, Vite 6, TypeScript 7, Tailwind CSS v4, TradingView Lightweight Charts
 
 ---
 
@@ -30,17 +30,17 @@ CarrotQuant.Data/
 │   │   ├── accessors/            # OOP 便捷访问层 (base.py, ashare.py, aindex.py)
 │   │   ├── python_api.py         # Python SDK 底层切片与探查 API
 │   │   ├── cli.py                # Typer CLI 控制台主入口 (cqdata sync/server/info/tables)
-│   │   └── rest_api.py           # FastAPI REST HTTP 服务
+│   │   └── rest_api.py           # FastAPI REST HTTP 服务 (含 SSE 日志流 & /tables/detailed)
 │   ├── config/                   # 配置管理 (支持 CQDATA_DATA_DIR 环境变量与 YAML)
 │   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
-│   ├── service/                  # 业务逻辑层 (SyncManager, DataReader, MetadataReader, TaskPlanner, MetadataManager)
+│   ├── service/                  # 业务逻辑层 (SyncManager, SyncProgressTracker, DataReader, TaskPlanner, MetadataManager)
 │   ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
 │   └── utils/                    # 工具箱 (logger_utils, time_utils)
 ├── web/                          # React Web 金融终端 frontend (Bun + Vite 6 + Tailwind v4 + TradingView 3-Pane)
 │   ├── src/
-│   │   ├── components/           # HeaderBar, TradingViewKLineChart, ErrorBoundary, SyncModal 等
-│   │   ├── views/                # StockListView, ConceptIndustryView (方案A穿透), StockDetailView
-│   │   ├── services/             # apiClient, transformers (2D矩阵转K线), indicators (MA/MACD/BS点)
+│   │   ├── components/           # HeaderBar, TradingViewKLineChart, TableManagementGrid, SyncLogTerminal, FloatingSyncWidget 等
+│   │   ├── views/                # StockListView, ConceptIndustryView, StockDetailView, DataManagementView (数据管理中心)
+│   │   ├── services/             # apiClient, transformers, indicators
 │   │   └── hooks/                # useMarketData, useConceptData, useTables
 │   └── package.json
 ├── scripts/                      # 辅助脚本 (wizard.py 交互向导, download_tdx.py)
@@ -227,8 +227,9 @@ data/
 
 ### 6.3 元数据规范 (metadata.json)
 
-每个表及格式维护独立的 `metadata.json`，包含了顶层显式版本号 `"version": 1`、`schema` 与 `statistics`（包括起止时间戳、ISO时间与 `total_bars`）。
-> **EV 表性能优化**：EV 表的 `metadata.json` 严禁包含 `symbol_count` 和 `time_steps` 字段，巡检时跳过大文件全量扫描。
+每个表及格式维护独立的 `metadata.json`，包含了顶层显式版本号 `"version": 1`、`schema` 与 `statistics`（包括上次同步的系统挂钟时间 `updated_at`、起止时间戳、ISO时间与 `total_bars`）。
+> **更新时间说明**：`statistics.updated_at` 为每次数据刷盘成功时的系统 ISO8601 时间戳（如 `"2026-08-10T16:25:00.000+08:00"`），方便前端与 API 精准识别物理数据的最新刷新时刻。
+> **EV 表性能优化**：EV 表的 `metadata.json` 严禁包含 `symbol_count` 和 `time_steps` 字段，巡检时跳过大文件全量扫描。对于无 timestamp 的平铺模式（如板块成分股），`statistics` 包含 `updated_at` 和 `total_bars`。
 > **复权因子说明**：仅保留后复权因子 `back_adj_factor`，剔除可变的历史前复权因子，防止历史数据变更污染增量水位线。
 
 ### 6.4 TS 与 EV 存储行为差异

@@ -11,6 +11,7 @@ interface HeaderBarProps {
   onSearchChange: (q: string) => void;
   colorMode: ColorMode;
   onColorModeChange: (mode: ColorMode) => void;
+  activeTaskCount?: number;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -22,6 +23,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onSearchChange,
   colorMode,
   onColorModeChange,
+  activeTaskCount = 0,
 }) => {
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -48,7 +50,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           <span className="font-extrabold text-base tracking-wide bg-gradient-to-r from-amber-400 via-orange-300 to-cyan-400 bg-clip-text text-transparent">
             CarrotQuant
           </span>
-          <span className="text-xs text-slate-400 ml-1 font-mono">Data Web v1.1</span>
+          <span className="text-xs text-slate-400 ml-1 font-mono">Data Web v1.2</span>
         </div>
       </div>
 
@@ -94,7 +96,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
       </div>
 
-      {/* 3. 右侧状态指示、配色设置与增量同步控台 */}
+      {/* 3. 右侧状态指示、配色设置与数据管理入口 */}
       <div className="flex items-center space-x-3">
         {/* 红涨绿跌 / 绿涨红跌 终端配色偏好切换 */}
         <div className="flex items-center space-x-1.5 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800" title="终端涨跌配色主题设置">
@@ -120,13 +122,18 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           </span>
         </div>
 
-        {/* 同步控台触发按钮 */}
+        {/* 数据管理触发按钮 */}
         <button
           onClick={onOpenSyncModal}
-          className="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg text-xs font-medium shadow-md shadow-cyan-900/30 transition-all active:scale-95 cursor-pointer"
+          className="flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg text-xs font-medium shadow-md shadow-cyan-900/30 transition-all active:scale-95 cursor-pointer relative"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>增量同步</span>
+          <RefreshCw className={`w-3.5 h-3.5 ${activeTaskCount > 0 ? 'animate-spin' : ''}`} />
+          <span>数据管理</span>
+          {activeTaskCount > 0 && (
+            <span className="ml-1 px-1.5 py-0.2 text-[10px] font-mono bg-cyan-400 text-slate-950 rounded-full font-bold">
+              {activeTaskCount}
+            </span>
+          )}
         </button>
       </div>
     </header>

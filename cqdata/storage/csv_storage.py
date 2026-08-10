@@ -1,3 +1,5 @@
+import threading
+import uuid
 from pathlib import Path
 import polars as pl
 import os
@@ -21,6 +23,7 @@ class CSVStorage(StorageManager):
         self.data_dir = Path(data_dir)
         self._partition = partition
         self._layout = layout
+        self._lock = threading.Lock()
 
     @property
     def partition(self) -> str:
@@ -115,35 +118,36 @@ class CSVStorage(StorageManager):
         if df.is_empty():
             return
 
-        # 基于核心的 timestamp (ms) 提取年份用于 Hive 分区
-        df = df.with_columns(
-            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
-        )
+        with self._lock:
+            # 基于核心的 timestamp (ms) 提取年份用于 Hive 分区
+            df = df.with_columns(
+                pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
+            )
 
-        # 按 symbol 和 _year 分组并处理每一块
-        for (symbol, year), group_df in df.partition_by(["symbol", "_year"], as_dict=True).items():
-            path = self._get_series_path(table_id, symbol, year)
-            
-            # 去除生成的 _year 辅助列，以便写入
-            patch_df = group_df.drop("_year")
-            
-            if mode == "append" and path.exists():
-                # 读取并合并
-                old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
-                # TS 模式：基于 [symbol, timestamp] 去重
-                merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])
-            else:
-                # 首次写入或 Overwrite
-                merged_df = patch_df
-            
-            # 显式使用单 symbol 时间轴排序
-            final_df = DataMerger.sort(merged_df, keys=["timestamp"])
-            
-            # 统一路径创建与原子落盘
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_suffix(".tmp")
-            final_df.write_csv(tmp_path)
-            os.replace(tmp_path, path)
+            # 按 symbol 和 _year 分组并处理每一块
+            for (symbol, year), group_df in df.partition_by(["symbol", "_year"], as_dict=True).items():
+                path = self._get_series_path(table_id, symbol, year)
+                
+                # 去除生成的 _year 辅助列，以便写入
+                patch_df = group_df.drop("_year")
+                
+                if mode == "append" and path.exists():
+                    # 读取并合并
+                    old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
+                    # TS 模式：基于 [symbol, timestamp] 去重
+                    merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])
+                else:
+                    # 首次写入或 Overwrite
+                    merged_df = patch_df
+                
+                # 显式使用单 symbol 时间轴排序
+                final_df = DataMerger.sort(merged_df, keys=["timestamp"])
+                
+                # 统一路径创建与原子落盘
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = path.with_name(f".tmp_{path.stem}_{uuid.uuid4().hex[:8]}.tmp")
+                final_df.write_csv(tmp_path)
+                os.replace(tmp_path, path)
 
     def write_event(self, table_id: str, df: pl.DataFrame, mode: str, sort_keys: list[str]):
         """
@@ -154,52 +158,53 @@ class CSVStorage(StorageManager):
         if df.is_empty():
             return
 
-        if "timestamp" not in df.columns:
-            # 平铺模式：无 Hive 分区，文件路径为 {root}/{table_id}/data.csv
-            path = self.data_dir / table_id / "data.csv"
-            
-            if mode == "append" and path.exists():
-                old_df = self._read_with_schema(table_id, path, schema_override=df.schema)
-                merged_df = DataMerger.merge(old_df, df, subset=None)
-            else:
-                merged_df = df
-            
-            final_df = DataMerger.sort(merged_df, keys=sort_keys)
-            
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_suffix(".tmp")
-            final_df.write_csv(tmp_path)
-            os.replace(tmp_path, path)
-            return
+        with self._lock:
+            if "timestamp" not in df.columns:
+                # 平铺模式：无 Hive 分区，文件路径为 {root}/{table_id}/data.csv
+                path = self.data_dir / table_id / "data.csv"
+                
+                if mode == "append" and path.exists():
+                    old_df = self._read_with_schema(table_id, path, schema_override=df.schema)
+                    merged_df = DataMerger.merge(old_df, df, subset=None)
+                else:
+                    merged_df = df
+                
+                final_df = DataMerger.sort(merged_df, keys=sort_keys)
+                
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = path.with_name(f".tmp_{path.stem}_{uuid.uuid4().hex[:8]}.tmp")
+                final_df.write_csv(tmp_path)
+                os.replace(tmp_path, path)
+                return
 
-        # Hive 分区模式：基于 timestamp (ms) 提取年份用于分区
-        df = df.with_columns(
-            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
-        )
+            # Hive 分区模式：基于 timestamp (ms) 提取年份用于分区
+            df = df.with_columns(
+                pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
+            )
 
-        # 按 _year 分组并处理每一块
-        for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
-            path = self._get_event_path(table_id, year)
-            
-            # 去除生成的 _year 辅列，以便写入
-            patch_df = group_df.drop("_year")
-            
-            if mode == "append" and path.exists():
-                # 读取并合并
-                old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
-                # EV 模式：全行去重
-                merged_df = DataMerger.merge(old_df, patch_df, subset=None)
-            else:
-                # 首次写入或 Overwrite
-                merged_df = patch_df
-            
-            final_df = DataMerger.sort(merged_df, keys=sort_keys)
-            
-            # 统一路径创建与原子落盘
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_suffix(".tmp")
-            final_df.write_csv(tmp_path)
-            os.replace(tmp_path, path)
+            # 按 _year 分组并处理每一块
+            for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
+                path = self._get_event_path(table_id, year)
+                
+                # 去除生成的 _year 辅列，以便写入
+                patch_df = group_df.drop("_year")
+                
+                if mode == "append" and path.exists():
+                    # 读取并合并
+                    old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
+                    # EV 模式：全行去重
+                    merged_df = DataMerger.merge(old_df, patch_df, subset=None)
+                else:
+                    # 首次写入或 Overwrite
+                    merged_df = patch_df
+                
+                final_df = DataMerger.sort(merged_df, keys=sort_keys)
+                
+                # 统一路径创建与原子落盘
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = path.with_name(f".tmp_{path.stem}_{uuid.uuid4().hex[:8]}.tmp")
+                final_df.write_csv(tmp_path)
+                os.replace(tmp_path, path)
 
     def get_all_symbols(self, table_id: str) -> list[str]:
         """扫描所有 year 目录，提取唯一 Symbol (文件名)"""

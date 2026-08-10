@@ -95,7 +95,7 @@ export const matrixToOHLC = (matrix: QueryMatrixResponse, maxBars?: number): OHL
   return sortedBars;
 };
 
-import { getUpDownColors, type ColorMode } from '../types/api';
+import { getUpDownColors, type ColorMode, type ConceptBoardItem } from '../types/api';
 
 /**
  * 从 OHLC 数据生成带动态配色的成交量 Histogram 数据系列 (支持 A股红涨绿跌 与 美股绿涨红跌)
@@ -113,4 +113,49 @@ export const ohlcToVolume = (
       color: isUp ? upColor : downColor,
     };
   });
+};
+
+/**
+ * 方案 A：将概念成分股 2D 矩阵按 board_code 分组聚合为 ConceptBoardItem 列表
+ */
+export const groupRowsToConceptBoards = (
+  columns: string[],
+  data: (string | number | boolean | null)[][]
+): ConceptBoardItem[] => {
+  if (!columns || !data || data.length === 0) return [];
+  const colMap = new Map<string, number>();
+  columns.forEach((col, idx) => colMap.set(col.toLowerCase(), idx));
+
+  const idxBoardCode = colMap.get('board_code') ?? -1;
+  const idxBoardName = colMap.get('board_name') ?? -1;
+  const idxSymbol = colMap.get('symbol') ?? -1;
+  const idxStockName = colMap.get('stock_name') ?? -1;
+
+  if (idxBoardCode === -1 || idxSymbol === -1) return [];
+
+  const boardMap = new Map<string, ConceptBoardItem>();
+
+  for (const row of data) {
+    const boardCode = String(row[idxBoardCode] || '');
+    const boardName = idxBoardName !== -1 ? String(row[idxBoardName] || '') : boardCode;
+    const symbol = String(row[idxSymbol] || '');
+    const stockName = idxStockName !== -1 ? String(row[idxStockName] || '') : symbol;
+
+    if (!boardCode || !symbol) continue;
+
+    if (!boardMap.has(boardCode)) {
+      boardMap.set(boardCode, {
+        board_code: boardCode,
+        board_name: boardName,
+        stock_count: 0,
+        stocks: [],
+      });
+    }
+
+    const item = boardMap.get(boardCode)!;
+    item.stocks.push({ symbol, stock_name: stockName });
+    item.stock_count = item.stocks.length;
+  }
+
+  return Array.from(boardMap.values());
 };

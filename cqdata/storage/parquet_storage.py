@@ -1,3 +1,5 @@
+import threading
+import uuid
 from pathlib import Path
 import os
 import polars as pl
@@ -21,6 +23,7 @@ class ParquetStorage(StorageManager):
         self.data_dir = Path(data_dir)
         self._partition = partition
         self._layout = layout
+        self._lock = threading.Lock()
 
     @property
     def partition(self) -> str:
@@ -130,33 +133,34 @@ class ParquetStorage(StorageManager):
         if df.is_empty():
             return
 
-        # 提取年份用于分区
-        df = df.with_columns(
-            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
-        )
+        with self._lock:
+            # 提取年份用于分区
+            df = df.with_columns(
+                pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
+            )
 
-        # 按 _year 分组处理
-        for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
-            path = self._get_series_path(table_id, year)
-            patch_df = group_df.drop("_year")
+            # 按 _year 分组处理
+            for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
+                path = self._get_series_path(table_id, year)
+                patch_df = group_df.drop("_year")
 
-            if mode == "append" and path.exists():
-                # 读取并合并（使用强锁对齐 patch_df 的类型）
-                old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
-                # TS 模式：基于 [symbol, timestamp] 去重
-                merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])
-            else:
-                # 首次写入或 Overwrite
-                merged_df = patch_df
-            
-            # 显式使用 Symbol-First 排序，支持 MMF 索引
-            final_df = DataMerger.sort(merged_df, keys=["symbol", "timestamp"])
+                if mode == "append" and path.exists():
+                    # 读取并合并（使用强锁对齐 patch_df 的类型）
+                    old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
+                    # TS 模式：基于 [symbol, timestamp] 去重
+                    merged_df = DataMerger.merge(old_df, patch_df, subset=["symbol", "timestamp"])
+                else:
+                    # 首次写入或 Overwrite
+                    merged_df = patch_df
+                
+                # 显式使用 Symbol-First 排序，支持 MMF 索引
+                final_df = DataMerger.sort(merged_df, keys=["symbol", "timestamp"])
 
-            # 原子写入
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_suffix(".tmp")
-            final_df.write_parquet(tmp_path, compression="zstd")
-            os.replace(tmp_path, path)
+                # 原子写入
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = path.with_name(f".tmp_{path.stem}_{uuid.uuid4().hex[:8]}.tmp")
+                final_df.write_parquet(tmp_path, compression="zstd")
+                os.replace(tmp_path, path)
 
     def write_event(self, table_id: str, df: pl.DataFrame, mode: str = "append", sort_keys: list[str] = None):
         """
@@ -167,50 +171,51 @@ class ParquetStorage(StorageManager):
         if df.is_empty():
             return
 
-        if "timestamp" not in df.columns:
-            # 平铺模式：无 Hive 分区，文件路径为 {root}/{table_id}/data.parquet
-            path = self._get_flat_event_path(table_id)
-            
-            if mode == "append" and path.exists():
-                old_df = self._read_with_schema(table_id, path, schema_override=df.schema)
-                merged_df = DataMerger.merge(old_df, df, subset=None)
-            else:
-                merged_df = df
-            
-            final_df = DataMerger.sort(merged_df, keys=sort_keys)
-            
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_suffix(".tmp")
-            final_df.write_parquet(tmp_path, compression="zstd")
-            os.replace(tmp_path, path)
-            return
+        with self._lock:
+            if "timestamp" not in df.columns:
+                # 平铺模式：无 Hive 分区，文件路径为 {root}/{table_id}/data.parquet
+                path = self._get_flat_event_path(table_id)
+                
+                if mode == "append" and path.exists():
+                    old_df = self._read_with_schema(table_id, path, schema_override=df.schema)
+                    merged_df = DataMerger.merge(old_df, df, subset=None)
+                else:
+                    merged_df = df
+                
+                final_df = DataMerger.sort(merged_df, keys=sort_keys)
+                
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = path.with_name(f".tmp_{path.stem}_{uuid.uuid4().hex[:8]}.tmp")
+                final_df.write_parquet(tmp_path, compression="zstd")
+                os.replace(tmp_path, path)
+                return
 
-        # Hive 分区模式：提取年份用于分区
-        df = df.with_columns(
-            pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
-        )
+            # Hive 分区模式：提取年份用于分区
+            df = df.with_columns(
+                pl.from_epoch(pl.col("timestamp"), time_unit="ms").dt.year().alias("_year")
+            )
 
-        # 按 _year 分组处理
-        for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
-            path = self._get_event_path(table_id, year)
-            patch_df = group_df.drop("_year")
+            # 按 _year 分组处理
+            for (year,), group_df in df.partition_by(["_year"], as_dict=True).items():
+                path = self._get_event_path(table_id, year)
+                patch_df = group_df.drop("_year")
 
-            if mode == "append" and path.exists():
-                # 读取并合并（使用强锁对齐 patch_df 的类型）
-                old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
-                # EV 模式：全行去重
-                merged_df = DataMerger.merge(old_df, patch_df, subset=None)
-            else:
-                # 首次写入或 Overwrite
-                merged_df = patch_df
-            
-            final_df = DataMerger.sort(merged_df, keys=sort_keys)
+                if mode == "append" and path.exists():
+                    # 读取并合并（使用强锁对齐 patch_df 的类型）
+                    old_df = self._read_with_schema(table_id, path, schema_override=patch_df.schema)
+                    # EV 模式：全行去重
+                    merged_df = DataMerger.merge(old_df, patch_df, subset=None)
+                else:
+                    # 首次写入或 Overwrite
+                    merged_df = patch_df
+                
+                final_df = DataMerger.sort(merged_df, keys=sort_keys)
 
-            # 原子写入
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = path.with_suffix(".tmp")
-            final_df.write_parquet(tmp_path, compression="zstd")
-            os.replace(tmp_path, path)
+                # 原子写入
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = path.with_name(f".tmp_{path.stem}_{uuid.uuid4().hex[:8]}.tmp")
+                final_df.write_parquet(tmp_path, compression="zstd")
+                os.replace(tmp_path, path)
 
     def get_all_symbols(self, table_id: str) -> list[str]:
         """扫描所有 parquet 文件，提取唯一证券代码"""

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { DATA_SOURCE_OPTIONS, type ColorMode } from './types/api';
+import { DATA_SOURCE_OPTIONS, type ColorMode, type SyncStatusItem } from './types/api';
 import { useTables } from './hooks/useTables';
+import { apiClient } from './services/apiClient';
 import { HeaderBar } from './components/HeaderBar';
 import { SidebarNav, type ViewType } from './components/SidebarNav';
 import { StockListView } from './views/StockListView';
 import { ConceptIndustryView } from './views/ConceptIndustryView';
 import { StockDetailView } from './views/StockDetailView';
+import { DataManagementView } from './views/DataManagementView';
+import { FloatingSyncWidget } from './components/FloatingSyncWidget';
 import { SyncModal } from './components/SyncModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -16,6 +19,8 @@ export const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
+  const [activeTaskCount, setActiveTaskCount] = useState<number>(0);
+  const [runningStatus, setRunningStatus] = useState<SyncStatusItem | null>(null);
 
   // 终端配色偏好: 'redUpGreenDown' (A股红涨绿跌) | 'greenUpRedDown' (美股绿涨红跌)，持久化至 localStorage
   const [colorMode, setColorMode] = useState<ColorMode>(() => {
@@ -27,6 +32,27 @@ export const App: React.FC = () => {
     localStorage.setItem('cqdata_color_mode', colorMode);
   }, [colorMode]);
 
+  // 全局轮询获取活动中的任务状态，供悬浮 Widget 使用
+  useEffect(() => {
+    const pollStatus = async () => {
+      try {
+        const res = await apiClient.getSyncStatus();
+        setActiveTaskCount((res.active_tasks || []).length);
+
+        const foundRunning = Object.values(res.statuses || {}).find(
+          (s) => s.status === 'running' || s.status === 'failed' || s.status === 'success'
+        );
+        setRunningStatus(foundRunning || null);
+      } catch (e) {
+        // 静默
+      }
+    };
+
+    pollStatus();
+    const timer = setInterval(pollStatus, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
   const { serverOnline } = useTables();
 
   // 从股票列表或板块成分股中选择某个代码，自动打通跳转到 3-Pane K 线详情页
@@ -37,17 +63,18 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary fallbackTitle="应用顶层组件渲染拦截">
-      <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans">
-        {/* 顶部 HeaderBar (Logo、数据源切换器、状态指示、搜索、配色设置与同步按钮) */}
+      <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans relative">
+        {/* 顶部 HeaderBar (Logo、数据源切换器、状态指示、搜索、配色设置与数据管理按钮) */}
         <HeaderBar
           currentTableId={currentTableId}
           onTableChange={setCurrentTableId}
           serverOnline={serverOnline}
-          onOpenSyncModal={() => setIsSyncModalOpen(true)}
+          onOpenSyncModal={() => setCurrentView('data_management')}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           colorMode={colorMode}
           onColorModeChange={setColorMode}
+          activeTaskCount={activeTaskCount}
         />
 
         {/* 主界面: 左侧侧边栏 + 右侧中央工作区 */}
@@ -86,12 +113,22 @@ export const App: React.FC = () => {
                   colorMode={colorMode}
                 />
               )}
+
+              {currentView === 'data_management' && (
+                <DataManagementView onSyncStatusChange={setActiveTaskCount} />
+              )}
             </ErrorBoundary>
           </main>
         </div>
 
-        {/* 增量同步控制台弹窗 */}
+        {/* 弹窗备份 */}
         <SyncModal isOpen={isSyncModalOpen} onClose={() => setIsSyncModalOpen(false)} />
+
+        {/* 全局右下角悬浮同步 Widget */}
+        <FloatingSyncWidget
+          activeStatus={runningStatus}
+          onNavigateToManagement={() => setCurrentView('data_management')}
+        />
       </div>
     </ErrorBoundary>
   );

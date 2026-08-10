@@ -130,6 +130,7 @@ class TestUpdateMetadataTS:
                 assert "statistics" in metadata
 
                 stats = metadata["statistics"]
+                assert "updated_at" in stats
                 assert "start_timestamp" in stats
                 assert "end_timestamp" in stats
                 assert "start_datetime" in stats

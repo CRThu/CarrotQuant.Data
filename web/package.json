@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run src/__tests__",
+    "test:coverage": "vitest run src/__tests__ --coverage",
     "lint": "oxlint",
     "preview": "vite preview"
   },

@@ -4,6 +4,9 @@ import type {
   TablesResponse,
   SyncRequestPayload,
   SyncTaskResponse,
+  TableDetailedMeta,
+  SyncStatusResponse,
+  TdxCheckResponse,
 } from '../types/api';
 
 /**
@@ -56,6 +59,7 @@ export const apiClient = {
   async queryData(params: {
     table_id: string;
     symbols?: string;
+    board_code?: string;
     start_date?: string;
     end_date?: string;
     columns?: string;
@@ -64,6 +68,35 @@ export const apiClient = {
     page_size?: number;
   }): Promise<QueryMatrixResponse> {
     const res = await api.get('/query', { params });
+    return res.data;
+  },
+
+  /**
+   * 极速获取概念/行业板块列表及成分股计数 (轻量 20KB 数据包)
+   */
+  async getConceptBoards(params: {
+    table_id: string;
+    query?: string;
+    page?: number;
+    page_size?: number;
+    format?: string;
+  }): Promise<{
+    table_id: string;
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+    boards: { board_code: string; board_name: string; stock_count: number }[];
+  }> {
+    const res = await api.get(`/tables/${params.table_id}/boards`, { params });
+    return res.data;
+  },
+
+  /**
+   * 获取所有数据表及其各存储格式的详细物理元数据
+   */
+  async getDetailedTables(): Promise<{ tables: TableDetailedMeta[]; total: number }> {
+    const res = await api.get('/tables/detailed');
     return res.data;
   },
 
@@ -82,4 +115,37 @@ export const apiClient = {
     const res = await api.get('/tasks');
     return res.data;
   },
+
+  /**
+   * 获取所有同步任务的详细精准状态与进度 (含 current, total, percentage, symbol)
+   */
+  async getSyncStatus(): Promise<SyncStatusResponse> {
+    const res = await api.get('/sync/status');
+    return res.data;
+  },
+
+  /**
+   * 检查通达信 vipdoc 本地路径状态
+   */
+  async checkTdxPath(vipdoc_dir: string = 'C:\\new_tdx\\vipdoc'): Promise<TdxCheckResponse> {
+    const res = await api.get('/tdx/check', { params: { vipdoc_dir } });
+    return res.data;
+  },
+
+  /**
+   * 触发后台下载并部署通达信官方全量日线包 hsjday.zip
+   */
+  async downloadTdxZip(vipdoc_dir: string = 'C:\\new_tdx\\vipdoc') {
+    const res = await api.post('/tdx/download', { vipdoc_dir });
+    return res.data;
+  },
+
+  /**
+   * 创建 SSE (Server-Sent Events) 日志流 EventSource 连接
+   */
+  createLogEventSource(): EventSource {
+    const sseUrl = typeof window !== 'undefined' ? '/api/v1/sync/stream' : 'http://localhost:8888/api/v1/sync/stream';
+    return new EventSource(sseUrl);
+  },
 };
+

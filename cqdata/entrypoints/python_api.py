@@ -102,6 +102,15 @@ def get_row_count(table_id: str, format: str = "auto") -> int:
     return mr.get_row_count(table_id=table_id, format=format)
 
 
+def list_boards(table_id: str, format: str = "auto") -> List[Dict[str, Any]]:
+    """获取板块概念/行业列表及各板块成分股计数"""
+    df = read(table_id=table_id, format=format)
+    if df.is_empty() or "board_code" not in df.columns:
+        return []
+    boards_df = df.group_by(["board_code", "board_name"]).agg(pl.len().alias("stock_count")).sort("board_code")
+    return [{"board_code": row[0], "board_name": row[1], "stock_count": row[2]} for row in boards_df.iter_rows()]
+
+
 def sync(
     table_ids: Union[List[str], str],
     formats: Union[List[str], str] = "parquet",

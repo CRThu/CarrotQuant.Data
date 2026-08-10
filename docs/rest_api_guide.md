@@ -37,7 +37,9 @@
 | **前端 UI 托管** | `/` | `GET` | 内置托管的 React Web 金融终端主界面（支持 SPA 路由） |
 | **系统探针** | `/health` | `GET` | 服务运行状态探针与 `data_dir` 探查 |
 | **元数据探查** | `/tables` | `GET` | 列出本地所有数据表清单（平铺对象数组，含 `category` 分类） |
-| | `/tables/{table_id}/formats` | `GET` | 获取某数据表已落地的存储格式列表 (`["parquet", "csv"]`) |
+| | `/tables/detailed` | `GET` | 获取所有数据表及其各格式 (Parquet/CSV) 独立水位线与条数的详细元数据 |
+| | `/tables/{table_id}/boards` | `GET` | 极速获取板块概念/行业列表及各板块成分股计数 (轻量 20KB 响应包) |
+| | `/tables/{table_id}/formats` | `GET` | 获取某数据表本地拥有的格式列表 (如 `["parquet", "csv"]`) |
 | | `/tables/{table_id}/symbols` | `GET` | 获取某数据表已落地的证券/代码唯一清单 |
 | | `/tables/{table_id}/time_range` | `GET` | 获取某数据表覆盖的全局时间起止跨度 |
 | | `/tables/{table_id}/schema` | `GET` | 获取某数据表的字段列名与 Polars/数据类型映射字典 |
@@ -45,6 +47,8 @@
 | **数据切片查询** | `/query` | `GET` | **【HTTP GET】** 统一切片查询，按 `table_id` 自动智能路由，支持物理分页与 2D List 导出 |
 | **同步任务控制** | `/sync` | `POST` | 触发后台数据全自动增量/全量同步任务 |
 | | `/tasks` | `GET` | 获取当前正在后台运行的同步任务列表 |
+| | `/sync/status` | `GET` | 获取全局同步任务精准进度、百分比与处理 Symbol 字典 |
+| | `/sync/stream` | `GET` | **【SSE】** Server-Sent Events 日志与进度实时推送流 |
 
 
 ---

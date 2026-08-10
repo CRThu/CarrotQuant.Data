@@ -1,7 +1,7 @@
 import React from 'react';
-import { TrendingUp, Layers, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, Layers, BarChart2, ChevronLeft, ChevronRight, Database } from 'lucide-react';
 
-export type ViewType = 'stock_list' | 'concept_industry' | 'stock_detail';
+export type ViewType = 'stock_list' | 'concept_industry' | 'stock_detail' | 'data_management';
 
 interface SidebarNavProps {
   currentView: ViewType;
@@ -27,13 +27,19 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       id: 'concept_industry' as ViewType,
       label: '板块概念穿透',
       icon: Layers,
-      desc: '东财概念/行业成分股探查 (方案A)',
+      desc: '东财概念/行业成分股探查',
     },
     {
       id: 'stock_detail' as ViewType,
       label: 'K线三窗格分析',
       icon: BarChart2,
       desc: 'TradingView 3-Pane 极速图表',
+    },
+    {
+      id: 'data_management' as ViewType,
+      label: '数据管理中心',
+      icon: Database,
+      desc: '格式水位线、增量同步与 Terminal 日志',
     },
   ];
 

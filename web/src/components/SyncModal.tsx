@@ -13,10 +13,17 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose }) => {
   const [startDate, setStartDate] = useState<string>('2024-01-01');
   const [endDate, setEndDate] = useState<string>('');
   const [forceRefresh, setForceRefresh] = useState<boolean>(false);
+  const [tdxMode, setTdxMode] = useState<'online' | 'local'>('online');
+  const [tdxVipdocDir, setTdxVipdocDir] = useState<string>('C:\\new_tdx\\vipdoc');
+  const [tdxPathStatus, setTdxPathStatus] = useState<{ exists: boolean; symbol_count: number; valid: boolean } | null>(null);
+  const [downloadingZip, setDownloadingZip] = useState<boolean>(false);
+
   const [activeTasks, setActiveTasks] = useState<string[]>([]);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const hasTdxSelected = selectedTables.some((t) => t.includes('.tdx'));
 
   // 轮询活动中的同步任务
   const checkActiveTasks = async () => {
@@ -28,6 +35,16 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  // 检查 TDX 本地路径状态
+  const checkTdxPath = async (dir: string) => {
+    try {
+      const status = await apiClient.checkTdxPath(dir);
+      setTdxPathStatus(status);
+    } catch (e) {
+      setTdxPathStatus(null);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       checkActiveTasks();
@@ -36,6 +53,12 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && hasTdxSelected && tdxMode === 'local') {
+      checkTdxPath(tdxVipdocDir);
+    }
+  }, [isOpen, hasTdxSelected, tdxMode, tdxVipdocDir]);
+
   if (!isOpen) return null;
 
   const toggleTableSelect = (tableId: string) => {
@@ -43,6 +66,20 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose }) => {
       setSelectedTables(selectedTables.filter((t) => t !== tableId));
     } else {
       setSelectedTables([...selectedTables, tableId]);
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    setDownloadingZip(true);
+    setError(null);
+    try {
+      await apiClient.downloadTdxZip(tdxVipdocDir);
+      setMessage(`离线全量包 (hsjday.zip) 后台下载任务已启动，正在向 sync_tracker 报告进度...`);
+      checkActiveTasks();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || err?.message || '触发离线包下载失败');
+    } finally {
+      setDownloadingZip(false);
     }
   };
 
@@ -57,13 +94,22 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose }) => {
     setError(null);
 
     try {
-      const res = await apiClient.triggerSync({
+      const payload: any = {
         table_ids: selectedTables,
         formats: ['parquet', 'csv'],
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         force_refresh: forceRefresh,
-      });
+      };
+
+      if (hasTdxSelected) {
+        payload.provider_kwargs = {
+          mode: tdxMode,
+          vipdoc_dir: tdxVipdocDir,
+        };
+      }
+
+      const res = await apiClient.triggerSync(payload);
 
       setMessage(`后台增量同步任务已启动：${res.started_tasks.join(', ')}`);
       checkActiveTasks();
@@ -155,6 +201,73 @@ export const SyncModal: React.FC<SyncModalProps> = ({ isOpen, onClose }) => {
               })}
             </div>
           </div>
+
+          {/* 通达信专属配置卡片 */}
+          {hasTdxSelected && (
+            <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-3">
+              <div className="text-xs font-semibold text-cyan-400 flex items-center justify-between">
+                <span>通达信 (TDX) 驱动工作模式设置</span>
+                <span className="text-[10px] font-normal text-slate-400">支持 TCP 在线 / 本地 vipdoc 目录</span>
+              </div>
+              <div className="flex items-center space-x-6 text-xs text-slate-300">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="tdxMode"
+                    value="online"
+                    checked={tdxMode === 'online'}
+                    onChange={() => setTdxMode('online')}
+                    className="text-cyan-500 focus:ring-cyan-500"
+                  />
+                  <span>🌐 TCP 在线抓取 (online)</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="tdxMode"
+                    value="local"
+                    checked={tdxMode === 'local'}
+                    onChange={() => setTdxMode('local')}
+                    className="text-cyan-500 focus:ring-cyan-500"
+                  />
+                  <span>📁 本地 vipdoc 目录 (local)</span>
+                </label>
+              </div>
+
+              {tdxMode === 'local' && (
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="tdxVipdocInput" className="text-[11px] text-slate-400">本地 vipdoc 文件夹路径:</label>
+                    {tdxPathStatus && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                        tdxPathStatus.valid ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60' : 'bg-amber-950/60 text-amber-400 border border-amber-800/60'
+                      }`}>
+                        {tdxPathStatus.valid ? `有效 (${tdxPathStatus.symbol_count} 个代码)` : '目录为空/不存在'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      id="tdxVipdocInput"
+                      type="text"
+                      value={tdxVipdocDir}
+                      onChange={(e) => setTdxVipdocDir(e.target.value)}
+                      placeholder="C:\new_tdx\vipdoc"
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleDownloadZip}
+                      disabled={downloadingZip}
+                      className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800/80 text-cyan-300 rounded-lg text-[11px] font-medium transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      {downloadingZip ? '启动下载中...' : '一键下载官方离线包'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 2. 起止时间范围 */}
           <div className="grid grid-cols-2 gap-4">

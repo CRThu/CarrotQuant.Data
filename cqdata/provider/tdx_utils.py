@@ -259,17 +259,27 @@ _MAX_NETWORK_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
 @retry(
     stop=stop_after_attempt(_MAX_NETWORK_RETRIES),
     wait=wait_exponential(multiplier=1, min=0.5, max=5),
-    retry=retry_if_exception_type((ConnectionError, OSError, TimeoutError)),
+    retry=retry_if_exception_type((ConnectionError, OSError, TimeoutError, RuntimeError)),
     reraise=True,
 )
 def _safe_tcp_call(callable_fn) -> list[dict] | None:
     """TCP 调用封装：连接/网络异常时自动重连换 IP 重试 (tenacity 指数退避)。"""
     global _cached_api
     try:
-        return callable_fn()
-    except (ConnectionError, OSError, TimeoutError):
+        # 若 _cached_api 为 None（如初始未连或上轮重连失败），先尝试重新建立 TCP 连接
+        if _cached_api is None:
+            _connect_tdx_api()
+        res = callable_fn()
+        if res is None:
+            # tdxpy 在 socket 断开/未连接时会静默返回 None，此处强制触发重连
+            logger.warning("[TDX] TCP 响应为 None (Socket 可能已断开)，尝试重连...")
+            _reconnect_tdx_api()
+            res = callable_fn()
+            if res is None:
+                raise ConnectionError("TDX TCP 无法获取数据 (服务器返回 None 或网络断开)")
+        return res
+    except (ConnectionError, OSError, TimeoutError, RuntimeError):
         _cached_api = None
-        _connect_tdx_api()
         raise
 
 

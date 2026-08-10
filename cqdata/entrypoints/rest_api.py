@@ -9,9 +9,11 @@ FastAPI RESTful HTTP API 接入面模块。
 import math
 import importlib.resources
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
+import polars as pl
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
@@ -60,7 +62,7 @@ from cqdata import __version__
 
 app = FastAPI(title="CarrotQuant.Data REST API", version=__version__)
 
-# 挂载 CORS 跨域中间件，允许 Web 前端应用直接调用 API
+# 挂载 CORS 跨域中间件与 GZip 压缩中间件
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -68,6 +70,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 @app.get("/api/v1/health")
@@ -114,6 +117,7 @@ class SyncRequest(BaseModel):
     force_refresh: bool = False
     batch_size: int = 100
     symbol_limit: Optional[int] = None
+    provider_kwargs: Optional[Dict[str, Any]] = None
 
 
 def parse_comma_param(val: Optional[str]) -> Optional[List[str]]:
@@ -131,7 +135,8 @@ def run_sync_task(
     end_date: Optional[str],
     force_refresh: bool,
     batch_size: int,
-    symbol_limit: Optional[int]
+    symbol_limit: Optional[int],
+    provider_kwargs: Optional[Dict[str, Any]] = None
 ):
     """后台同步任务执行器"""
     try:
@@ -142,13 +147,72 @@ def run_sync_task(
             end_date=end_date,
             force_refresh=force_refresh,
             batch_size=batch_size,
-            symbol_limit=symbol_limit
+            symbol_limit=symbol_limit,
+            provider_kwargs=provider_kwargs
         )
         logger.info(f"[REST API] Background sync finished for {table_id}")
     except Exception as e:
         logger.error(f"[REST API] Background sync failed for {table_id}: {e}")
     finally:
         ACTIVE_SYNC_TASKS.remove(table_id)
+
+
+import json
+from cqdata.service.metadata_manager import MetadataManager
+from cqdata.service.sync_tracker import sync_tracker
+
+# 所有支持的标准 Table ID 预定义字典与元数据映射
+KNOWN_TABLE_DEFINITIONS = [
+    {
+        "table_id": "ashare.kline.1d.raw.baostock",
+        "name": "Baostock A股日线 (不复权)",
+        "category": "timeseries",
+        "source": "baostock",
+        "description": "个股日线 OHLCV 数据，按 [symbol, year] CSV/Parquet 分片"
+    },
+    {
+        "table_id": "ashare.kline.1d.adj.baostock",
+        "name": "Baostock A股日线 (后复权)",
+        "category": "timeseries",
+        "source": "baostock",
+        "description": "个股后复权 K 线数据"
+    },
+    {
+        "table_id": "ashare.kline.5m.raw.baostock",
+        "name": "Baostock A股5分钟线",
+        "category": "timeseries",
+        "source": "baostock",
+        "description": "个股高频 5 分钟 K 线数据"
+    },
+    {
+        "table_id": "ashare.concept.eastmoney",
+        "name": "东方财富 概念板块与成分股",
+        "category": "event",
+        "source": "eastmoney",
+        "description": "东财概念板块代码与成分股映射 (Event 表)"
+    },
+    {
+        "table_id": "ashare.industry.eastmoney",
+        "name": "东方财富 行业板块与成分股",
+        "category": "event",
+        "source": "eastmoney",
+        "description": "东财行业板块成分股映射"
+    },
+    {
+        "table_id": "ashare.dragon_tiger.eastmoney",
+        "name": "东方财富 龙虎榜每日统计",
+        "category": "event",
+        "source": "eastmoney",
+        "description": "机构与营业部每日上榜明细"
+    },
+    {
+        "table_id": "ashare.kline.1d.raw.tdx",
+        "name": "通达信 A股日线 (TDX)",
+        "category": "timeseries",
+        "source": "tdx",
+        "description": "通达信本地 vipdoc 或在线日线数据"
+    }
+]
 
 
 # ==================== 元数据探查 Endpoints ====================
@@ -164,6 +228,67 @@ async def api_list_all_tables(format: str = "auto"):
         }
     except Exception as e:
         handle_endpoint_exception(e, "GET tables")
+
+
+@app.get("/api/v1/tables/detailed")
+async def api_list_tables_detailed():
+    """
+    获取所有数据表及其各个存储格式 (Parquet / CSV) 独立物理元数据的详细列表。
+    方便前端展现层级化数据管理表格与独立格式水位线。
+    """
+    try:
+        meta_mgr = MetadataManager(settings.data_dir)
+        disk_tables = {t["table_id"] for t in list_tables(format="auto")}
+        result = []
+
+        # 汇总所有的预定义表以及磁盘发现的其他表
+        all_table_ids = set([t["table_id"] for t in KNOWN_TABLE_DEFINITIONS]) | disk_tables
+        known_map = {t["table_id"]: t for t in KNOWN_TABLE_DEFINITIONS}
+
+        for table_id in sorted(all_table_ids):
+            base_info = known_map.get(table_id, {
+                "table_id": table_id,
+                "name": table_id,
+                "category": "timeseries" if "kline" in table_id else "event",
+                "source": table_id.split(".")[-1] if "." in table_id else "unknown",
+                "description": f"自定义本地数据表 ({table_id})"
+            })
+
+            formats_info = {}
+            for fmt in ["parquet", "csv"]:
+                meta = meta_mgr.load(table_id, fmt)
+                if meta and "statistics" in meta:
+                    stats = meta["statistics"]
+                    formats_info[fmt] = {
+                        "exists": True,
+                        "updated_at": stats.get("updated_at"),
+                        "start_datetime": stats.get("start_datetime"),
+                        "end_datetime": stats.get("end_datetime"),
+                        "total_bars": stats.get("total_bars", 0),
+                        "symbol_count": stats.get("symbol_count", 0),
+                    }
+                else:
+                    formats_info[fmt] = {
+                        "exists": False,
+                        "updated_at": None,
+                        "start_datetime": None,
+                        "end_datetime": None,
+                        "total_bars": 0,
+                        "symbol_count": 0,
+                    }
+
+            table_entry = {
+                **base_info,
+                "formats": formats_info
+            }
+            result.append(table_entry)
+
+        return {
+            "tables": result,
+            "total": len(result)
+        }
+    except Exception as e:
+        handle_endpoint_exception(e, "GET tables/detailed")
 
 
 @app.get("/api/v1/tables/{table_id}/formats")
@@ -213,12 +338,66 @@ async def api_get_row_count(table_id: str, format: str = "auto"):
         handle_endpoint_exception(e, f"GET row_count for {table_id}")
 
 
+@app.get("/api/v1/tables/{table_id}/boards")
+async def api_get_boards(
+    table_id: str,
+    query: Optional[str] = Query(None, description="搜索板块代码或名称 (如 BK0612 或 低空经济)"),
+    format: str = Query("auto", description="存储格式"),
+    page: int = Query(1, ge=1, description="当前页码"),
+    page_size: int = Query(500, ge=1, description="每页板块数")
+):
+    """
+    极速聚合获取板块概念/行业列表及各板块成分股计数 (轻量 20KB 数据包)
+    """
+    try:
+        df = read(table_id=table_id, format=format)
+        if df.is_empty() or "board_code" not in df.columns:
+            return {"table_id": table_id, "boards": [], "total": 0, "page": page, "page_size": page_size}
+
+        boards_df = (
+            df.group_by(["board_code", "board_name"])
+            .agg(pl.len().alias("stock_count"))
+            .sort("board_code")
+        )
+
+        if query:
+            q = query.strip()
+            boards_df = boards_df.filter(
+                pl.col("board_name").str.contains(f"(?i){q}") | pl.col("board_code").str.contains(f"(?i){q}")
+            )
+
+        total = boards_df.height
+        offset = (page - 1) * page_size
+        sliced = boards_df.slice(offset, page_size) if not boards_df.is_empty() else boards_df
+
+        boards_list = [
+            {
+                "board_code": row[0],
+                "board_name": row[1],
+                "stock_count": row[2]
+            }
+            for row in sliced.iter_rows()
+        ]
+
+        return {
+            "table_id": table_id,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": math.ceil(total / page_size) if total > 0 else 0,
+            "boards": boards_list
+        }
+    except Exception as e:
+        handle_endpoint_exception(e, f"GET boards for {table_id}")
+
+
 # ==================== 数据切片查询 Endpoints (纯 HTTP GET 形式) ====================
 
 @app.get("/api/v1/query")
 async def api_query(
     table_id: str = Query(..., description="数据表 ID (如 ashare.kline.1d.raw.baostock 或 ashare.dragon_tiger.eastmoney)"),
     symbols: Optional[str] = Query(None, description="股票代码或以逗号分隔的代码列表 (如 sh.600000,sz.000001)"),
+    board_code: Optional[str] = Query(None, description="板块代码 (如 BK0612) 用于精确定向获取板块成分股"),
     start_date: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
     columns: Optional[str] = Query(None, description="选挑字段清单，以逗号分隔 (如 timestamp,close)"),
@@ -241,6 +420,10 @@ async def api_query(
             columns=parsed_columns,
             format=format
         )
+
+        # 支持按 board_code 过滤成分股
+        if board_code and "board_code" in df.columns:
+            df = df.filter(pl.col("board_code") == board_code.strip())
 
         total = df.height
         total_pages = math.ceil(total / page_size) if total > 0 else 0
@@ -289,7 +472,8 @@ async def api_sync_data(request: SyncRequest, background_tasks: BackgroundTasks)
             request.end_date,
             request.force_refresh,
             request.batch_size,
-            request.symbol_limit
+            request.symbol_limit,
+            request.provider_kwargs
         )
 
     return {
@@ -304,6 +488,69 @@ async def api_sync_data(request: SyncRequest, background_tasks: BackgroundTasks)
 async def api_get_active_tasks():
     """获取正在运行的后台同步任务"""
     return {"active_tasks": list(ACTIVE_SYNC_TASKS)}
+
+
+@app.get("/api/v1/sync/status")
+async def api_get_sync_status():
+    """获取所有同步任务的详细精准状态与进度 (含 current, total, percentage, symbol 与 error_msg)"""
+    return {
+        "active_tasks": list(ACTIVE_SYNC_TASKS),
+        "statuses": sync_tracker.get_all_statuses()
+    }
+
+
+# ==================== TDX 离线包与路径检查 Endpoints ====================
+
+class TdxDownloadRequest(BaseModel):
+    vipdoc_dir: str = r"C:\new_tdx\vipdoc"
+
+
+@app.get("/api/v1/tdx/check")
+async def api_tdx_check(vipdoc_dir: str = Query(r"C:\new_tdx\vipdoc", description="通达信 vipdoc 目录路径")):
+    """检查通达信 vipdoc 路径物理状态与包含的代码数量"""
+    try:
+        path = Path(vipdoc_dir)
+        from cqdata.provider.tdx_utils import discover_tdx_symbols_from_local
+        symbols = discover_tdx_symbols_from_local(path) if path.exists() else []
+        return {
+            "path": str(path),
+            "exists": path.exists(),
+            "symbol_count": len(symbols),
+            "valid": len(symbols) > 0,
+        }
+    except Exception as e:
+        handle_endpoint_exception(e, "GET tdx check")
+
+
+def run_tdx_download_task(vipdoc_dir: str):
+    """后台下载并解压通达信全量 hsjday.zip 包"""
+    task_id = "tdx.download.hsjday"
+    try:
+        from scripts.download_tdx import download_and_extract
+        download_and_extract(Path(vipdoc_dir), task_id=task_id)
+    except Exception as e:
+        logger.error(f"[REST API] TDX Zip download failed: {e}")
+    finally:
+        if task_id in ACTIVE_SYNC_TASKS:
+            ACTIVE_SYNC_TASKS.remove(task_id)
+
+
+@app.post("/api/v1/tdx/download")
+async def api_tdx_download(request: TdxDownloadRequest, background_tasks: BackgroundTasks):
+    """触发后台从通达信官方服务器下载 hsjday.zip 离线日线行情包并自动解压部署"""
+    task_id = "tdx.download.hsjday"
+    if task_id in ACTIVE_SYNC_TASKS:
+        raise HTTPException(status_code=409, detail="TDX zip download task is already running.")
+
+    ACTIVE_SYNC_TASKS.add(task_id)
+    background_tasks.add_task(run_tdx_download_task, request.vipdoc_dir)
+
+    return {
+        "status": "accepted",
+        "task_id": task_id,
+        "vipdoc_dir": request.vipdoc_dir,
+        "message": "TDX hsjday.zip download started in background."
+    }
 
 
 # ==================== 静态前端 UI 托管 (SPA 标准挂载) ====================

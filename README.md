@@ -11,10 +11,10 @@ CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的
 - **灵活的存储格式**：原生支持 `csv` 和基于列式存储的高效 `parquet` 格式，以满足不同体量的数据读写需求。
 - **增量与全量同步**：基于时间戳水位线的同步机制，支持从断点智能续接（增量拉取），以及强制全量覆盖更新刷新数据。
 - **现代化多通道接入支持**：
-  - **React Web 终端**：现代暗黑极速金融终端 (`web/`)，基于 Bun + Vite 6 + React 19 + TradingView Lightweight Charts (v4 3-Pane 时间轴强同步) + 方案 A 概念/行业成分股 0 延时穿透。
+  - **React Web 终端**：现代暗黑极速金融终端 (`web/`)，基于 Bun + Vite 6 + React 19 + TradingView Lightweight Charts (v4 3-Pane 时间轴强同步) + 方案 A 概念/行业成分股 0 延时穿透 + **独立格式水位线数据管理中心与 SSE Terminal 日志流视窗与右下角悬浮 Widget**。
   - **Python SDK**：简单直观的 `import cqdata` API，支持高性能跨年份数据切片读取 (`cqdata.read`)、`columns` 按需字段选择、格式识别与元数据探查。
   - **命令行工具 (CLI)**：统一的 `cqdata` 命令行工具，提供数据同步 (`cqdata sync`)、数据表探索 (`cqdata tables`)、元数据查询 (`cqdata info`) 与 HTTP 服务启动 (`cqdata server`)。
-  - **REST API 服务**：基于 FastAPI 的 REST API，为远程微服务提供 HTTP 数据切片与同步触发。
+  - **REST API 服务**：基于 FastAPI 的 REST API，为远程微服务与 Web 终端提供 HTTP 数据切片、SSE 实时日志流与同步触发。
 - **优秀的底层性能**：使用 [Polars](https://pola.rs/) 库进行高性能的数据加工和清洗。
 
 ## 📁 目录结构 (Project Structure)

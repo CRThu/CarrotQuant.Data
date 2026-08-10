@@ -57,14 +57,37 @@ describe('apiClient full execution coverage test suite', () => {
     expect(res.count).toBe(5);
   });
 
-  it('should execute triggerSync correctly', async () => {
+  it('should execute triggerSync with provider_kwargs correctly', async () => {
     const spy = vi.spyOn(axios.Axios.prototype, 'request').mockResolvedValue({
-      data: { status: 'success', started_tasks: ['ashare.kline.1d.raw.baostock'] },
+      data: { status: 'accepted', started_tasks: ['ashare.kline.1d.raw.tdx'] },
     });
 
-    const res = await apiClient.triggerSync({ table_ids: ['ashare.kline.1d.raw.baostock'] });
+    const res = await apiClient.triggerSync({
+      table_ids: ['ashare.kline.1d.raw.tdx'],
+      provider_kwargs: { mode: 'local', vipdoc_dir: 'C:\\custom_tdx' },
+    });
     expect(spy).toHaveBeenCalled();
-    expect(res.status).toBe('success');
+    expect(res.status).toBe('accepted');
+  });
+
+  it('should execute checkTdxPath correctly', async () => {
+    const spy = vi.spyOn(axios.Axios.prototype, 'request').mockResolvedValue({
+      data: { path: 'C:\\new_tdx\\vipdoc', exists: true, symbol_count: 5000, valid: true },
+    });
+
+    const res = await apiClient.checkTdxPath('C:\\new_tdx\\vipdoc');
+    expect(spy).toHaveBeenCalled();
+    expect(res.symbol_count).toBe(5000);
+  });
+
+  it('should execute downloadTdxZip correctly', async () => {
+    const spy = vi.spyOn(axios.Axios.prototype, 'request').mockResolvedValue({
+      data: { status: 'accepted', task_id: 'tdx.download.hsjday' },
+    });
+
+    const res = await apiClient.downloadTdxZip('C:\\new_tdx\\vipdoc');
+    expect(spy).toHaveBeenCalled();
+    expect(res.task_id).toBe('tdx.download.hsjday');
   });
 
   it('should execute getActiveTasks correctly', async () => {
