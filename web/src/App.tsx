@@ -8,6 +8,7 @@ import { StockListView } from './views/StockListView';
 import { ConceptIndustryView } from './views/ConceptIndustryView';
 import { StockDetailView } from './views/StockDetailView';
 import { DataManagementView } from './views/DataManagementView';
+import { LogCenterView } from './views/LogCenterView';
 import { SettingsView } from './views/SettingsView';
 import { FloatingSyncWidget } from './components/FloatingSyncWidget';
 import { SyncModal } from './components/SyncModal';
@@ -120,6 +121,10 @@ export const App: React.FC = () => {
               {currentView === 'data_management' && (
                 <DataManagementView onSyncStatusChange={setActiveTaskCount} />
               )}
+
+              <div className={currentView === 'log_center' ? 'h-full flex-1' : 'hidden'}>
+                <LogCenterView />
+              </div>
 
               {currentView === 'settings' && (
                 <SettingsView

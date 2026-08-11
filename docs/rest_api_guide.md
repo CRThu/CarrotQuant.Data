@@ -48,7 +48,7 @@
 | **同步任务控制** | `/sync` | `POST` | 触发后台数据全自动增量/全量同步任务 |
 | | `/tasks` | `GET` | 获取当前正在后台运行的同步任务列表 |
 | | `/sync/status` | `GET` | 获取全局同步任务精准进度、百分比与处理 Symbol 字典 |
-| | `/sync/stream` | `GET` | **【SSE】** Server-Sent Events 日志与进度实时推送流 |
+| | `/logs/stream` | `GET` | **【SSE】** Server-Sent Events 全局 Loguru 系统与数据引擎日志实时推送流 |
 | **文件系统探查** | `/filesystem/list` | `GET` | 通用本地文件/目录列表探查 API（为 Web 端文件浏览器 Modal 提供支持） |
 
 

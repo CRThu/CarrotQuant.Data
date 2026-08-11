@@ -7,12 +7,15 @@ FastAPI RESTful HTTP API 接入面模块。
 """
 
 import math
+import json
+import asyncio
 import importlib.resources
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Union, Dict, Any
 import polars as pl
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +23,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 from loguru import logger
 from cqdata.config import settings
+from cqdata.utils.logger_utils import log_broadcaster
 
 
 class SPAStaticFiles(StaticFiles):
@@ -564,6 +568,36 @@ async def api_get_sync_status():
         "active_tasks": list(ACTIVE_SYNC_TASKS),
         "statuses": sync_tracker.get_all_statuses()
     }
+
+
+@app.get("/api/v1/logs/stream")
+async def api_logs_stream():
+    """
+    【SSE】Server-Sent Events 全局 Loguru 日志与任务进度实时推送流。
+    握手时自动补发最新 100 条历史 Log 上下文，随后增量流式推送系统与数据引擎日志。
+    """
+    async def log_event_generator():
+        q = log_broadcaster.subscribe()
+        try:
+            # 1. 先推送历史 Buffer 缓存
+            history = log_broadcaster.get_history()
+            for entry in history:
+                yield f"data: {json.dumps(entry, ensure_ascii=False)}\n\n"
+            
+            # 2. 循环推送实时增量 Loguru 日志
+            while True:
+                try:
+                    # 15 秒无新日志触发 ping 心跳，维持 HTTP SSE 长连接
+                    entry = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(entry, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            log_broadcaster.unsubscribe(q)
+
+    return StreamingResponse(log_event_generator(), media_type="text/event-stream")
 
 
 # ==================== TDX 离线包与路径检查 Endpoints ====================

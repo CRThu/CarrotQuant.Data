@@ -153,7 +153,7 @@ export const apiClient = {
    * 创建 SSE (Server-Sent Events) 日志流 EventSource 连接
    */
   createLogEventSource(): EventSource {
-    const sseUrl = typeof window !== 'undefined' ? '/api/v1/sync/stream' : 'http://localhost:8888/api/v1/sync/stream';
+    const sseUrl = typeof window !== 'undefined' ? '/api/v1/logs/stream' : 'http://localhost:8888/api/v1/logs/stream';
     return new EventSource(sseUrl);
   },
 };

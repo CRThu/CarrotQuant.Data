@@ -71,3 +71,45 @@ def test_sync_manager_batch_write(sync_manager):
         last_write_df = storage.write_series.call_args_list[3][0][1]
         assert len(last_write_df) == 1
         assert last_write_df["symbol"].to_list() == symbols[9:]
+
+
+def test_sync_manager_interrupted_batch_does_not_update_metadata(sync_manager):
+    """
+    测试当同步在中途某批次抛出异常中断时，
+    已落盘数据成功下沉，但 _update_metadata 绝对不会提前被调用更新元数据，
+    防止水位线虚高导致断网恢复后丢失历史数据。
+    """
+    table_id = "test.table"
+    format = "parquet"
+    symbols = [f"SZ{i:06d}" for i in range(6)]
+    
+    sync_manager.planner.plan.return_value = [{"symbol": s, "start": 0, "end": 0} for s in symbols]
+    
+    provider = MagicMock()
+    # 模拟第 4 个 symbol 时抛出异常中断 (模拟断网)
+    def mock_fetch(tid, sym, s, e):
+        if sym == "SZ000003":
+            raise ConnectionError("Network disconnected in batch 2")
+        return pl.DataFrame({"symbol": [sym], "timestamp": [1672531200000], "close": [10.0]})
+        
+    provider.fetch.side_effect = mock_fetch
+    sync_manager.provider_mgr.get_provider.return_value = provider
+    provider.get_all_symbols.return_value = symbols
+    provider.get_table_category.return_value = "timeseries"
+    
+    storage = MagicMock()
+    storage.category = "timeseries"
+    
+    with patch("cqdata.service.sync_manager.StorageFactory.get_storage", return_value=storage), \
+         patch.object(sync_manager, "_update_metadata") as mock_update_meta:
+        # 设置 batch_size=3, 总共 6 支股票 (2 个批次)
+        # 批次 1 (SZ000000~SZ000002) 成功，批次 2 (SZ000003...) 失败
+        with pytest.raises(ConnectionError, match="Network disconnected in batch 2"):
+            sync_manager.sync(table_id, format, batch_size=3)
+            
+        # 验证批次 1 确实成功落盘了 (write_series 调用了 1 次)
+        assert storage.write_series.call_count == 1
+        
+        # 验证 _update_metadata 在中断发生时一次都没有被调用！(元数据未虚高盖章)
+        assert mock_update_meta.call_count == 0
+

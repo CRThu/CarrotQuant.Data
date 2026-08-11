@@ -259,4 +259,32 @@ def test_list_tables_detailed_known_tables():
     assert "ashare.inst_trade.eastmoney" in table_ids
 
 
+def test_log_broadcaster_and_stream():
+    """验证 LogBroadcaster 日志广播单例与 GET /api/v1/logs/stream SSE 端点"""
+    from cqdata.utils.logger_utils import log_broadcaster
+
+    dummy_log = {
+        "timestamp": "2026-08-11 22:50:00.000",
+        "level": "INFO",
+        "name": "test_module",
+        "line": 42,
+        "message": "Unit test broadcast message",
+    }
+    log_broadcaster.history.append(dummy_log)
+
+    # 验证 get_history 能查到
+    history = log_broadcaster.get_history()
+    assert dummy_log in history
+
+    # 测试 /api/v1/logs/stream SSE 端点
+    with client.stream("GET", "/api/v1/logs/stream") as response:
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers.get("content-type", "")
+        for line in response.iter_lines():
+            if line.startswith("data:"):
+                assert "Unit test broadcast message" in line
+                break
+
+
+
 

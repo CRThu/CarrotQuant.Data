@@ -157,9 +157,9 @@ class SyncManager:
                     batch_dfs.clear()
                     del big_df
 
-                    # 批次级元数据更新：支持断点续传
-                    for fmt, storage in storages.items():
-                        self._update_metadata(table_id, fmt, storage, last_success_df, True, force_refresh)
+            # 全表所有批次成功下沉落盘后，统一更新元数据水位线，防止中途中断导致水位线虚高
+            for fmt, storage in storages.items():
+                self._update_metadata(table_id, fmt, storage, last_success_df, data_written, force_refresh)
             
             if total_tasks == 0:
                 finish_msg = "本地数据已是最新 (无需补全)"

@@ -1,7 +1,7 @@
 import React from 'react';
-import { TrendingUp, Layers, BarChart2, ChevronLeft, ChevronRight, Database, Settings } from 'lucide-react';
+import { TrendingUp, Layers, BarChart2, ChevronLeft, ChevronRight, Database, Settings, Terminal } from 'lucide-react';
 
-export type ViewType = 'stock_list' | 'concept_industry' | 'stock_detail' | 'data_management' | 'settings';
+export type ViewType = 'stock_list' | 'concept_industry' | 'stock_detail' | 'data_management' | 'log_center' | 'settings';
 
 interface SidebarNavProps {
   currentView: ViewType;
@@ -41,8 +41,14 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       id: 'data_management' as ViewType,
       label: '数据管理中心',
       icon: Database,
-      desc: '格式范围、增量同步与 Terminal 日志',
+      desc: '物理格式、水位线与数据增量同步',
       badge: activeTaskCount,
+    },
+    {
+      id: 'log_center' as ViewType,
+      label: '系统日志中心',
+      icon: Terminal,
+      desc: '全局 Loguru 架构与引擎实时日志流',
     },
   ];
 

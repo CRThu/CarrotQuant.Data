@@ -1,9 +1,79 @@
 import sys
 import os
 import datetime
-from loguru import logger
+import threading
+import asyncio
+from collections import deque
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any, List, Set
+from loguru import logger
+
+
+class LogBroadcaster:
+    """
+    全局 Loguru 日志广播器单例。
+    维护内存环形历史缓存 (History Buffer)，并将每条结构化日志实时分发给所有 active 的 SSE 订阅队列。
+    """
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(LogBroadcaster, cls).__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
+
+    def __init__(self, max_history: Optional[int] = None):
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
+        self.history: deque = deque(maxlen=max_history)
+        self.subscribers: Set[asyncio.Queue] = set()
+        self._sub_lock = threading.Lock()
+
+    def subscribe(self) -> asyncio.Queue:
+        """注册一个新的 SSE 订阅队列"""
+        q: asyncio.Queue = asyncio.Queue()
+        with self._sub_lock:
+            self.subscribers.add(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue):
+        """解绑并移除一个 SSE 订阅队列"""
+        with self._sub_lock:
+            self.subscribers.discard(q)
+
+    def get_history(self) -> List[Dict[str, Any]]:
+        """获取当前内存中的历史日志列表"""
+        with self._sub_lock:
+            return list(self.history)
+
+    def sink(self, message):
+        """
+        Loguru 自定义 Sink 回调函数。
+        记录 timestamp, level, name, line, message，并推送到历史缓存与各个 SSE 订阅队列。
+        """
+        record = message.record
+        time_str = record["time"].strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        log_entry = {
+            "timestamp": time_str,
+            "level": record["level"].name,
+            "name": record["name"],
+            "line": record["line"],
+            "message": record["message"],
+        }
+        with self._sub_lock:
+            self.history.append(log_entry)
+            for q in list(self.subscribers):
+                try:
+                    q.put_nowait(log_entry)
+                except Exception:
+                    pass
+
+
+# 全局单例
+log_broadcaster = LogBroadcaster()
 
 
 def setup_logger(
@@ -12,7 +82,7 @@ def setup_logger(
     log_dir: Optional[Union[str, Path]] = None
 ):
     """
-    配置 loguru 日志，同时输出到控制台和文件。
+    配置 loguru 日志，同时输出到控制台和文件，并挂载 LogBroadcaster。
 
     Args:
         log_level: 日志级别 (如 'INFO', 'DEBUG')，若为 None 从 settings 读取
@@ -61,10 +131,14 @@ def setup_logger(
         format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"
     )
 
+    # 添加 LogBroadcaster 自定义 Sink，实时广播给 SSE Web 客户端
+    logger.add(
+        log_broadcaster.sink,
+        level=log_level,
+        enqueue=True,
+    )
+
     return logger
-
-
-import threading
 
 
 class SuppressOutput:
@@ -90,4 +164,3 @@ class SuppressOutput:
     def __exit__(self, exc_type, exc_val, exc_tb):
         sys.stdout = self._stdout
         sys.stderr = self._stderr
-

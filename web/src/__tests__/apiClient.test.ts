@@ -137,4 +137,13 @@ describe('apiClient full execution coverage test suite', () => {
     expect(spy).toHaveBeenCalled();
     expect(res.active_tasks).toEqual([]);
   });
+
+  it('should create Log EventSource using /api/v1/logs/stream', () => {
+    const mockEventSource = vi.fn();
+    vi.stubGlobal('EventSource', mockEventSource);
+
+    apiClient.createLogEventSource();
+    expect(mockEventSource).toHaveBeenCalledWith('http://localhost:8888/api/v1/logs/stream');
+  });
 });
+

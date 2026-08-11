@@ -316,8 +316,10 @@ export interface SyncStatusResponse {
 // SSE / Log 视窗日志项
 export interface LogMessage {
   timestamp: string;
-  level: 'INFO' | 'DEBUG' | 'WARNING' | 'ERROR';
+  level: 'INFO' | 'DEBUG' | 'WARNING' | 'WARN' | 'ERROR' | 'SUCCESS' | string;
   message: string;
+  name?: string;
+  line?: number;
   time_raw?: number;
 }
 
