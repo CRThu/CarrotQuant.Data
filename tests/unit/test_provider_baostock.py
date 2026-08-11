@@ -105,3 +105,111 @@ class TestEmptyDataDefense:
         assert front_cols == ["symbol", "datetime", "timestamp"]
         # 验证数值列类型（经过 cast 转换）
         assert df.schema["back_adj_factor"] == pl.Float64
+
+
+class TestErrorCodeRetryAndRelogin:
+    """测试 error_code != '0' 时的自动 _relogin 重试与异常断言。"""
+
+    def test_safe_bs_call_retries_on_error_code_and_relogins(self, provider, mock_baostock):
+        """当 API 返回 error_code != '0' (如网络接收错误) 时，应自动调用 _relogin 重试并成功。"""
+        from cqdata.provider.baostock_provider import BaostockCallError
+
+        # 模拟第一个 rs 返回网络接收错误，第二个 rs 返回正常 error_code='0'
+        mock_fail_rs = MagicMock()
+        mock_fail_rs.error_code = "-1"
+        mock_fail_rs.error_msg = "网络接收错误。"
+
+        mock_ok_rs = MagicMock()
+        mock_ok_rs.error_code = "0"
+        mock_ok_rs.next.side_effect = [True, False]
+        mock_ok_rs.get_row_data.return_value = ["sh.600000", "浦发银行", "1999-11-10", "", "1", "1"]
+
+        mock_baostock.query_stock_basic.side_effect = [mock_fail_rs, mock_ok_rs]
+
+        symbols = provider.get_all_symbols("ashare.kline.1d.raw.baostock")
+        assert "sh.600000" in symbols
+
+        # 验证重新登录被触发 (初始 1 次 + re-login 1 次 = 2 次)
+        assert mock_baostock.login.call_count >= 2
+
+    def test_safe_bs_call_raises_after_max_retries(self, provider, mock_baostock):
+        """当持续返回 error_code != '0' 达到最大重试次数时，应抛出 BaostockCallError。"""
+        from cqdata.provider.baostock_provider import BaostockCallError
+
+        mock_fail_rs = MagicMock()
+        mock_fail_rs.error_code = "-1"
+        mock_fail_rs.error_msg = "网络接收错误。"
+
+        mock_baostock.query_stock_basic.return_value = mock_fail_rs
+
+        with pytest.raises(BaostockCallError, match="Baostock API Error"):
+            provider.get_all_symbols("ashare.kline.1d.raw.baostock")
+
+    def test_fetch_kline_recovers_from_transient_network_error(self, provider, mock_baostock):
+        """测试 _fetch_kline 在遇到临时网络错误码时可成功恢复。"""
+        mock_fail_rs = MagicMock()
+        mock_fail_rs.error_code = "-1"
+        mock_fail_rs.error_msg = "网络接收错误。"
+
+        mock_ok_rs = MagicMock()
+        mock_ok_rs.error_code = "0"
+        mock_ok_rs.next.return_value = False
+
+        mock_baostock.query_history_k_data_plus.side_effect = [mock_fail_rs, mock_ok_rs]
+
+        df = provider.fetch("ashare.kline.1d.raw.baostock", "sh.600000", "2024-01-01", "2024-01-05")
+        assert df.is_empty()
+        assert mock_baostock.login.call_count >= 2
+
+    def test_relogin_failure_raises_baostock_call_error_and_retries(self, provider, mock_baostock):
+        """验证 _relogin 失败时抛出 BaostockCallError（而不是 RuntimeError），能被 tenacity 正确捕获并重试。"""
+        from cqdata.provider.baostock_provider import BaostockCallError
+
+        # 模拟每次调用 API 都返回网络接收错误
+        mock_fail_rs = MagicMock()
+        mock_fail_rs.error_code = "10002007"
+        mock_fail_rs.error_msg = "网络接收错误。"
+        mock_baostock.query_history_k_data_plus.return_value = mock_fail_rs
+
+        # 模拟 login 也失败
+        mock_login_fail = MagicMock()
+        mock_login_fail.error_code = "10002007"
+        mock_login_fail.error_msg = "网络接收错误。"
+        mock_baostock.login.return_value = mock_login_fail
+
+        # 应触发 tenacity 重试并最终抛出 BaostockCallError（而非短路为 RuntimeError）
+        with pytest.raises(BaostockCallError, match="Baostock re-login failed"):
+            provider.fetch("ashare.kline.1d.raw.baostock", "sh.600000", "2024-01-01", "2024-01-05")
+
+        # 初始 1 次登录 + MAX_RETRIES (默认3次) 重重登录 = 4 次登录调用
+        assert mock_baostock.login.call_count >= 3
+
+
+class TestThreadSafety:
+    """测试并发多线程调用的线程锁防护。"""
+
+    def test_baostock_provider_thread_safety(self, provider, mock_baostock):
+        """多线程并发调用 provider 应正常通过 RLock 互斥，不抛出异常。"""
+        import concurrent.futures
+
+        def _make_mock_rs():
+            mock_rs = MagicMock()
+            mock_rs.error_code = "0"
+            mock_rs.next.side_effect = [True, False]
+            mock_rs.get_row_data.return_value = ["sh.600000", "浦发银行", "1999-11-10", "", "1", "1"]
+            return mock_rs
+
+        mock_baostock.query_stock_basic.side_effect = _make_mock_rs
+
+        def _worker(idx):
+            return provider.get_all_symbols("aindex.kline.1d.raw.baostock")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(_worker, i) for i in range(5)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        assert len(results) == 5
+        for res in results:
+            assert isinstance(res, list)
+
+

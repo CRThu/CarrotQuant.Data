@@ -1,10 +1,48 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { apiClient } from '../services/apiClient';
+import { DATA_SOURCE_OPTIONS } from '../types/api';
 import axios from 'axios';
 
 describe('apiClient full execution coverage test suite', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('should verify DATA_SOURCE_OPTIONS contains all 16 built-in tables including TDX index and share', () => {
+    expect(DATA_SOURCE_OPTIONS.length).toBe(16);
+    const tableIds = DATA_SOURCE_OPTIONS.map((opt) => opt.table_id);
+    expect(tableIds).toContain('aindex.kline.1d.raw.tdx');
+    expect(tableIds).toContain('aindex.kline.5m.raw.tdx');
+    expect(tableIds).toContain('aindex.kline.1m.raw.tdx');
+    expect(tableIds).toContain('ashare.kline.5m.raw.tdx');
+    expect(tableIds).toContain('ashare.kline.1m.raw.tdx');
+    expect(tableIds).toContain('aindex.kline.1d.raw.baostock');
+    expect(tableIds).toContain('ashare.adj_factor.baostock');
+    expect(tableIds).toContain('ashare.inst_trade.eastmoney');
+  });
+
+  it('should correctly identify TDX tables and distinguish known built-in vs offline custom tables', () => {
+    const knownSet = new Set(DATA_SOURCE_OPTIONS.map((opt) => opt.table_id));
+
+    const tdxTables = [
+      'ashare.kline.1d.raw.tdx',
+      'ashare.kline.5m.raw.tdx',
+      'ashare.kline.1m.raw.tdx',
+      'aindex.kline.1d.raw.tdx',
+      'aindex.kline.5m.raw.tdx',
+      'aindex.kline.1m.raw.tdx',
+    ];
+
+    // 1. 所有通达信数据表均应当带有 .tdx 后缀以触发高级设置
+    tdxTables.forEach((tid) => {
+      expect(tid.includes('.tdx')).toBe(true);
+      expect(knownSet.has(tid)).toBe(true);
+    });
+
+    // 2. 自定义磁盘离线表 (未在预定义清单中) 应当判定 isKnownTable = false
+    const customTableId = 'custom.disk.offline_data';
+    expect(customTableId.includes('.tdx')).toBe(false);
+    expect(knownSet.has(customTableId)).toBe(false);
   });
 
   it('should execute getHealth correctly', async () => {

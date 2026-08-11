@@ -161,7 +161,7 @@ SyncManager.sync()
 
 ### 4.3 数据驱动层 (Provider)
 - **`BaseProvider` (ABC)**: 驱动抽象基类，规范 `fetch`, `get_all_symbols`, `get_supported_tables`, `get_table_category`, `get_sort_keys` 接口。
-- **`BaostockProvider`**: Baostock 数据驱动，处理个股/指数 K 线与复权因子，支持断线重连。
+- **`BaostockProvider`**: Baostock 数据驱动，处理个股/指数 K 线与复权因子，支持 RLock 线程锁并发防护、API 错误码 (如网络接收错误/未登录) 识别与自动重新登录 (`_relogin`) 重试。
 - **`EastMoneyProvider`**: 东方财富数据驱动，处理板块成分股、龙虎榜与机构交易，采用 TLS 指纹防封与节流重试。无 symbol 的宏观表 `get_all_symbols` 返回 `["_ALL_"]`。
 - **`TDXProvider`**: 通达信数据驱动，支持 `online` (TCP 在线) 与 `local` (vipdoc 离线) 两种模式。
 - **`DataCleaner`**: 统一清洗时间轴，转换产生 `timestamp` (Int64 ms) 与 `datetime` (ISO8601) 标准列。
@@ -304,6 +304,7 @@ type_map = {
 
 - **零盲目假设与沟通契约**:
   - **严禁盲目假设**：当对需求意图、架构变动或接口设计存在不确切或多种可选方案时，必须先提出疑问与方案选择，与用户讨论确认后再执行代码修改，严禁擅自做主更改逻辑。
+  - **严禁擅自编写兜底/降级逻辑**：当遇到不确定的边界条件、第三方 API 异常或逻辑未尽事项时，**严禁自动编写隐式兜底/降级代码**（如静默 try-except 容错、假默认值 fallback、模棱两可的硬编码兜底），必须第一时间向用户提出疑问与方案选择，经用户明确确认后再执行代码实现。
   - **最小改动原则**：代码修改严格遵循最小可行改动原则，严禁删除不相关的代码与注释。
 - **技术栈禁令**: 强制全系统使用 Polars (`pl`)，**严禁使用 pandas**（包括 SDK 接口、类型提示与数据转换，全量基于 Polars）。
 - **包管理与安装禁令**: **严禁使用 `pip install`** 方式安装依赖包。项目包管理一律统一使用 `uv` 工具链（如 `uv sync` / `uv add`）。

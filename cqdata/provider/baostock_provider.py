@@ -1,5 +1,6 @@
 import os
 import socket
+import threading
 
 import baostock as bs
 import polars as pl
@@ -20,11 +21,20 @@ from cqdata.utils.logger_utils import SuppressOutput
 
 _BS_MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "3"))
 
+
+class BaostockCallError(RuntimeError):
+    """Baostock API 调用返回非零错误码 (如网络接收错误/未登录) 时抛出的异常。"""
+    pass
+
+
 class BaostockProvider(BaseProvider):
     """
     Baostock 数据源驱动实现
     """
     
+    # 类级别可重入线程锁，确保全局 baostock C/socket 模块调用的线程安全
+    _lock = threading.RLock()
+
     # 类常量：table_id 到数据类别的映射
     _SUPPORTED_TABLE_MAP: dict[str, str] = {
         "ashare.kline.1d.adj.baostock": "timeseries",
@@ -39,53 +49,68 @@ class BaostockProvider(BaseProvider):
         """
         初始化并登录 Baostock
         """
-        with SuppressOutput():
-            self.lg = bs.login()
-            
-        if self.lg.error_code != '0':
-            logger.error(f"Baostock login failed: {self.lg.error_msg}")
-        else:
-            logger.info("Baostock login success")
+        with self._lock:
+            with SuppressOutput():
+                self.lg = bs.login()
+                
+            if self.lg.error_code != '0':
+                logger.error(f"Baostock login failed: {self.lg.error_msg}")
+            else:
+                logger.info("Baostock login success")
 
     def __del__(self):
         """
         析构时退出 Baostock
         """
         try:
-            with SuppressOutput():
-                bs.logout()
-            logger.info("Baostock logout success")
+            with self._lock:
+                with SuppressOutput():
+                    bs.logout()
+                logger.info("Baostock logout success")
         except Exception as e:
             logger.warning(f"Baostock logout error: {e}")
 
     def _relogin(self) -> None:
         """重新登录 Baostock (连接断开时调用)。"""
-        try:
+        with self._lock:
+            try:
+                with SuppressOutput():
+                    bs.logout()
+            except Exception:
+                pass
             with SuppressOutput():
-                bs.logout()
-        except Exception:
-            pass
-        with SuppressOutput():
-            result = bs.login()
-        if result.error_code != '0':
-            logger.error(f"Baostock re-login failed: {result.error_msg}")
-            raise RuntimeError(f"Baostock re-login failed: {result.error_msg}")
-        logger.info("Baostock re-login success")
+                result = bs.login()
+            if result.error_code != '0':
+                logger.error(f"Baostock re-login failed: {result.error_msg}")
+                # 抛出 BaostockCallError 替代 RuntimeError，确保 tenacity 重试机制捕获并执行指数退避重试
+                raise BaostockCallError(f"Baostock re-login failed: {result.error_msg}")
+            logger.info("Baostock re-login success")
 
     def _safe_bs_call(self, func, *args, **kwargs):
-        """Baostock 调用封装：网络异常时 re-login 重试 (tenacity 指数退避)。"""
+        """Baostock 调用封装：网络异常及 API 返回错误码时 re-login 重试 (tenacity 指数退避)。"""
         @retry(
             stop=stop_after_attempt(_BS_MAX_RETRIES),
             wait=wait_exponential(multiplier=1, min=0.5, max=5),
-            retry=retry_if_exception_type((socket.error, ConnectionError, OSError)),
+            retry=retry_if_exception_type((socket.error, ConnectionError, OSError, BaostockCallError)),
             reraise=True,
         )
         def _call():
-            try:
-                return func(*args, **kwargs)
-            except (socket.error, ConnectionError, OSError):
-                self._relogin()
-                raise
+            with self._lock:
+                try:
+                    res = func(*args, **kwargs)
+                except (socket.error, ConnectionError, OSError) as e:
+                    logger.warning(f"Baostock socket exception: {e}, performing re-login and retry...")
+                    self._relogin()
+                    raise
+
+                # 关键检查：Baostock 不抛出 Exception，而是返回 rs.error_code != '0' (如 '网络接收错误。' / '-1')
+                if hasattr(res, "error_code") and res.error_code != "0":
+                    logger.warning(
+                        f"Baostock call returned error_code={res.error_code} ({res.error_msg}), performing re-login and retry..."
+                    )
+                    self._relogin()
+                    raise BaostockCallError(f"Baostock API Error: {res.error_msg} (code={res.error_code})")
+                return res
         return _call()
 
     def get_supported_tables(self) -> list[str]:

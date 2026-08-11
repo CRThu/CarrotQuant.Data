@@ -7,13 +7,14 @@ export interface DataSourceOption {
   id: string;
   name: string;
   table_id: string;
-  category: 'ashare' | 'aindex' | 'concept' | 'dragon_tiger';
+  category: 'ashare' | 'aindex' | 'concept' | 'dragon_tiger' | 'inst_trade' | 'adj_factor';
   source: 'baostock' | 'eastmoney' | 'tdx';
   description: string;
 }
 
-// 预定义常用的金融终端数据源选项
+// 预定义常用的金融终端数据源选项 (全量 16 个内置数据表)
 export const DATA_SOURCE_OPTIONS: DataSourceOption[] = [
+  // Baostock 6 表
   {
     id: 'ashare_kline_1d_raw_baostock',
     name: 'Baostock A股日线 (不复权)',
@@ -32,12 +33,37 @@ export const DATA_SOURCE_OPTIONS: DataSourceOption[] = [
   },
   {
     id: 'ashare_kline_5m_raw_baostock',
-    name: 'Baostock A股5分钟线',
+    name: 'Baostock A股5分钟线 (不复权)',
     table_id: 'ashare.kline.5m.raw.baostock',
     category: 'ashare',
     source: 'baostock',
     description: '个股高频 5 分钟 K 线数据'
   },
+  {
+    id: 'ashare_kline_5m_adj_baostock',
+    name: 'Baostock A股5分钟线 (后复权)',
+    table_id: 'ashare.kline.5m.adj.baostock',
+    category: 'ashare',
+    source: 'baostock',
+    description: '个股高频 5 分钟后复权 K 线数据'
+  },
+  {
+    id: 'aindex_kline_1d_raw_baostock',
+    name: 'Baostock 指数日线 (不复权)',
+    table_id: 'aindex.kline.1d.raw.baostock',
+    category: 'aindex',
+    source: 'baostock',
+    description: '大盘与主要指数日线 OHLCV 数据'
+  },
+  {
+    id: 'ashare_adj_factor_baostock',
+    name: 'Baostock A股后复权因子',
+    table_id: 'ashare.adj_factor.baostock',
+    category: 'adj_factor',
+    source: 'baostock',
+    description: '个股历史除权除息与后复权因子 (Event 表)'
+  },
+  // EastMoney 4 表
   {
     id: 'ashare_concept_eastmoney',
     name: '东方财富 概念板块与成分股',
@@ -52,7 +78,7 @@ export const DATA_SOURCE_OPTIONS: DataSourceOption[] = [
     table_id: 'ashare.industry.eastmoney',
     category: 'concept',
     source: 'eastmoney',
-    description: '东财行业板块成分股映射'
+    description: '东财行业板块成分股映射 (Event 表)'
   },
   {
     id: 'ashare_dragon_tiger_eastmoney',
@@ -60,8 +86,17 @@ export const DATA_SOURCE_OPTIONS: DataSourceOption[] = [
     table_id: 'ashare.dragon_tiger.eastmoney',
     category: 'dragon_tiger',
     source: 'eastmoney',
-    description: '机构与营业部每日上榜明细'
+    description: '机构与营业部每日上榜明细 (Event 表)'
   },
+  {
+    id: 'ashare_inst_trade_eastmoney',
+    name: '东方财富 机构交易明细',
+    table_id: 'ashare.inst_trade.eastmoney',
+    category: 'inst_trade',
+    source: 'eastmoney',
+    description: '机构席位买卖交易明细 (Event 表)'
+  },
+  // TDX (通达信) 6 表
   {
     id: 'ashare_kline_1d_raw_tdx',
     name: '通达信 A股日线 (TDX)',
@@ -69,6 +104,46 @@ export const DATA_SOURCE_OPTIONS: DataSourceOption[] = [
     category: 'ashare',
     source: 'tdx',
     description: '通达信本地 vipdoc 或在线日线数据'
+  },
+  {
+    id: 'ashare_kline_5m_raw_tdx',
+    name: '通达信 A股5分钟线 (TDX)',
+    table_id: 'ashare.kline.5m.raw.tdx',
+    category: 'ashare',
+    source: 'tdx',
+    description: '通达信本地 vipdoc 或在线 5 分钟线数据'
+  },
+  {
+    id: 'ashare_kline_1m_raw_tdx',
+    name: '通达信 A股1分钟线 (TDX)',
+    table_id: 'ashare.kline.1m.raw.tdx',
+    category: 'ashare',
+    source: 'tdx',
+    description: '通达信本地 vipdoc 或在线 1 分钟超高频数据'
+  },
+  {
+    id: 'aindex_kline_1d_raw_tdx',
+    name: '通达信 指数日线 (TDX)',
+    table_id: 'aindex.kline.1d.raw.tdx',
+    category: 'aindex',
+    source: 'tdx',
+    description: '通达信大盘与主要指数日线数据'
+  },
+  {
+    id: 'aindex_kline_5m_raw_tdx',
+    name: '通达信 指数5分钟线 (TDX)',
+    table_id: 'aindex.kline.5m.raw.tdx',
+    category: 'aindex',
+    source: 'tdx',
+    description: '通达信大盘与主要指数 5 分钟线数据'
+  },
+  {
+    id: 'aindex_kline_1m_raw_tdx',
+    name: '通达信 指数1分钟线 (TDX)',
+    table_id: 'aindex.kline.1m.raw.tdx',
+    category: 'aindex',
+    source: 'tdx',
+    description: '通达信大盘与主要指数 1 分钟线数据'
   }
 ];
 

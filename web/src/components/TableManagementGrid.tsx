@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { TableDetailedMeta, SyncStatusItem } from '../types/api';
+import { DATA_SOURCE_OPTIONS, type TableDetailedMeta, type SyncStatusItem } from '../types/api';
 import { RefreshCw, ShieldAlert, CheckCircle2, Clock, Play, FolderOpen } from 'lucide-react';
 import { FileExplorerModal } from './FileExplorerModal';
 
@@ -99,9 +99,11 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
     });
   };
 
+  const knownTableIds = new Set(DATA_SOURCE_OPTIONS.map((opt) => opt.table_id));
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedTables(tables.map((t) => t.table_id));
+      setSelectedTables(tables.filter((t) => knownTableIds.has(t.table_id)).map((t) => t.table_id));
     } else {
       setSelectedTables([]);
     }
@@ -242,6 +244,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
           </thead>
           <tbody className="divide-y divide-slate-800/60 font-mono">
             {tables.map((item) => {
+              const isKnownTable = knownTableIds.has(item.table_id);
               const isSelected = selectedTables.includes(item.table_id);
               const isExpanded = expandedRows[item.table_id] ?? false;
               const statusObj = statuses[item.table_id];
@@ -261,8 +264,12 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => toggleTableSelect(item.table_id)}
-                        className="rounded bg-slate-950 border-slate-700 text-cyan-500 cursor-pointer"
+                        disabled={!isKnownTable}
+                        onChange={() => isKnownTable && toggleTableSelect(item.table_id)}
+                        className={`rounded bg-slate-950 border-slate-700 text-cyan-500 ${
+                          isKnownTable ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'
+                        }`}
+                        title={!isKnownTable ? '非预定义数据表无外部同步驱动' : ''}
                       />
                     </td>
 
@@ -433,14 +440,23 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
                             <span className="text-[10px] px-1">⚙️ 高级</span>
                           </button>
                         )}
-                        <button
-                          onClick={() => handleStartSync([item.table_id])}
-                          disabled={syncing}
-                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors inline-flex items-center space-x-1 cursor-pointer disabled:opacity-50 font-sans"
-                        >
-                          <Play className="w-3 h-3 text-cyan-400 shrink-0" />
-                          <span>立即同步</span>
-                        </button>
+                        {isKnownTable ? (
+                          <button
+                            onClick={() => handleStartSync([item.table_id])}
+                            disabled={syncing}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors inline-flex items-center space-x-1 cursor-pointer disabled:opacity-50 font-sans"
+                          >
+                            <Play className="w-3 h-3 text-cyan-400 shrink-0" />
+                            <span>立即同步</span>
+                          </button>
+                        ) : (
+                          <span
+                            className="px-2 py-1 bg-slate-800/60 border border-slate-700/50 text-slate-500 rounded-lg text-[11px] font-sans select-none"
+                            title="自定义/非预定义数据表，无外部在线数据源驱动，仅支持物理磁盘读取解析"
+                          >
+                            离线表 (仅解析)
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>

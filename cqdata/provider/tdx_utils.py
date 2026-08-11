@@ -55,11 +55,12 @@ _FREQ_TO_EXT = {
 _daily_reader = TdxDailyBarReader()
 _lc_min_reader = TdxLCMinBarReader()
 
-# TDX 服务器候选池 (经过行情数据严格探针验证的高可用节点)
+# TDX 服务器候选池 (经过行情数据严格探针验证的高可用节点，包含最新实测极速节点与原可用节点)
 _TDX_SERVERS = [
+    ("180.153.18.170", 7709),
     ("218.75.126.9", 7709),
-    ("60.191.117.167", 7709),
     ("115.238.56.198", 7709),
+    ("60.191.117.167", 7709),
 ]
 
 # 模块级 TCP 连接缓存，同进程复用同一服务器
@@ -119,9 +120,42 @@ def _probe_best_server() -> tuple[str, int, float]:
     return best_ip, best_port, best_latency
 
 
+_tdxpy_patched = False
+
+
+def _patch_tdxpy_once() -> None:
+    """针对 tdxpy 补充 market=2 (BJ 北交所) 的安全 Monkeypatch。
+
+    只在 market in (2, 'bj', 'BJ') 时生效，market in (0, 1) 完全原封不动透传。
+    """
+    global _tdxpy_patched
+    if _tdxpy_patched:
+        return
+    try:
+        import tdxpy.constants as c
+        import tdxpy.helper as h
+
+        c.SECURITY_COEFFICIENT["BJ_A_STOCK"] = [0.01, 0.01]
+        c.SECURITY_COEFFICIENT["BJ_INDEX"] = [0.01, 1.0]
+
+        orig_get_security_type = h.get_security_type
+
+        def hooked_get_security_type(market: Any, code: Any) -> str:
+            code_str = str(code)
+            if market in ("BJ", "bj", 2):
+                return "BJ_INDEX" if code_str.startswith("89") else "BJ_A_STOCK"
+            return orig_get_security_type(market, code)
+
+        h.get_security_type = hooked_get_security_type
+        _tdxpy_patched = True
+    except Exception as e:
+        logger.warning(f"[TDX] Patching tdxpy for market=2 failed: {e}")
+
+
 def _connect_tdx_api() -> TdxHq_API:
     """连接 TDX 服务器。复用已有连接，断线时才重新探测。"""
     global _cached_api
+    _patch_tdxpy_once()
     if _cached_api is not None:
         return _cached_api
 
@@ -266,17 +300,21 @@ def _safe_tcp_call(callable_fn) -> list[dict] | None:
     """TCP 调用封装：连接/网络异常时自动重连换 IP 重试 (tenacity 指数退避)。"""
     global _cached_api
     try:
-        # 若 _cached_api 为 None（如初始未连或上轮重连失败），先尝试重新建立 TCP 连接
-        if _cached_api is None:
+        # 若 _cached_api 为 None 或 client 状态断开，先尝试重新建立 TCP 连接
+        if _cached_api is None or getattr(_cached_api, "client", None) is None:
             _connect_tdx_api()
+
         res = callable_fn()
+
         if res is None:
-            # tdxpy 在 socket 断开/未连接时会静默返回 None，此处强制触发重连
-            logger.warning("[TDX] TCP 响应为 None (Socket 可能已断开)，尝试重连...")
-            _reconnect_tdx_api()
-            res = callable_fn()
-            if res is None:
-                raise ConnectionError("TDX TCP 无法获取数据 (服务器返回 None 或网络断开)")
+            # 检查调用过程中 socket 是否真正断开 (tdxpy 会在断线时将 client 设为 None)
+            if _cached_api is None or getattr(_cached_api, "client", None) is None:
+                logger.warning("[TDX] TCP Socket 已断开，尝试重连...")
+                _reconnect_tdx_api()
+                res = callable_fn()
+                if res is None and (_cached_api is None or getattr(_cached_api, "client", None) is None):
+                    raise ConnectionError("TDX TCP 无法获取数据 (服务器返回 None 或网络断开)")
+
         return res
     except (ConnectionError, OSError, TimeoutError, RuntimeError):
         _cached_api = None
@@ -302,8 +340,9 @@ def fetch_bars_online(
     if category is None:
         raise ValueError(f"不支持的频率: {freq}")
 
-    is_index = table_id.startswith("aindex") or pure_code.startswith(("000", "399"))
-    fetch_market = 1 if pure_code.startswith("000") else market
+    # 依据 Single Source of Truth (SSOT) 原则，仅由 table_id 前缀决定是否为指数表
+    is_index = table_id.startswith("aindex")
+    fetch_market = market
 
     is_minute = freq in ("5m", "1m")
 
@@ -321,15 +360,30 @@ def fetch_bars_online(
             break
 
         for row in data:
-            dt_str = row["datetime"]
+            dt_str = str(row.get("datetime", ""))
+            year = row.get("year", 0)
+
+            # Fail-Fast 校验：通达信服务端错位解包或网络包损坏时，立即抛出 ValueError 终止流水线，防止水质污染与水位线误推进
+            if not dt_str or dt_str.startswith("0-") or len(dt_str) < 8 or (year != 0 and (year < 1970 or year > 2100)):
+                raise ValueError(f"[TDX Data Error] {symbol} 收到损坏的数据记录 (datetime='{dt_str}', year={year})，触发 Fail-Fast 保护")
+
+            try:
+                vol_val = float(row.get("vol", 0))
+                amt_val = float(row.get("amount", 0))
+            except (ValueError, TypeError) as e:
+                raise ValueError(f"[TDX Data Error] {symbol} 数值解析失败: {e}") from e
+
+            if not (0 <= vol_val < 1e18) or not (0 <= amt_val < 1e18):
+                raise ValueError(f"[TDX Data Error] {symbol} 收到超范围异常数值 (volume={vol_val}, amount={amt_val})，触发 Fail-Fast 保护")
+
             date_part = dt_str[:10]
             rec = {
-                "open": round(float(row["open"]), 4),
-                "high": round(float(row["high"]), 4),
-                "low": round(float(row["low"]), 4),
-                "close": round(float(row["close"]), 4),
-                "volume": int(row["vol"]),
-                "amount": round(float(row["amount"]), 2),
+                "open": round(float(row.get("open", 0)), 4),
+                "high": round(float(row.get("high", 0)), 4),
+                "low": round(float(row.get("low", 0)), 4),
+                "close": round(float(row.get("close", 0)), 4),
+                "volume": vol_val,
+                "amount": round(amt_val, 2),
             }
             if is_minute:
                 rec["datetime"] = dt_str
@@ -359,7 +413,7 @@ def fetch_bars_online(
             "high": pl.Float64,
             "low": pl.Float64,
             "close": pl.Float64,
-            "volume": pl.Int64,
+            "volume": pl.Float64,
             "amount": pl.Float64,
         })
     else:
@@ -369,7 +423,7 @@ def fetch_bars_online(
             "high": pl.Float64,
             "low": pl.Float64,
             "close": pl.Float64,
-            "volume": pl.Int64,
+            "volume": pl.Float64,
             "amount": pl.Float64,
         })
 
@@ -384,7 +438,10 @@ def fetch_bars_online(
 
 
 def fetch_stock_list_online(market: str = "sh") -> list[str]:
-    """通过 TDX TCP 获取股票列表。"""
+    """通过 TDX TCP 获取股票列表。对 market=='bj' 静默返回 []。"""
+    if market == "bj":
+        return []
+
     market_code = _MARKET_MAP.get(market)
     if market_code is None:
         raise ValueError(f"未知市场: {market}")

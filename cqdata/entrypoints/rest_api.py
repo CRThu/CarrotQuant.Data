@@ -162,8 +162,9 @@ import json
 from cqdata.service.metadata_manager import MetadataManager
 from cqdata.service.sync_tracker import sync_tracker
 
-# 所有支持的标准 Table ID 预定义字典与元数据映射
+# 所有支持的标准 Table ID 预定义字典与元数据映射 (全量 16 个内置数据表)
 KNOWN_TABLE_DEFINITIONS = [
+    # Baostock 6 表
     {
         "table_id": "ashare.kline.1d.raw.baostock",
         "name": "Baostock A股日线 (不复权)",
@@ -180,11 +181,33 @@ KNOWN_TABLE_DEFINITIONS = [
     },
     {
         "table_id": "ashare.kline.5m.raw.baostock",
-        "name": "Baostock A股5分钟线",
+        "name": "Baostock A股5分钟线 (不复权)",
         "category": "timeseries",
         "source": "baostock",
         "description": "个股高频 5 分钟 K 线数据"
     },
+    {
+        "table_id": "ashare.kline.5m.adj.baostock",
+        "name": "Baostock A股5分钟线 (后复权)",
+        "category": "timeseries",
+        "source": "baostock",
+        "description": "个股高频 5 分钟后复权 K 线数据"
+    },
+    {
+        "table_id": "aindex.kline.1d.raw.baostock",
+        "name": "Baostock 指数日线 (不复权)",
+        "category": "timeseries",
+        "source": "baostock",
+        "description": "大盘与主要指数日线 OHLCV 数据"
+    },
+    {
+        "table_id": "ashare.adj_factor.baostock",
+        "name": "Baostock A股后复权因子",
+        "category": "event",
+        "source": "baostock",
+        "description": "个股历史除权除息与后复权因子 (Event 表)"
+    },
+    # EastMoney 4 表
     {
         "table_id": "ashare.concept.eastmoney",
         "name": "东方财富 概念板块与成分股",
@@ -197,21 +220,64 @@ KNOWN_TABLE_DEFINITIONS = [
         "name": "东方财富 行业板块与成分股",
         "category": "event",
         "source": "eastmoney",
-        "description": "东财行业板块成分股映射"
+        "description": "东财行业板块成分股映射 (Event 表)"
     },
     {
         "table_id": "ashare.dragon_tiger.eastmoney",
         "name": "东方财富 龙虎榜每日统计",
         "category": "event",
         "source": "eastmoney",
-        "description": "机构与营业部每日上榜明细"
+        "description": "机构与营业部每日上榜明细 (Event 表)"
     },
+    {
+        "table_id": "ashare.inst_trade.eastmoney",
+        "name": "东方财富 机构交易明细",
+        "category": "event",
+        "source": "eastmoney",
+        "description": "机构席位买卖交易明细 (Event 表)"
+    },
+    # TDX (通达信) 6 表
     {
         "table_id": "ashare.kline.1d.raw.tdx",
         "name": "通达信 A股日线 (TDX)",
         "category": "timeseries",
         "source": "tdx",
         "description": "通达信本地 vipdoc 或在线日线数据"
+    },
+    {
+        "table_id": "ashare.kline.5m.raw.tdx",
+        "name": "通达信 A股5分钟线 (TDX)",
+        "category": "timeseries",
+        "source": "tdx",
+        "description": "通达信本地 vipdoc 或在线 5 分钟线数据"
+    },
+    {
+        "table_id": "ashare.kline.1m.raw.tdx",
+        "name": "通达信 A股1分钟线 (TDX)",
+        "category": "timeseries",
+        "source": "tdx",
+        "description": "通达信本地 vipdoc 或在线 1 分钟超高频数据"
+    },
+    {
+        "table_id": "aindex.kline.1d.raw.tdx",
+        "name": "通达信 指数日线 (TDX)",
+        "category": "timeseries",
+        "source": "tdx",
+        "description": "通达信大盘与主要指数日线数据"
+    },
+    {
+        "table_id": "aindex.kline.5m.raw.tdx",
+        "name": "通达信 指数5分钟线 (TDX)",
+        "category": "timeseries",
+        "source": "tdx",
+        "description": "通达信大盘与主要指数 5 分钟线数据"
+    },
+    {
+        "table_id": "aindex.kline.1m.raw.tdx",
+        "name": "通达信 指数1分钟线 (TDX)",
+        "category": "timeseries",
+        "source": "tdx",
+        "description": "通达信大盘与主要指数 1 分钟线数据"
     }
 ]
 

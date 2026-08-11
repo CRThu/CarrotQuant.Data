@@ -233,3 +233,30 @@ def test_filesystem_list(tmp_path):
     assert data_non["total"] == 0
 
 
+def test_list_tables_detailed_known_tables():
+    """验证 GET /api/v1/tables/detailed 接口能正确返回全部 16 个内置预定义表元数据 (包含 TDX 指数与高频)"""
+    response = client.get("/api/v1/tables/detailed")
+    assert response.status_code == 200
+    data = response.json()
+    table_ids = [t["table_id"] for t in data["tables"]]
+    assert len(table_ids) >= 16
+
+    # 校验 TDX 的全部 6 个表
+    expected_tdx = [
+        "ashare.kline.1d.raw.tdx",
+        "ashare.kline.5m.raw.tdx",
+        "ashare.kline.1m.raw.tdx",
+        "aindex.kline.1d.raw.tdx",
+        "aindex.kline.5m.raw.tdx",
+        "aindex.kline.1m.raw.tdx",
+    ]
+    for tid in expected_tdx:
+        assert tid in table_ids, f"Expected TDX table '{tid}' to be present in /tables/detailed"
+
+    # 校验 Baostock 指数与复权因子
+    assert "aindex.kline.1d.raw.baostock" in table_ids
+    assert "ashare.adj_factor.baostock" in table_ids
+    assert "ashare.inst_trade.eastmoney" in table_ids
+
+
+

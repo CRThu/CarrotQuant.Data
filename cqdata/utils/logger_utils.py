@@ -64,19 +64,30 @@ def setup_logger(
     return logger
 
 
+import threading
+
+
 class SuppressOutput:
     """
     上下文管理器，用于静默 stdout 和 stderr。
     常用于屏蔽 baostock 等库产生的非 log 打印。
     """
+    _devnull_out = None
+    _devnull_err = None
+    _lock = threading.Lock()
+
     def __enter__(self):
         self._stdout = sys.stdout
         self._stderr = sys.stderr
-        sys.stdout = open(os.devnull, 'w')
-        sys.stderr = open(os.devnull, 'w')
+        with SuppressOutput._lock:
+            if SuppressOutput._devnull_out is None or SuppressOutput._devnull_out.closed:
+                SuppressOutput._devnull_out = open(os.devnull, 'w')
+            if SuppressOutput._devnull_err is None or SuppressOutput._devnull_err.closed:
+                SuppressOutput._devnull_err = open(os.devnull, 'w')
+        sys.stdout = SuppressOutput._devnull_out
+        sys.stderr = SuppressOutput._devnull_err
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stderr.close()
         sys.stdout = self._stdout
         sys.stderr = self._stderr
+

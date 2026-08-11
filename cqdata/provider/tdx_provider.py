@@ -88,26 +88,65 @@ class TDXProvider(BaseProvider):
         raw = discover_tdx_symbols_from_local(self._vipdoc_dir)
 
         if prefix == "aindex":
-            return [tdx_code_to_standard(c) for c in raw if c[2:].startswith(('000', '399'))]
-        sh_symbols = [c for c in raw if c[:2] == 'sh' and c[2:].startswith('6')]
-        sz_symbols = [c for c in raw if c[:2] == 'sz' and c[2:].startswith(('0', '3'))]
-        bj_symbols = [tdx_code_to_standard(c) for c in raw if c[2:].startswith(('920', '83', '87', '43'))]
-        symbols = sorted([tdx_code_to_standard(c) for c in sh_symbols + sz_symbols] + bj_symbols)
-        logger.info(f"Discovered {len(symbols)} symbols (local)")
-        return symbols
+            # 指数: 上交所00/深交所39/北交所89开头 (如 sh.000001, sz.395001, bj.899050)
+            return sorted([
+                tdx_code_to_standard(c) for c in raw
+                if (c.startswith('sh') and c[2:].startswith('00'))
+                or (c.startswith('sz') and c[2:].startswith('39'))
+                or (c.startswith('bj') and c[2:].startswith('89'))
+            ])
+        if prefix == "ashare":
+            # 个股白名单: 上交所60/68, 深交所00/30 (剔除39指数), 北交所920/83/87/43
+            sh_symbols = [c for c in raw if c[:2] == 'sh' and c[2:].startswith(('60', '68'))]
+            sz_symbols = [c for c in raw if c[:2] == 'sz' and c[2:].startswith(('00', '30'))]
+            bj_symbols = [tdx_code_to_standard(c) for c in raw if c[2:].startswith(('920', '83', '87', '43'))]
+            symbols = sorted([tdx_code_to_standard(c) for c in sh_symbols + sz_symbols] + bj_symbols)
+            logger.info(f"Discovered {len(symbols)} symbols (local)")
+            return symbols
+        raise ValueError(f"Unsupported Universe prefix: '{prefix}'. Only 'ashare' and 'aindex' are supported.")
+
+    def _get_bj_symbols_online(self, prefix: str = "ashare") -> list[str]:
+        """在线获取北交所代码列表。优先使用 fetch_stock_list_online，若为空则复用既有 BaostockProvider 的基础库探查，失败时 Warning 优雅放弃。"""
+        try:
+            bj = fetch_stock_list_online(market="bj")
+            if bj:
+                return [tdx_code_to_standard(c) for c in bj]
+        except Exception:
+            pass
+
+        try:
+            from cqdata.provider.baostock_provider import BaostockProvider
+            bp = BaostockProvider()
+            bs_symbols = bp.get_all_symbols(f"{prefix}.kline.1d.raw.baostock")
+            return [s for s in bs_symbols if s.startswith("bj.")]
+        except Exception as e:
+            logger.warning(f"[TDX] 无法通过 Baostock 基础库拉取北交所 {prefix} 代码列表 (将自动跳过 BJ 市场): {e}")
+            return []
 
     def _get_all_symbols_online(self, prefix: str) -> list[str]:
         if prefix == "aindex":
             sh = fetch_stock_list_online(market="sh")
             sz = fetch_stock_list_online(market="sz")
-            return sorted([tdx_code_to_standard(c) for c in sh + sz if c[2:].startswith(('000', '399'))])
-        sh = fetch_stock_list_online(market="sh")
-        sz = fetch_stock_list_online(market="sz")
-        sh_symbols = [c for c in sh if c[2:].startswith('6')]
-        sz_symbols = [c for c in sz if c[2:].startswith(('0', '3'))]
-        symbols = sorted([tdx_code_to_standard(c) for c in sh_symbols + sz_symbols])
-        logger.info(f"Discovered {len(symbols)} symbols (online, sh+sz)")
-        return symbols
+            bj_indices = self._get_bj_symbols_online(prefix="aindex")
+            sh_indices = [tdx_code_to_standard(c) for c in sh if c[2:].startswith('00')]
+            sz_indices = [tdx_code_to_standard(c) for c in sz if c[2:].startswith('39')]
+            bj_filtered = [c if '.' in c else tdx_code_to_standard(c) for c in bj_indices if (c[3:] if '.' in c else c[2:]).startswith('89')]
+            if "bj.899050" not in bj_filtered:
+                bj_filtered.append("bj.899050")
+            symbols = sorted(set(sh_indices + sz_indices + bj_filtered))
+            logger.info(f"Discovered {len(symbols)} symbols for Universe 'aindex' (online)")
+            return symbols
+        if prefix == "ashare":
+            sh = fetch_stock_list_online(market="sh")
+            sz = fetch_stock_list_online(market="sz")
+            bj_stocks = self._get_bj_symbols_online(prefix="ashare")
+            sh_symbols = [c for c in sh if c[2:].startswith(('60', '68'))]
+            sz_symbols = [c for c in sz if c[2:].startswith(('00', '30'))]
+            bj_filtered = [c if '.' in c else tdx_code_to_standard(c) for c in bj_stocks if (c[3:] if '.' in c else c[2:]).startswith(('920', '83', '87', '43'))]
+            symbols = sorted([tdx_code_to_standard(c) for c in sh_symbols + sz_symbols] + bj_filtered)
+            logger.info(f"Discovered {len(symbols)} symbols for Universe 'ashare' (online)")
+            return symbols
+        raise ValueError(f"Unsupported Universe prefix: '{prefix}'. Only 'ashare' and 'aindex' are supported.")
 
     def fetch(
         self, table_id: str, symbol: str, start_date: Any, end_date: Any, **kwargs
