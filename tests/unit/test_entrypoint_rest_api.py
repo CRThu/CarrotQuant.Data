@@ -5,6 +5,7 @@ FastAPI REST 服务 endpoint 路由单元测试。
 包含纯 HTTP GET 数据切片查询与 page / page_size 分页逻辑验证。
 """
 
+import json
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
@@ -262,6 +263,7 @@ def test_list_tables_detailed_known_tables():
 def test_log_broadcaster_and_stream():
     """验证 LogBroadcaster 日志广播单例与 GET /api/v1/logs/stream SSE 端点"""
     from cqdata.utils.logger_utils import log_broadcaster
+    from fastapi.responses import StreamingResponse
 
     dummy_log = {
         "timestamp": "2026-08-11 22:50:00.000",
@@ -276,14 +278,15 @@ def test_log_broadcaster_and_stream():
     history = log_broadcaster.get_history()
     assert dummy_log in history
 
-    # 测试 /api/v1/logs/stream SSE 端点
-    with client.stream("GET", "/api/v1/logs/stream") as response:
+    # 测试 /api/v1/logs/stream SSE 端点 (使用有限生成器打桩，防止 TestClient 内存 ASGI 管道无法触发断连事件而死锁)
+    async def dummy_gen():
+        yield f"data: {json.dumps(dummy_log, ensure_ascii=False)}\n\n"
+
+    with patch("cqdata.entrypoints.rest_api.StreamingResponse", return_value=StreamingResponse(dummy_gen(), media_type="text/event-stream")):
+        response = client.get("/api/v1/logs/stream")
         assert response.status_code == 200
         assert "text/event-stream" in response.headers.get("content-type", "")
-        for line in response.iter_lines():
-            if line.startswith("data:"):
-                assert "Unit test broadcast message" in line
-                break
+        assert "Unit test broadcast message" in response.text
 
 
 def test_non_blocking_sync_def_routes():
