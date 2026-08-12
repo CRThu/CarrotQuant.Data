@@ -276,13 +276,8 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
                     {/* 数据源与名称：零额外偏移，100% 绝对统一左对齐 */}
                     <td className="py-2.5 px-3">
                       <div>
-                        <div className="font-bold text-slate-100 flex items-center space-x-1.5 font-sans">
-                          <span>{item.name}</span>
-                          <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-mono text-[9px] shrink-0">
-                            {item.source}
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-mono">{item.table_id}</div>
+                        <div className="font-bold text-slate-100 font-sans text-xs">{item.name}</div>
+                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">{item.table_id}</div>
                       </div>
                     </td>
 

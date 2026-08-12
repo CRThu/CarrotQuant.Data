@@ -1,17 +1,19 @@
 import React from 'react';
 import type { QueryMatrixResponse, ColorMode } from '../types/api';
-import { Table, ArrowUpDown, Download } from 'lucide-react';
+import { Table, ArrowUpDown, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface DataTableProps {
   matrix: QueryMatrixResponse | null;
   loading: boolean;
   colorMode?: ColorMode;
+  onPageChange?: (page: number) => void;
 }
 
 export const DataTable: React.FC<DataTableProps> = ({
   matrix,
   loading,
   colorMode = 'redUpGreenDown',
+  onPageChange,
 }) => {
   // 一键导出 2D 切片矩阵数据为 CSV 文件
   const handleExportCSV = () => {
@@ -61,14 +63,17 @@ export const DataTable: React.FC<DataTableProps> = ({
   const posColorClass = isRedUp ? 'text-red-400 font-semibold' : 'text-emerald-400 font-semibold';
   const negColorClass = isRedUp ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold';
 
+  const currentPage = matrix.page || 1;
+  const totalPages = matrix.total_pages || Math.ceil((matrix.total || 0) / (matrix.page_size || 500)) || 1;
+
   return (
-    <div className="bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden flex flex-col shadow-xl">
+    <div className="bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden flex flex-col shadow-xl h-full font-mono">
       {/* 表格标题、导出按钮与统计 */}
-      <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+      <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 flex-wrap gap-2 shrink-0">
         <div className="flex items-center space-x-2">
           <Table className="w-4 h-4 text-cyan-400" />
           <span className="text-xs font-semibold text-slate-200">
-            原始 Polars 数据切片明细表
+            数据切片明细
           </span>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/40">
             {matrix.table_id}
@@ -89,8 +94,8 @@ export const DataTable: React.FC<DataTableProps> = ({
         </div>
       </div>
 
-      {/* 2D 矩阵表格容器 */}
-      <div className="overflow-x-auto max-h-80">
+      {/* 2D 矩阵表格容器 (完美垂直伸展填充屏幕最下方) */}
+      <div className="overflow-x-auto overflow-y-auto flex-1 min-h-0">
         <table className="w-full text-left text-xs font-mono">
           <thead className="sticky top-0 bg-slate-950 text-slate-400 border-b border-slate-800 shadow-md">
             <tr>
@@ -109,7 +114,7 @@ export const DataTable: React.FC<DataTableProps> = ({
             {matrix.data.map((row, rowIdx) => (
               <tr key={rowIdx} className="hover:bg-slate-800/40 transition-colors">
                 <td className="px-3 py-1.5 text-slate-500 border-r border-slate-800/40 text-[10px]">
-                  {rowIdx + 1}
+                  {(currentPage - 1) * (matrix.page_size || 500) + rowIdx + 1}
                 </td>
                 {row.map((val, colIdx) => (
                   <td key={colIdx} className="px-3 py-1.5 whitespace-nowrap">
@@ -128,6 +133,31 @@ export const DataTable: React.FC<DataTableProps> = ({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* 极速物理分页 Bar */}
+      <div className="px-4 py-2 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs font-mono shrink-0">
+        <div className="text-slate-400 text-[11px]">
+          第 <span className="text-cyan-400 font-bold">{currentPage}</span> / <span className="text-slate-300 font-bold">{totalPages}</span> 页
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => onPageChange && onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 border border-slate-800 rounded-lg text-slate-300 transition-colors flex items-center space-x-1 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>上一页</span>
+          </button>
+          <button
+            onClick={() => onPageChange && onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 border border-slate-800 rounded-lg text-slate-300 transition-colors flex items-center space-x-1 cursor-pointer disabled:cursor-not-allowed"
+          >
+            <span>下一页</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

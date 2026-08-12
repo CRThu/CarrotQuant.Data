@@ -90,6 +90,19 @@ def test_log_broadcaster_special_characters_and_emojis():
     assert hist[0]["message"] == special_msg
 
 
+def test_setup_logger_attaches_broadcaster():
+    """验证 setup_logger() 正确挂载 LogBroadcaster.sink 并收到 loguru 日志"""
+    from cqdata.utils.logger_utils import log_broadcaster
+    log_broadcaster.history.clear()
+
+    setup_logger(log_level="INFO", log_file_prefix="test")
+    logger.info("Test log line via setup_logger")
+
+    hist = log_broadcaster.get_history()
+    assert len(hist) > 0, "LogBroadcaster should receive log entries from loguru"
+    assert any("Test log line via setup_logger" in entry["message"] for entry in hist)
+
+
 def test_suppress_output():
     """验证 SuppressOutput 静默输出功能"""
     stdout_before = sys.stdout

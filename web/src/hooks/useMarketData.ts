@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { DATA_SOURCE_OPTIONS } from '../types/api';
 import type {
   OHLCBar,
@@ -70,8 +70,25 @@ export const useMarketData = (
     setSymbol(initialSymbol);
   }
 
-  const fetchData = useCallback(async () => {
+  const lastFetchedRef = useRef<string>('');
+
+  const fetchData = useCallback(async (isForce: boolean = false) => {
     if (!tableId || !symbol) return;
+
+    const fetchKey = `${tableId}:${symbol}`;
+    if (!isForce && lastFetchedRef.current === fetchKey && matrixRaw !== null) {
+      // 当前数据已成功加载且未变更代码，直接复用既有状态
+      return;
+    }
+
+    // 当请求新股票/新表时，立即清空上一次旧股票的数据，防止图表残留旧 K 线造成误解
+    if (lastFetchedRef.current !== fetchKey) {
+      setOhlcBars([]);
+      setVolumeBars([]);
+      setMaData({ ma5: [], ma10: [], ma20: [] });
+      setMatrixRaw(null);
+    }
+
     setLoading(true);
     setError(null);
 
@@ -80,10 +97,11 @@ export const useMarketData = (
         table_id: tableId,
         symbols: symbol,
         page: 1,
-        page_size: 5000,
+        page_size: 1000,
       });
 
       setMatrixRaw(res);
+      lastFetchedRef.current = fetchKey;
 
       // 1. 先用全量历史数据 (无 barLimit 截断) 转换为 OHLC Bars，保证 EMA/MACD/RSI 长期记忆指标计算无失真
       const fullBars = matrixToOHLC(res);
@@ -118,13 +136,14 @@ export const useMarketData = (
       setOhlcBars([]);
       setVolumeBars([]);
       setMatrixRaw(null);
+      lastFetchedRef.current = '';
     } finally {
       setLoading(false);
     }
-  }, [tableId, symbol, barLimit, colorMode]);
+  }, [tableId, symbol, barLimit, colorMode, matrixRaw]);
 
   useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, [fetchData]);
 
   // 合并派生的金叉死叉 Marker 与外部扩展注入的 Marker (使用 useMemo 缓存 Array 引用防重绘)
@@ -152,6 +171,6 @@ export const useMarketData = (
     markers: combinedMarkers,
     matrixRaw,
     setExternalMarkers,
-    refreshData: fetchData,
+    refreshData: () => fetchData(true),
   };
 };

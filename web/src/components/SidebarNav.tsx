@@ -1,7 +1,7 @@
 import React from 'react';
-import { TrendingUp, Layers, BarChart2, ChevronLeft, ChevronRight, Database, Settings, Terminal } from 'lucide-react';
+import { TrendingUp, Layers, BarChart2, Table, ChevronLeft, ChevronRight, Database, Settings, Terminal } from 'lucide-react';
 
-export type ViewType = 'stock_list' | 'concept_industry' | 'stock_detail' | 'data_management' | 'log_center' | 'settings';
+export type ViewType = 'stock_list' | 'concept_industry' | 'stock_detail' | 'data_matrix' | 'data_management' | 'log_center' | 'settings';
 
 interface SidebarNavProps {
   currentView: ViewType;
@@ -21,34 +21,40 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const navItems = [
     {
       id: 'stock_list' as ViewType,
-      label: '股票市场',
+      label: '股票搜索',
       icon: TrendingUp,
-      desc: '全市场股票搜索与自选',
+      desc: '全市场代码与自选',
     },
     {
       id: 'concept_industry' as ViewType,
-      label: '板块概念穿透',
+      label: '板块概念',
       icon: Layers,
-      desc: '东财概念/行业成分股探查',
+      desc: '概念与行业成分股',
     },
     {
       id: 'stock_detail' as ViewType,
-      label: 'K线三窗格分析',
+      label: '行情 K 线',
       icon: BarChart2,
-      desc: 'TradingView 3-Pane 极速图表',
+      desc: '3-Pane 图表分析',
+    },
+    {
+      id: 'data_matrix' as ViewType,
+      label: '数据矩阵',
+      icon: Table,
+      desc: '二维 List 矩阵切片',
     },
     {
       id: 'data_management' as ViewType,
-      label: '数据管理中心',
+      label: '数据中心',
       icon: Database,
-      desc: '物理格式、水位线与数据增量同步',
+      desc: '存储与增量同步',
       badge: activeTaskCount,
     },
     {
       id: 'log_center' as ViewType,
-      label: '系统日志中心',
+      label: '日志中心',
       icon: Terminal,
-      desc: '全局 Loguru 架构与引擎实时日志流',
+      desc: 'Loguru 实时日志流',
     },
   ];
 

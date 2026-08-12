@@ -21,6 +21,20 @@ const api = axios.create({
   },
 });
 
+// 在途 HTTP GET 请求去重与 Promise 共享 map (解决并发重复发包造成的后端 CPU 竞争与卡顿)
+const inFlightPromises = new Map<string, Promise<any>>();
+
+function deduplicateGet<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  if (inFlightPromises.has(key)) {
+    return inFlightPromises.get(key) as Promise<T>;
+  }
+  const promise = fetcher().finally(() => {
+    inFlightPromises.delete(key);
+  });
+  inFlightPromises.set(key, promise);
+  return promise;
+}
+
 export const apiClient = {
   /**
    * 健康检查
@@ -34,28 +48,34 @@ export const apiClient = {
    * 获取所有本地已建立的数据表总览
    */
   async listTables(format: string = 'auto'): Promise<TablesResponse> {
-    const res = await api.get('/tables', { params: { format } });
-    return res.data;
+    return deduplicateGet(`listTables:${format}`, async () => {
+      const res = await api.get('/tables', { params: { format } });
+      return res.data;
+    });
   },
 
   /**
    * 获取某数据表包含的 Symbol 代码清单
    */
   async listSymbols(tableId: string, format: string = 'auto') {
-    const res = await api.get(`/tables/${tableId}/symbols`, { params: { format } });
-    return res.data;
+    return deduplicateGet(`listSymbols:${tableId}:${format}`, async () => {
+      const res = await api.get(`/tables/${tableId}/symbols`, { params: { format } });
+      return res.data;
+    });
   },
 
   /**
    * 获取某数据表的时间跨度
    */
   async getTimeRange(tableId: string, format: string = 'auto') {
-    const res = await api.get(`/tables/${tableId}/time_range`, { params: { format } });
-    return res.data;
+    return deduplicateGet(`getTimeRange:${tableId}:${format}`, async () => {
+      const res = await api.get(`/tables/${tableId}/time_range`, { params: { format } });
+      return res.data;
+    });
   },
 
   /**
-   * 统一切片查询接口 (GET /api/v1/query)
+   * 统一切片查询接口 (GET /api/v1/query)，集成在途请求合并 deduplication
    */
   async queryData(params: {
     table_id: string;
@@ -68,8 +88,11 @@ export const apiClient = {
     page?: number;
     page_size?: number;
   }): Promise<QueryMatrixResponse> {
-    const res = await api.get('/query', { params });
-    return res.data;
+    const key = `queryData:${JSON.stringify(params)}`;
+    return deduplicateGet(key, async () => {
+      const res = await api.get('/query', { params });
+      return res.data;
+    });
   },
 
   /**
@@ -89,16 +112,21 @@ export const apiClient = {
     total_pages: number;
     boards: { board_code: string; board_name: string; stock_count: number }[];
   }> {
-    const res = await api.get(`/tables/${params.table_id}/boards`, { params });
-    return res.data;
+    const key = `getConceptBoards:${JSON.stringify(params)}`;
+    return deduplicateGet(key, async () => {
+      const res = await api.get(`/tables/${params.table_id}/boards`, { params });
+      return res.data;
+    });
   },
 
   /**
    * 获取所有数据表及其各存储格式的详细物理元数据
    */
   async getDetailedTables(): Promise<{ tables: TableDetailedMeta[]; total: number }> {
-    const res = await api.get('/tables/detailed');
-    return res.data;
+    return deduplicateGet('getDetailedTables', async () => {
+      const res = await api.get('/tables/detailed');
+      return res.data;
+    });
   },
 
   /**

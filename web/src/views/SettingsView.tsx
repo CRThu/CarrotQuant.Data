@@ -31,16 +31,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const selectedOpt = DATA_SOURCE_OPTIONS.find((opt) => opt.table_id === currentTableId) || DATA_SOURCE_OPTIONS[0];
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-10">
-      {/* 标题说明区 */}
-      <div className="border-b border-slate-800 pb-4">
-        <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-          <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">⚙️</span>
-          系统设置
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          管理 Web 终端的默认数据源表、视觉涨跌配色偏好及后端 API 连接与物理存储诊断信息。
-        </p>
+    <div className="space-y-6 max-w-5xl mx-auto pb-10 animate-in fade-in duration-300">
+      {/* 视图 Header: 统一格式的工作区表头 */}
+      <div className="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-800 flex items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 bg-cyan-950/60 rounded-xl border border-cyan-800/50 text-cyan-400 font-bold text-sm">
+            ⚙️
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-slate-100">系统设置</h1>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              默认数据源、配色偏好与 API 状态
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* 模块 1: 🗄️ 全局默认数据源设置 */}

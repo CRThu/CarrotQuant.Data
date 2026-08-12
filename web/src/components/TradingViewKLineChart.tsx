@@ -1,397 +1,134 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  createChart,
-  ColorType,
-  CrosshairMode,
-} from 'lightweight-charts';
-import type {
-  IChartApi,
-  SeriesMarker,
-  Time,
-} from 'lightweight-charts';
-import type {
-  OHLCBar,
-  HistogramBar,
-  MovingAverageData,
-  MACDResult,
-  BSMarkerItem,
-  LineDataPoint,
-  ColorMode,
-} from '../types/api';
+import type { OHLCBar, HistogramBar, MovingAverageData, ColorMode } from '../types/api';
 import { getUpDownColors } from '../types/api';
-import { Sliders, Activity, Target } from 'lucide-react';
+import { Activity, Target } from 'lucide-react';
+import { KLineCanvasEngine } from '../services/chartEngine';
 
 interface TradingViewKLineChartProps {
   ohlcBars: OHLCBar[];
   volumeBars: HistogramBar[];
   maData: MovingAverageData;
-  macdData: MACDResult;
-  rsiData?: LineDataPoint[];
-  markers?: BSMarkerItem[];
-  selectedIndicator?: string;
-  onIndicatorChange?: (ind: string) => void;
-  barLimit: number;
-  onBarLimitChange: (limit: number) => void;
   colorMode?: ColorMode;
 }
 
-export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = ({
+export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = React.memo(({
   ohlcBars,
   volumeBars,
   maData,
-  macdData,
-  rsiData = [],
-  markers = [],
-  selectedIndicator = 'MACD',
-  onIndicatorChange,
-  barLimit,
-  onBarLimitChange,
   colorMode = 'redUpGreenDown',
 }) => {
+  const outerWrapperRef = useRef<HTMLDivElement>(null);
   const containerMainRef = useRef<HTMLDivElement>(null);
   const containerVolRef = useRef<HTMLDivElement>(null);
-  const containerIndRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<KLineCanvasEngine | null>(null);
 
-  const chartMainRef = useRef<IChartApi | null>(null);
-  const chartVolRef = useRef<IChartApi | null>(null);
-  const chartIndRef = useRef<IChartApi | null>(null);
-
-  // 实时 Crosshair 光敏探针 Legend
+  // 悬浮数据探针与十字光标
   const [hoverInfo, setHoverInfo] = useState<OHLCBar | null>(null);
-
-  // 记录上次适配视口的数据指纹，防止重复重置用户缩放/拖拽视角
-  const lastDataKeyRef = useRef<string>('');
-
   const { upColor, downColor } = getUpDownColors(colorMode);
 
-  // 初始化 3-Pane 图表与手势/时间轴强同步 (Lightweight Charts v4 Native)
+  // 1. 初始化并绑定 KLineCanvasEngine 引擎生命周期
   useEffect(() => {
-    if (!containerMainRef.current || !containerVolRef.current || !containerIndRef.current) return;
+    if (!containerMainRef.current || !containerVolRef.current) return;
 
-    // 通用外观样式选项
-    const commonChartOptions = {
-      layout: {
-        background: { type: ColorType.Solid, color: '#090d16' },
-        textColor: '#94a3b8',
-        fontSize: 11,
-        fontFamily: 'Roboto, -apple-system, sans-serif',
-      },
-      grid: {
-        vertLines: { color: '#162032' },
-        horzLines: { color: '#162032' },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-      },
-      rightPriceScale: {
-        borderColor: '#1e293b',
-      },
-      timeScale: {
-        borderColor: '#1e293b',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      handleScale: {
-        mouseWheel: true,
-        pinch: true,
-        axisPressedMouseMove: true,
-      },
-      handleScroll: {
-        mouseWheel: true,
-        pressedMouseMove: true,
-      },
-    };
+    const engine = new KLineCanvasEngine();
+    engineRef.current = engine;
 
-    // 1. 创建 Pane 1 (主图: K线 + 均线 + 买卖点)
-    const chartMain = createChart(containerMainRef.current, {
-      ...commonChartOptions,
-      height: 320,
-    });
-    chartMainRef.current = chartMain;
-
-    const candlestickSeries = chartMain.addCandlestickSeries({
-      upColor,
-      downColor,
-      borderVisible: false,
-      wickUpColor: upColor,
-      wickDownColor: downColor,
+    engine.mount(containerMainRef.current, containerVolRef.current, {
+      colorMode,
+      onCrosshairMove: (bar) => setHoverInfo(bar),
     });
 
-    // 绑定十字光标移动探针，更新 Hover 数据
-    chartMain.subscribeCrosshairMove((param) => {
-      if (!param || !param.time || param.point === undefined || param.point.x < 0 || param.point.y < 0) {
-        setHoverInfo(null);
-        return;
-      }
-      const data = param.seriesData.get(candlestickSeries) as any;
-      if (data && typeof data.close === 'number') {
-        setHoverInfo({
-          time: String(param.time),
-          open: data.open,
-          high: data.high,
-          low: data.low,
-          close: data.close,
-          volume: data.volume ?? 0,
-        });
-      }
-    });
+    // 监听外层 Resize
+    let animFrameId: number | null = null;
+    let lastW = 0;
+    let lastH = 0;
 
-    // 均线 Overlay 系列
-    const ma5Series = chartMain.addLineSeries({ color: '#eab308', lineWidth: 1, title: 'MA5' });
-    const ma10Series = chartMain.addLineSeries({ color: '#a855f7', lineWidth: 1, title: 'MA10' });
-    const ma20Series = chartMain.addLineSeries({ color: '#06b6d4', lineWidth: 1, title: 'MA20' });
-    const ma60Series = chartMain.addLineSeries({ color: '#64748b', lineWidth: 1, title: 'MA60' });
-
-    // 2. 创建 Pane 2 (副图 1: 成交量 VOL)
-    const chartVol = createChart(containerVolRef.current, {
-      ...commonChartOptions,
-      height: 120,
-    });
-    chartVolRef.current = chartVol;
-
-    const volumeSeries = chartVol.addHistogramSeries({
-      priceFormat: { type: 'volume' },
-    });
-
-    // 3. 创建 Pane 3 (副图 2: 技术指标 MACD / RSI)
-    const chartInd = createChart(containerIndRef.current, {
-      ...commonChartOptions,
-      height: 130,
-    });
-    chartIndRef.current = chartInd;
-
-    const difSeries = chartInd.addLineSeries({ color: '#38bdf8', lineWidth: 1, title: 'DIF' });
-    const deaSeries = chartInd.addLineSeries({ color: '#f59e0b', lineWidth: 1, title: 'DEA' });
-    const macdBarSeries = chartInd.addHistogramSeries({ title: 'MACD' });
-    const rsiSeries = chartInd.addLineSeries({ color: '#ec4899', lineWidth: 1, title: 'RSI(14)' });
-
-    // 三窗格时间轴强同步机制 (TimeScale Sync Guard)
-    let isSyncing = false;
-
-    const syncLogicalRange = (sourceChart: IChartApi, targets: IChartApi[]) => {
-      sourceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        if (isSyncing || !range) return;
-        isSyncing = true;
-        targets.forEach((target) => {
-          target.timeScale().setVisibleLogicalRange(range);
-        });
-        isSyncing = false;
-      });
-    };
-
-    syncLogicalRange(chartMain, [chartVol, chartInd]);
-    syncLogicalRange(chartVol, [chartMain, chartInd]);
-    syncLogicalRange(chartInd, [chartMain, chartVol]);
-
-    // 自动响应窗口大小变动 (ResizeObserver，增加像素阈值防抖，防止亚像素震荡)
-    let lastWidth = 0;
     const handleResize = () => {
-      const w = containerMainRef.current?.clientWidth || 0;
-      if (w <= 0 || Math.abs(w - lastWidth) < 2) return;
-      lastWidth = w;
-      if (containerMainRef.current) chartMain.applyOptions({ width: w });
-      if (containerVolRef.current) chartVol.applyOptions({ width: w });
-      if (containerIndRef.current) chartInd.applyOptions({ width: w });
+      if (!outerWrapperRef.current) return;
+      const w = outerWrapperRef.current.clientWidth;
+      const totalH = outerWrapperRef.current.clientHeight;
+
+      if (w <= 0 || totalH <= 0) return;
+      if (Math.abs(w - lastW) < 2 && Math.abs(totalH - lastH) < 2) return;
+
+      lastW = w;
+      lastH = totalH;
+
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      animFrameId = requestAnimationFrame(() => {
+        if (engineRef.current) {
+          engineRef.current.resize(w, totalH);
+        }
+      });
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
-    if (containerMainRef.current) resizeObserver.observe(containerMainRef.current);
-    if (containerVolRef.current) resizeObserver.observe(containerVolRef.current);
-    if (containerIndRef.current) resizeObserver.observe(containerIndRef.current);
+    if (outerWrapperRef.current) {
+      resizeObserver.observe(outerWrapperRef.current);
+    }
 
-    // 存入 refs
-    (chartMainRef as any).currentSeries = {
-      candlestick: candlestickSeries,
-      ma5: ma5Series,
-      ma10: ma10Series,
-      ma20: ma20Series,
-      ma60: ma60Series,
-    };
-    (chartVolRef as any).currentSeries = { volume: volumeSeries };
-    (chartIndRef as any).currentSeries = {
-      dif: difSeries,
-      dea: deaSeries,
-      macdBar: macdBarSeries,
-      rsi: rsiSeries,
-    };
+    handleResize();
 
     return () => {
+      if (animFrameId) cancelAnimationFrame(animFrameId);
       resizeObserver.disconnect();
-      chartMain.remove();
-      chartVol.remove();
-      chartInd.remove();
+      engine.destroy();
+      engineRef.current = null;
     };
   }, []);
 
-  // 响应 colorMode 更新蜡烛图颜色属性
+  // 2. 颜色模式联动更新
   useEffect(() => {
-    const mainSeries = (chartMainRef as any).currentSeries;
-    if (mainSeries && mainSeries.candlestick) {
-      mainSeries.candlestick.applyOptions({
-        upColor,
-        downColor,
-        wickUpColor: upColor,
-        wickDownColor: downColor,
-      });
+    if (engineRef.current) {
+      engineRef.current.updateColors(colorMode);
     }
-  }, [colorMode, upColor, downColor]);
+  }, [colorMode]);
 
-  // 更新图表数据系列
+  // 3. 增量填入/重置数据
   useEffect(() => {
-    const mainSeries = (chartMainRef as any).currentSeries;
-    const volSeries = (chartVolRef as any).currentSeries;
-    const indSeries = (chartIndRef as any).currentSeries;
-
-    if (!mainSeries || !ohlcBars || ohlcBars.length === 0) return;
-
-    // 1. 设置主图蜡烛图与均线
-    mainSeries.candlestick.setData(
-      ohlcBars.map((b) => ({
-        time: b.time as Time,
-        open: b.open,
-        high: b.high,
-        low: b.low,
-        close: b.close,
-      }))
-    );
-
-    mainSeries.ma5.setData(maData.ma5.map((d) => ({ time: d.time as Time, value: d.value })));
-    mainSeries.ma10.setData(maData.ma10.map((d) => ({ time: d.time as Time, value: d.value })));
-    mainSeries.ma20.setData(maData.ma20.map((d) => ({ time: d.time as Time, value: d.value })));
-    mainSeries.ma60.setData(maData.ma60.map((d) => ({ time: d.time as Time, value: d.value })));
-
-    // 2. 设置原生 setMarkers 买卖点标记 (必须按 time 升序排序防 Crash)
-    if (markers && markers.length > 0) {
-      const tvMarkers: SeriesMarker<Time>[] = markers.map((m) => ({
-        time: m.time as Time,
-        position: m.position,
-        color: m.color,
-        shape: m.shape,
-        text: m.text,
-        size: m.size || 1,
-      }));
-      tvMarkers.sort((a, b) => (String(a.time) > String(b.time) ? 1 : -1));
-      mainSeries.candlestick.setMarkers(tvMarkers);
-    } else {
-      mainSeries.candlestick.setMarkers([]);
+    if (engineRef.current) {
+      engineRef.current.updateData(ohlcBars, volumeBars, maData);
     }
+  }, [ohlcBars, volumeBars, maData]);
 
-    // 3. 设置成交量 VOL
-    if (volSeries && volumeBars) {
-      volSeries.volume.setData(
-        volumeBars.map((v) => ({
-          time: v.time as Time,
-          value: v.value,
-          color: v.color,
-        }))
-      );
-    }
-
-    // 4. 设置 Pane 3 技术指标 (MACD 或 RSI(14))
-    if (indSeries) {
-      if (selectedIndicator === 'RSI') {
-        indSeries.dif.setData([]);
-        indSeries.dea.setData([]);
-        indSeries.macdBar.setData([]);
-
-        indSeries.rsi.setData(rsiData.map((d) => ({ time: d.time as Time, value: d.value })));
-      } else {
-        indSeries.rsi.setData([]);
-
-        if (macdData) {
-          indSeries.dif.setData(macdData.dif.map((d) => ({ time: d.time as Time, value: d.value })));
-          indSeries.dea.setData(macdData.dea.map((d) => ({ time: d.time as Time, value: d.value })));
-          indSeries.macdBar.setData(
-            macdData.macdBar.map((m) => ({
-              time: m.time as Time,
-              value: m.value,
-              color: m.color,
-            }))
-          );
-        }
-      }
-    }
-
-    // 仅在数据集产生结构性变更（如切换标的、变更 Bar 数量）时自动适应视口，避免刷新时重置用户平移与缩放
-    const firstTime = ohlcBars[0]?.time ?? '';
-    const lastTime = ohlcBars[ohlcBars.length - 1]?.time ?? '';
-    const currentDataKey = `${firstTime}_${lastTime}_${ohlcBars.length}_${barLimit}`;
-
-    if (lastDataKeyRef.current !== currentDataKey) {
-      lastDataKeyRef.current = currentDataKey;
-      if (chartMainRef.current) chartMainRef.current.timeScale().fitContent();
-      if (chartVolRef.current) chartVolRef.current.timeScale().fitContent();
-      if (chartIndRef.current) chartIndRef.current.timeScale().fitContent();
-    }
-  }, [ohlcBars, volumeBars, maData, macdData, rsiData, markers, selectedIndicator, barLimit]);
-
-  // 最新 Bar 数据 (默认展现)
-  const lastBar = ohlcBars.length > 0 ? ohlcBars[ohlcBars.length - 1] : null;
-  const activeBar = hoverInfo || lastBar;
+  const activeBar = hoverInfo;
   const changePct = activeBar ? (((activeBar.close - activeBar.open) / activeBar.open) * 100).toFixed(2) : '0.00';
   const isUp = activeBar ? activeBar.close >= activeBar.open : true;
   const activeColor = isUp ? upColor : downColor;
 
   return (
-    <div className="flex flex-col space-y-2 w-full bg-slate-950 p-3 rounded-2xl border border-slate-800">
-      {/* 图表顶栏控制条: Bar 数量选择 & 副图指标切换 */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 rounded-xl border border-slate-800 text-xs">
-        {/* 左侧: 均线与买卖点标记说明 */}
-        <div className="flex items-center space-x-4">
-          <span className="flex items-center font-medium text-slate-300">
+    <div
+      ref={outerWrapperRef}
+      className="h-full w-full flex flex-col space-y-1.5 bg-slate-950 p-2.5 rounded-2xl border border-slate-800 overflow-hidden relative"
+    >
+      {/* 顶栏: 包含 FPS 帧率监控 overlay 与 均线 Legend */}
+      <div className="flex items-center justify-between px-3 py-1 bg-slate-900/90 rounded-xl border border-slate-800 text-xs shrink-0 h-9">
+        <div className="flex items-center space-x-3">
+          <span className="flex items-center font-bold text-slate-100">
             <Activity className="w-3.5 h-3.5 text-cyan-400 mr-1.5" />
-            三窗格强同步 K 线图
+            主图 K 线 + 附图成交量 (单向 Master 联动)
           </span>
+
           <div className="flex items-center space-x-3 text-[11px] font-mono">
             <span className="text-amber-400">● MA5</span>
-            <span className="text-purple-400">● MA10</span>
             <span className="text-cyan-400">● MA20</span>
-            <span className="text-slate-400">● MA60</span>
-            <span className="font-bold" style={{ color: upColor }}>▲ 买(B)</span>
-            <span className="font-bold" style={{ color: downColor }}>▼ 卖(S)</span>
           </div>
         </div>
 
-        {/* 右侧: Bar 数控制与指标下拉 */}
-        <div className="flex items-center space-x-3">
-          {/* Bar 数快捷按钮 */}
-          <div className="flex items-center bg-slate-950 rounded-lg p-0.5 border border-slate-800 font-mono">
-            {[250, 500, 1000, 0].map((limit) => (
-              <button
-                key={limit}
-                onClick={() => onBarLimitChange(limit)}
-                className={`px-2 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-                  barLimit === limit
-                    ? 'bg-cyan-500 text-slate-950 font-bold'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {limit === 0 ? 'ALL' : `${limit}Bars`}
-              </button>
-            ))}
-          </div>
-
-          {/* 窗格 3 技术指标切换菜单 */}
-          <div className="flex items-center space-x-1 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800">
-            <Sliders className="w-3 h-3 text-cyan-400" />
-            <select
-              id="indicatorSelect"
-              name="indicatorSelect"
-              aria-label="选择窗格3技术指标"
-              value={selectedIndicator}
-              onChange={(e) => onIndicatorChange && onIndicatorChange(e.target.value)}
-              className="bg-transparent text-[11px] text-slate-200 focus:outline-none cursor-pointer"
-            >
-              <option value="MACD" className="bg-slate-900">窗格3: MACD 指标</option>
-              <option value="RSI" className="bg-slate-900">窗格3: RSI (14) 相对强弱</option>
-            </select>
-          </div>
+        <div className="text-[11px] font-mono text-slate-400">
+          滚轮缩放 / 拖拽手势
         </div>
       </div>
 
-      {/* 1. 主图 Pane (K线 + 悬浮探针 Status Overlay) */}
-      <div className="relative rounded-xl overflow-hidden border border-slate-800/60">
-        {/* Crosshair Hover 光敏探针 Legend */}
+      {/* 1. 主图 Pane (K线 + 均线) */}
+      <div className="relative rounded-xl overflow-hidden border border-slate-800/60 flex-1 min-h-0">
+        {ohlcBars.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 z-20 text-xs text-slate-400 font-mono">
+            <Activity className="w-6 h-6 text-cyan-400 mb-2 animate-spin" />
+            <span>正在加载 K 线行情数据...</span>
+          </div>
+        )}
+
         {activeBar && (
           <div className="absolute top-2 left-3 z-10 text-[11px] font-mono bg-slate-950/95 px-2.5 py-1 rounded-lg border border-slate-800/80 pointer-events-none flex items-center space-x-3 text-slate-300">
             <span className="flex items-center text-slate-400">
@@ -406,24 +143,16 @@ export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = ({
             <span className="text-slate-400">VOL: <span className="text-cyan-300">{activeBar.volume.toLocaleString()}</span></span>
           </div>
         )}
-        <div ref={containerMainRef} className="w-full" />
+        <div ref={containerMainRef} className="w-full h-full" />
       </div>
 
-      {/* 2. 成交量 VOL Pane */}
-      <div className="relative rounded-xl overflow-hidden border border-slate-800/60">
-        <div className="absolute top-1.5 left-3 z-10 text-[10px] font-mono text-slate-400 pointer-events-none">
-          副图1: 成交量 VOL (柱状图)
+      {/* 2. 附图 Pane (成交量 VOL) */}
+      <div className="relative rounded-xl overflow-hidden border border-slate-800/60 h-28 shrink-0">
+        <div className="absolute top-1 left-2.5 z-10 text-[10px] font-mono text-slate-400 pointer-events-none">
+          附图: 成交量 VOL
         </div>
-        <div ref={containerVolRef} className="w-full" />
-      </div>
-
-      {/* 3. 技术指标 MACD / RSI Pane */}
-      <div className="relative rounded-xl overflow-hidden border border-slate-800/60">
-        <div className="absolute top-1.5 left-3 z-10 text-[10px] font-mono text-slate-400 pointer-events-none">
-          副图2: {selectedIndicator === 'RSI' ? 'RSI (14) 相对强弱指标' : 'MACD (DIF 快线 / DEA 慢线 / MACD 能量柱)'}
-        </div>
-        <div ref={containerIndRef} className="w-full" />
+        <div ref={containerVolRef} className="w-full h-full" />
       </div>
     </div>
   );
-};
+});

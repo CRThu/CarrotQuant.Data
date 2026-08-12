@@ -12,7 +12,7 @@ CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管
 - 支持 Baostock（日线/5分线/复权因子）、东方财富（概念/行业板块/龙虎榜/机构交易）、通达信（日线/5分/1分线）
 - 支持 CSV 和 Parquet 两种存储格式
 - 基于时间戳水位线的增量同步与断点续接
-- 四种入口：Python SDK (OOP `cqdata.ashare.kline.get()` / 统一 `cqdata.read()`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API、**极速 React Web 终端 (`web/` TradingView 3-Pane 图表 + 方案 A 概念穿透 + 独立格式水位线数据管理中心与 SSE Terminal 日志流)**
+- 四种入口：Python SDK (OOP `cqdata.ashare.kline.get()` / 统一 `cqdata.read()`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API、**极速 React Web 终端 (`web/` 统一 Header 工作区 + TradingView 3-Pane 单屏无滚动图表 + 拼音/代码/名称通用搜索组件 `SearchInput` + 独立 `数据矩阵` 视图 + 数据中心与 Loguru SSE 日志流)**
 
 **技术栈**：
 - **后端**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, PyYAML
@@ -30,7 +30,7 @@ CarrotQuant.Data/
 │   │   ├── accessors/            # OOP 便捷访问层 (base.py, ashare.py, aindex.py)
 │   │   ├── python_api.py         # Python SDK 底层切片与探查 API
 │   │   ├── cli.py                # Typer CLI 控制台主入口 (cqdata sync/server/info/tables)
-│   │   └── rest_api.py           # FastAPI REST HTTP 服务 (含 SSE 日志流 & /tables/detailed)
+│   │   └── rest_api.py           # FastAPI REST HTTP 服务 (含 Loguru SSE 日志流 & /tables/detailed)
 │   ├── config/                   # 配置管理 (支持 CQDATA_DATA_DIR 环境变量与 YAML)
 │   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
 │   ├── service/                  # 业务逻辑层 (SyncManager, SyncProgressTracker, DataReader, TaskPlanner, MetadataManager)
@@ -38,9 +38,9 @@ CarrotQuant.Data/
 │   └── utils/                    # 工具箱 (logger_utils, time_utils)
 ├── web/                          # React Web 金融终端 frontend (Bun + Vite 6 + Tailwind v4 + TradingView 3-Pane)
 │   ├── src/
-│   │   ├── components/           # HeaderBar, TradingViewKLineChart, TableManagementGrid, SyncLogTerminal, FloatingSyncWidget 等
-│   │   ├── views/                # StockListView, ConceptIndustryView, StockDetailView, DataManagementView (数据管理中心)
-│   │   ├── services/             # apiClient, transformers, indicators
+│   │   ├── components/           # HeaderBar, SearchInput, TradingViewKLineChart, TableManagementGrid, LogTerminal, FloatingSyncWidget 等
+│   │   ├── views/                # StockListView (搜索与自选), ConceptIndustryView, StockDetailView, DataMatrixView (数据矩阵), DataManagementView (数据中心)
+│   │   ├── services/             # apiClient, pinyin, transformers, indicators
 │   │   └── hooks/                # useMarketData, useConceptData, useTables
 │   └── package.json
 ├── scripts/                      # 辅助脚本 (wizard.py 交互向导, download_tdx.py)
@@ -149,7 +149,7 @@ SyncManager.sync()
 - **`accessors/` 包**: 提供 OOP 便捷访问层子包（`ashare.kline`, `aindex.kline` 等）与 `DefaultConfig` 三层链式继承解析器，支持极其直观的 `.get()` 参数补全与智能默认值支持。
 - **`python_api.py`**: 提供 SDK 高阶 API (`read`, `list_tables`, `sync`, `configure`, `get_schema`, `get_time_range` 等)，以磁盘物理 `metadata.json` 为单事实来源直接高效路由。
 - **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata server`, `cqdata wizard`)，支持通过 `cqdata server --open` 自动唤醒系统浏览器访问内置 Web 终端。
-- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，并内置托管 `cqdata/static/` 前端 SPA 静态资源。
+- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，所有 Polars IO/磁盘读取端点均采用普通 `def` 函数声明派发至底层的 Worker 线程池并发处理，杜绝主事件循环卡顿，并内置托管 `cqdata/static/` 前端 SPA 静态资源。
 
 
 
@@ -284,6 +284,9 @@ type_map = {
    - **Provider (驱动层)**: 专一负责网络/二进制数据拉取与 `DataCleaner` 标准化。
    - **Storage (存储层)**: 专一负责增量合并 (`DataMerger`)、去重、排序与 Hive 物理落盘。
    - **单向依赖规则**: 接入层 ➔ 服务层 ➔ 驱动层/存储层，严格禁止跨层反向调用。
+4. **前端文案与 UI 专业性规范 (Professional UI & Tone)**:
+   - **拒绝 AI 营销修饰感**：严禁在 UI 标题、描述与注释中使用形如“极速引擎”、“强同步研判”、“底层透视”、“全量数据共享”、“0ms 内存极速切片”等夸张、AI 化、营销感重的冗长词汇。
+   - **回归金融终端本质**：UI 文案必须精炼、概要、间接、专业，保持类似 Bloomberg / TradingView 官方终端的干练风格（如：“K 线行情”、“数据矩阵”、“按时间序列展现 OHLC 与成交量明细”）。
 
 ### 8.2 物理与鲁棒性原则
 1. **原子落盘**: 任何写操作均采用 `.tmp` 文件写入 -> `os.replace` -> `fsync` 刷盘，杜绝写入中断导致文件损坏。

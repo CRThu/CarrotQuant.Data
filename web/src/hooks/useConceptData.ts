@@ -80,6 +80,8 @@ export const useConceptData = (): UseConceptDataReturn => {
     let isMounted = true;
     const fetchStocks = async () => {
       setStockLoading(true);
+      // 💡 举一反三防误导修补：切换板块时立刻清空上一个板块的成分股，防止列表残留旧数据
+      setCurrentBoardStocks([]);
       try {
         const res = await apiClient.queryData({
           table_id: conceptTableId,

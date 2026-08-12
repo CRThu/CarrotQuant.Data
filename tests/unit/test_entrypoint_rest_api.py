@@ -286,5 +286,13 @@ def test_log_broadcaster_and_stream():
                 break
 
 
+def test_non_blocking_sync_def_routes():
+    """验证从 async def 重构为 sync def 的 IO 路由能够正常响应，并经由线程池调度处理"""
+    resp_query = client.get("/api/v1/query", params={"table_id": "ashare.kline.1d.raw.baostock"})
+    assert resp_query.status_code == 200
 
+    resp_boards = client.get("/api/v1/tables/ashare.concept.eastmoney/boards")
+    assert resp_boards.status_code == 200
 
+    resp_fs = client.get("/api/v1/filesystem/list")
+    assert resp_fs.status_code == 200

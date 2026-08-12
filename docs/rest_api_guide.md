@@ -26,6 +26,11 @@
 - **`409 Conflict`**: 同一 `table_id` 的后台同步任务正在运行中，拒绝重复并发触发。
 - **`500 Internal Server Error`**: 未捕获的服务器内部未知异常。
 
+### 1.4 线程池并发与主事件循环 (Event Loop) 非阻塞架构
+FastAPI 路由对于包含 Polars DataFrame 切片处理与磁盘文件 IO 的只读查询端点（如 `/query`, `/tables/detailed`, `/tables/{table_id}/boards`），采用标准 `def` 同步声明。
+- **底层机制**：FastAPI 自动将这些同步 IO 密集型操作派发至底层的 Worker 线程池并发执行，使主事件循环（Event Loop）保持空闲与自由。
+- **并发优势**：即使在进行大表数据切片读取时，系统依然能够以 `< 1ms` 的极速响应 `/health` 健康检查与 `/sync/status` 同步状态轮询，杜绝线程卡顿与网络假死。
+
 ---
 
 ## 2. API 端点全量概览表

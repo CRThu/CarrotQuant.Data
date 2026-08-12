@@ -83,24 +83,26 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({ onSyncSt
   return (
     <div className="space-y-6 animate-in fade-in duration-300 pb-12">
       {/* 顶部标题与数据量概览 Cards */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-100 flex items-center space-x-2">
-            <Database className="w-6 h-6 text-cyan-400" />
-            <span>本地数据中心与同步管理</span>
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            监控本地 Parquet / CSV 物理存储格式与数据起止范围，全自动增量拉取并补全 A 股数据
-          </p>
+      <div className="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 bg-cyan-950/60 rounded-xl border border-cyan-800/50 text-cyan-400">
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-slate-100">数据中心</h1>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              监控本地存储格式、增量水位线与全自动增量数据同步
+            </p>
+          </div>
         </div>
 
         <button
           onClick={fetchDetailedTables}
           disabled={loading}
-          className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl text-xs font-medium transition-colors flex items-center space-x-1.5 self-start sm:self-auto cursor-pointer"
+          title="刷新物理状态"
+          className="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
         >
-          <RefreshCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>刷新物理状态</span>
+          <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 

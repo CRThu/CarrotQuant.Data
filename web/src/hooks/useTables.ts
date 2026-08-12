@@ -20,18 +20,21 @@ export const useTables = (): UseTablesReturn => {
   const [healthInfo, setHealthInfo] = useState<any>(null);
   const [latency, setLatency] = useState<number | null>(null);
 
-  // 单独轻量测量 HTTP 往返 Ping 延迟与健康状态
+  // 单独轻量测量 HTTP 往返 Ping 延迟与健康状态 (带引用比对，避免无脑重绘)
   const checkHealth = useCallback(async () => {
     const startTime = Date.now();
     try {
       const health = await apiClient.getHealth();
       const endTime = Date.now();
-      setLatency(endTime - startTime);
-      setHealthInfo(health);
-      setServerOnline(health?.status === 'ok');
-    } catch (err) {
-      setServerOnline(false);
-      setLatency(null);
+      const newLatency = endTime - startTime;
+      const isOk = health?.status === 'ok';
+
+      setLatency((prev) => (prev !== null && Math.abs(newLatency - prev) < 40 ? prev : newLatency));
+      setHealthInfo((prev: any) => (prev?.status === health?.status && prev?.version === health?.version ? prev : health));
+      setServerOnline((prev) => (prev === isOk ? prev : isOk));
+    } catch {
+      setServerOnline((prev) => (prev === false ? prev : false));
+      setLatency((prev) => (prev === null ? prev : null));
     }
   }, []);
 
@@ -39,7 +42,6 @@ export const useTables = (): UseTablesReturn => {
     setLoading(true);
     setError(null);
     try {
-      // 并行请求健康度与数据表列表，避免串行 await 导致的双倍网络开销
       const [, res] = await Promise.all([checkHealth(), apiClient.listTables()]);
       const tableList = (res.tables || []).map((t: any) =>
         typeof t === 'string' ? t : t.table_id
@@ -55,8 +57,8 @@ export const useTables = (): UseTablesReturn => {
 
   useEffect(() => {
     fetchTables();
-    // 每 3 秒实时轮询探查 Ping 延迟与健康状态，实现 HeaderBar 与 SettingsView 强同频实时刷新
-    const timer = setInterval(checkHealth, 3000);
+    // 每 5 秒轻量探查 Ping 延迟
+    const timer = setInterval(checkHealth, 5000);
     return () => clearInterval(timer);
   }, [fetchTables, checkHealth]);
 
@@ -71,5 +73,3 @@ export const useTables = (): UseTablesReturn => {
     refreshTables: fetchTables,
   };
 };
-
-

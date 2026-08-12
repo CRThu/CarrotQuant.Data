@@ -23,7 +23,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 from loguru import logger
 from cqdata.config import settings
-from cqdata.utils.logger_utils import log_broadcaster
+from cqdata.utils.logger_utils import log_broadcaster, setup_logger
 
 
 class SPAStaticFiles(StaticFiles):
@@ -64,6 +64,9 @@ from cqdata.entrypoints.python_api import (
 )
 
 from cqdata import __version__
+
+# 初始化全系统 Loguru 日志，挂载 LogBroadcaster.sink 供 SSE 日志流使用
+setup_logger()
 
 app = FastAPI(title="CarrotQuant.Data REST API", version=__version__)
 
@@ -289,7 +292,7 @@ KNOWN_TABLE_DEFINITIONS = [
 # ==================== 元数据探查 Endpoints ====================
 
 @app.get("/api/v1/tables")
-async def api_list_all_tables(format: str = "auto"):
+def api_list_all_tables(format: str = "auto"):
     """获取所有本地数据表总览清单 (平铺对象列表，含 category 属性)"""
     try:
         tables = list_tables(format=format)
@@ -302,7 +305,7 @@ async def api_list_all_tables(format: str = "auto"):
 
 
 @app.get("/api/v1/tables/detailed")
-async def api_list_tables_detailed():
+def api_list_tables_detailed():
     """
     获取所有数据表及其各个存储格式 (Parquet / CSV) 独立物理元数据的详细列表。
     方便前端展现层级化数据管理表格与独立格式水位线。
@@ -363,7 +366,7 @@ async def api_list_tables_detailed():
 
 
 @app.get("/api/v1/tables/{table_id}/formats")
-async def api_list_formats(table_id: str):
+def api_list_formats(table_id: str):
     """获取某表在本地已有的格式列表"""
     try:
         return {"table_id": table_id, "formats": list_formats(table_id)}
@@ -372,7 +375,7 @@ async def api_list_formats(table_id: str):
 
 
 @app.get("/api/v1/tables/{table_id}/symbols")
-async def api_list_symbols(table_id: str, format: str = "auto"):
+def api_list_symbols(table_id: str, format: str = "auto"):
     """获取某表包含的 symbol 唯一代码列表"""
     try:
         symbols = list_symbols(table_id, format=format)
@@ -382,7 +385,7 @@ async def api_list_symbols(table_id: str, format: str = "auto"):
 
 
 @app.get("/api/v1/tables/{table_id}/time_range")
-async def api_get_time_range(table_id: str, format: str = "auto"):
+def api_get_time_range(table_id: str, format: str = "auto"):
     """获取某表的时间跨度 (start_datetime, end_datetime)"""
     try:
         start_dt, end_dt = get_time_range(table_id, format=format)
@@ -392,7 +395,7 @@ async def api_get_time_range(table_id: str, format: str = "auto"):
 
 
 @app.get("/api/v1/tables/{table_id}/schema")
-async def api_get_schema(table_id: str, format: str = "auto"):
+def api_get_schema(table_id: str, format: str = "auto"):
     """获取某表在元数据中的字段 Schema 列名与类型"""
     try:
         return {"table_id": table_id, "schema": get_schema(table_id, format=format)}
@@ -401,7 +404,7 @@ async def api_get_schema(table_id: str, format: str = "auto"):
 
 
 @app.get("/api/v1/tables/{table_id}/row_count")
-async def api_get_row_count(table_id: str, format: str = "auto"):
+def api_get_row_count(table_id: str, format: str = "auto"):
     """获取某表在物理存储中的记录总行数/条目数"""
     try:
         return {"table_id": table_id, "row_count": get_row_count(table_id, format=format)}
@@ -410,7 +413,7 @@ async def api_get_row_count(table_id: str, format: str = "auto"):
 
 
 @app.get("/api/v1/tables/{table_id}/boards")
-async def api_get_boards(
+def api_get_boards(
     table_id: str,
     query: Optional[str] = Query(None, description="搜索板块代码或名称 (如 BK0612 或 低空经济)"),
     format: str = Query("auto", description="存储格式"),
@@ -465,7 +468,7 @@ async def api_get_boards(
 # ==================== 数据切片查询 Endpoints (纯 HTTP GET 形式) ====================
 
 @app.get("/api/v1/query")
-async def api_query(
+def api_query(
     table_id: str = Query(..., description="数据表 ID (如 ashare.kline.1d.raw.baostock 或 ashare.dragon_tiger.eastmoney)"),
     symbols: Optional[str] = Query(None, description="股票代码或以逗号分隔的代码列表 (如 sh.600000,sz.000001)"),
     board_code: Optional[str] = Query(None, description="板块代码 (如 BK0612) 用于精确定向获取板块成分股"),
@@ -607,7 +610,7 @@ class TdxDownloadRequest(BaseModel):
 
 
 @app.get("/api/v1/tdx/check")
-async def api_tdx_check(vipdoc_dir: str = Query(r"C:\new_tdx\vipdoc", description="通达信 vipdoc 目录路径")):
+def api_tdx_check(vipdoc_dir: str = Query(r"C:\new_tdx\vipdoc", description="通达信 vipdoc 目录路径")):
     """检查通达信 vipdoc 路径物理状态与包含的代码数量"""
     try:
         path = Path(vipdoc_dir)
@@ -714,7 +717,7 @@ def _scan_directory(target_path: Path) -> Dict[str, Any]:
 
 
 @app.get("/api/v1/filesystem/list")
-async def api_filesystem_list(
+def api_filesystem_list(
     path: Optional[str] = Query(None, description="要查看的本地目录或文件路径，默认指向数据目录")
 ):
     """
