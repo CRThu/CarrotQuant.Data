@@ -34,7 +34,7 @@ export const App: React.FC = () => {
     localStorage.setItem('cqdata_color_mode', colorMode);
   }, [colorMode]);
 
-  // 全局轮询获取活动中的任务状态，供悬浮 Widget 使用
+  // 全局轮询获取活动中的任务状态 (固定 2 秒简洁可靠轮询)
   useEffect(() => {
     const pollStatus = async () => {
       try {
@@ -42,7 +42,7 @@ export const App: React.FC = () => {
         setActiveTaskCount((res.active_tasks || []).length);
 
         const allStatuses = Object.values(res.statuses || {});
-        // 1. 优先选 status === 'running' 的任务 (若有多个，按 start_time 倒序选最新发起的)
+        // 1. 优先选 status === 'running' 的任务
         const runningTask = allStatuses
           .filter((s) => s.status === 'running')
           .sort((a, b) => (b.start_time || 0) - (a.start_time || 0))[0];
@@ -50,7 +50,7 @@ export const App: React.FC = () => {
         if (runningTask) {
           setRunningStatus(runningTask);
         } else {
-          // 2. 无正在运行的任务时，选最近完成或失败的任务 (按 end_time/start_time 倒序)
+          // 2. 无正在运行的任务时，选最近完成或失败的任务
           const finishedTask = allStatuses
             .filter((s) => s.status === 'success' || s.status === 'failed')
             .sort((a, b) => (b.end_time || b.start_time || 0) - (a.end_time || a.start_time || 0))[0];
@@ -94,39 +94,39 @@ export const App: React.FC = () => {
           {/* 中央工作区 (带 ErrorBoundary 防白屏) */}
           <main className="flex-1 p-4 lg:p-6 overflow-y-auto max-w-7xl mx-auto w-full">
             <ErrorBoundary fallbackTitle="视图区域渲染拦截">
-              {currentView === 'stock_list' && (
+              <div className={currentView === 'stock_list' ? 'block' : 'hidden'}>
                 <StockListView
                   currentTableId={currentTableId}
                   onSelectStock={handleSelectStock}
                   searchQuery={searchQuery}
                 />
-              )}
+              </div>
 
-              {currentView === 'concept_industry' && (
+              <div className={currentView === 'concept_industry' ? 'block' : 'hidden'}>
                 <ConceptIndustryView
                   onSelectStock={handleSelectStock}
                   globalSearchQuery={searchQuery}
                 />
-              )}
+              </div>
 
-              {currentView === 'stock_detail' && (
+              <div className={currentView === 'stock_detail' ? 'block' : 'hidden'}>
                 <StockDetailView
                   currentTableId={currentTableId}
                   selectedSymbol={selectedSymbol}
                   onSymbolChange={setSelectedSymbol}
                   colorMode={colorMode}
                 />
-              )}
+              </div>
 
-              {currentView === 'data_management' && (
+              <div className={currentView === 'data_management' ? 'block' : 'hidden'}>
                 <DataManagementView onSyncStatusChange={setActiveTaskCount} />
-              )}
+              </div>
 
-              <div className={currentView === 'log_center' ? 'h-full flex-1' : 'hidden'}>
+              <div className={currentView === 'log_center' ? 'h-full flex-1 block' : 'hidden'}>
                 <LogCenterView />
               </div>
 
-              {currentView === 'settings' && (
+              <div className={currentView === 'settings' ? 'block' : 'hidden'}>
                 <SettingsView
                   currentTableId={currentTableId}
                   onTableChange={setCurrentTableId}
@@ -136,7 +136,7 @@ export const App: React.FC = () => {
                   latency={latency}
                   healthInfo={healthInfo}
                 />
-              )}
+              </div>
             </ErrorBoundary>
           </main>
         </div>

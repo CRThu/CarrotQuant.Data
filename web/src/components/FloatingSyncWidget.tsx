@@ -34,12 +34,12 @@ export const FloatingSyncWidget: React.FC<FloatingSyncWidgetProps> = ({
       <div className="fixed bottom-5 right-5 z-50 animate-in fade-in duration-300">
         <button
           onClick={() => setMinimized(false)}
-          className={`px-3 py-1.5 rounded-full shadow-xl flex items-center space-x-2 backdrop-blur-md border cursor-pointer transition-all hover:scale-105 ${
+          className={`px-3 py-1.5 rounded-full flex items-center space-x-2 border cursor-pointer transition-colors ${
             isRunning
-              ? 'bg-slate-900/90 border-cyan-500/60 text-cyan-300 shadow-cyan-950/50'
+              ? 'bg-slate-900/98 border-cyan-500/60 text-cyan-300'
               : isSuccess
-              ? 'bg-emerald-950/90 border-emerald-500/60 text-emerald-300'
-              : 'bg-red-950/90 border-red-500/60 text-red-300'
+              ? 'bg-emerald-950/98 border-emerald-500/60 text-emerald-300'
+              : 'bg-red-950/98 border-red-500/60 text-red-300'
           }`}
           title="点击展开同步进度"
         >
@@ -56,7 +56,7 @@ export const FloatingSyncWidget: React.FC<FloatingSyncWidgetProps> = ({
 
   // 展开紧凑型卡片状态
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-72 bg-slate-900/95 border border-slate-800 rounded-xl shadow-2xl backdrop-blur-md overflow-hidden animate-in slide-in-from-bottom-3 duration-200">
+    <div className="fixed bottom-5 right-5 z-50 w-72 bg-slate-900/98 border border-slate-800 rounded-xl overflow-hidden animate-in slide-in-from-bottom-3 duration-200">
       {/* 顶部 Header：表名与控制按钮 */}
       <div className="px-3 py-1.5 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200 min-w-0">

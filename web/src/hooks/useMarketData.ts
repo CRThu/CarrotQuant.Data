@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { DATA_SOURCE_OPTIONS } from '../types/api';
 import type {
   OHLCBar,
@@ -56,14 +56,19 @@ export const useMarketData = (
   const [externalMarkers, setExternalMarkers] = useState<BSMarkerItem[]>([]);
   const [matrixRaw, setMatrixRaw] = useState<QueryMatrixResponse | null>(null);
 
-  // 当外部 Props (initialTableId / initialSymbol) 变更时驱动同步更新内部状态
-  useEffect(() => {
-    setTableId(initialTableId);
-  }, [initialTableId]);
+  // 在 Render 阶段同步 Prop 变动，彻底消除切换/加载标的时产生的二次串行 HTTP 请求 (1.6s -> 0.2s)
+  const [prevInitialTableId, setPrevInitialTableId] = useState(initialTableId);
+  const [prevInitialSymbol, setPrevInitialSymbol] = useState(initialSymbol);
 
-  useEffect(() => {
+  if (initialTableId !== prevInitialTableId) {
+    setPrevInitialTableId(initialTableId);
+    setTableId(initialTableId);
+  }
+
+  if (initialSymbol !== prevInitialSymbol) {
+    setPrevInitialSymbol(initialSymbol);
     setSymbol(initialSymbol);
-  }, [initialSymbol]);
+  }
 
   const fetchData = useCallback(async () => {
     if (!tableId || !symbol) return;
@@ -122,8 +127,11 @@ export const useMarketData = (
     fetchData();
   }, [fetchData]);
 
-  // 合并派生的金叉死叉 Marker 与外部扩展注入的 Marker
-  const combinedMarkers = [...derivedMarkers, ...externalMarkers];
+  // 合并派生的金叉死叉 Marker 与外部扩展注入的 Marker (使用 useMemo 缓存 Array 引用防重绘)
+  const combinedMarkers = useMemo(
+    () => [...derivedMarkers, ...externalMarkers],
+    [derivedMarkers, externalMarkers]
+  );
 
   return {
     tableId,

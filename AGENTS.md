@@ -163,7 +163,7 @@ SyncManager.sync()
 - **`BaseProvider` (ABC)**: 驱动抽象基类，规范 `fetch`, `get_all_symbols`, `get_supported_tables`, `get_table_category`, `get_sort_keys` 接口。
 - **`BaostockProvider`**: Baostock 数据驱动，处理个股/指数 K 线与复权因子，支持 RLock 线程锁并发防护、API 错误码 (如网络接收错误/未登录) 识别与自动重新登录 (`_relogin`) 重试。
 - **`EastMoneyProvider`**: 东方财富数据驱动，处理板块成分股、龙虎榜与机构交易，采用 TLS 指纹防封与节流重试。无 symbol 的宏观表 `get_all_symbols` 返回 `["_ALL_"]`。
-- **`TDXProvider`**: 通达信数据驱动，支持 `online` (TCP 在线) 与 `local` (vipdoc 离线) 两种模式。
+- **`TDXProvider`**: 通达信数据驱动，支持 `online` (TCP 在线) 与 `local` (vipdoc 离线) 两种模式，完整覆盖沪深主板、创业板、科创板与北交所（注：`online` 模式受云端 API 限制仅覆盖在交易股票，获取已退市股票建议使用 `local` 离线模式或 Baostock 驱动）。
 - **`DataCleaner`**: 统一清洗时间轴，转换产生 `timestamp` (Int64 ms) 与 `datetime` (ISO8601) 标准列。
 - **`ProviderManager`**: Provider 单例工厂，根据 `table_id` 末段标识路由驱动。
 

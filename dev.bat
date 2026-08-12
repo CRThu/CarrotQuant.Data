@@ -7,6 +7,13 @@ echo   Frontend: http://localhost:5173  (Vite HMR)
 echo ===================================================
 echo.
 
+echo [0/2] Building React Web Frontend (cqdata/static)...
+REM Build frontend static files into cqdata/static
+pushd "%~dp0web"
+call bun run build
+popd
+echo.
+
 echo [1/2] Starting Python REST API Server (Reload)...
 start "CQData-Backend" cmd /k "uv run cqdata server --port 8888 --reload"
 

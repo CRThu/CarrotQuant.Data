@@ -26,10 +26,8 @@
   background: #475569;
 }
 
-/* 毛玻璃高质感玻璃拟态样式 */
+/* 高性能暗色拟态面板样式 (优化 GPU 帧合成开销) */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(15, 23, 42, 0.96);
   border: 1px solid rgba(51, 65, 85, 0.5);
 }

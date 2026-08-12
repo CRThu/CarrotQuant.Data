@@ -30,14 +30,15 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({ onSyncSt
     }
   };
 
-  // 2. 轮询各表精准同步状态
+  // 2. 轮询各表精准同步状态 (固定 2 秒简洁轮询)
   const checkSyncStatus = async () => {
     try {
       const res = await apiClient.getSyncStatus();
       setStatuses(res.statuses || {});
-      setActiveTasks(res.active_tasks || []);
+      const activeList = res.active_tasks || [];
+      setActiveTasks(activeList);
       if (onSyncStatusChange) {
-        onSyncStatusChange((res.active_tasks || []).length);
+        onSyncStatusChange(activeList.length);
       }
     } catch (e) {
       // 静默

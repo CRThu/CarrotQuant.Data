@@ -39,8 +39,8 @@ export const useTables = (): UseTablesReturn => {
     setLoading(true);
     setError(null);
     try {
-      await checkHealth();
-      const res = await apiClient.listTables();
+      // 并行请求健康度与数据表列表，避免串行 await 导致的双倍网络开销
+      const [, res] = await Promise.all([checkHealth(), apiClient.listTables()]);
       const tableList = (res.tables || []).map((t: any) =>
         typeof t === 'string' ? t : t.table_id
       );

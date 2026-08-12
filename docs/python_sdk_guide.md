@@ -404,3 +404,4 @@ SDK 中的读取、探查与配置操作均遵循标准的 Python 异常体系�
 
 - **`ValueError`**: 输入了非法的参数组合或拼装出了底层驱动不支持的表 ID（例如试图用通达信驱动读取后复权数据 `ashare.kline.1d.adj.tdx`）。
 - **`FileNotFoundError`**: 指定的数据表在本地物理存储中不存在，或调用的 `cqdata.configure("not_exist.yaml")` 路径无效。
+- **数据源退市股票特性**: 通达信 `tdx` 驱动的 `online` (TCP 在线) 模式因云端 API 限制仅覆盖在交易股票；若需拉取或研究已退市股票历史数据，建议使用 Baostock 驱动（`source="baostock"`）或通达信 `local` 离线模式（`mode="local"`）。

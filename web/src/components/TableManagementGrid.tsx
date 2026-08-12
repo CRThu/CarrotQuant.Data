@@ -308,7 +308,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
                               </span>
 
                               {/* 高颜值悬浮 Glassmorphic 气泡 */}
-                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 min-w-[220px] p-3 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl shadow-black/90 text-xs font-sans text-slate-200 pointer-events-none transition-all">
+                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 min-w-[220px] p-3 bg-slate-900/98 border border-slate-700/80 rounded-xl shadow-2xl shadow-black/90 text-xs font-sans text-slate-200 pointer-events-none transition-all">
                                 <div className="font-bold text-cyan-400 pb-1.5 mb-2 border-b border-slate-800/80 flex items-center justify-between">
                                   <span>Parquet 存储明细</span>
                                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono border border-cyan-800/60">zstd 压缩</span>
@@ -359,7 +359,7 @@ export const TableManagementGrid: React.FC<TableManagementGridProps> = ({
                               </span>
 
                               {/* 高颜值悬浮 Glassmorphic 气泡 */}
-                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 min-w-[220px] p-3 bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-xl shadow-2xl shadow-black/90 text-xs font-sans text-slate-200 pointer-events-none transition-all">
+                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 min-w-[220px] p-3 bg-slate-900/98 border border-slate-700/80 rounded-xl shadow-2xl shadow-black/90 text-xs font-sans text-slate-200 pointer-events-none transition-all">
                                 <div className="font-bold text-amber-400 pb-1.5 mb-2 border-b border-slate-800/80 flex items-center justify-between">
                                   <span>CSV 存储明细</span>
                                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 font-mono border border-amber-800/60">明文存储</span>

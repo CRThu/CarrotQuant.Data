@@ -59,6 +59,9 @@ export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = ({
   // 实时 Crosshair 光敏探针 Legend
   const [hoverInfo, setHoverInfo] = useState<OHLCBar | null>(null);
 
+  // 记录上次适配视口的数据指纹，防止重复重置用户缩放/拖拽视角
+  const lastDataKeyRef = useRef<string>('');
+
   const { upColor, downColor } = getUpDownColors(colorMode);
 
   // 初始化 3-Pane 图表与手势/时间轴强同步 (Lightweight Charts v4 Native)
@@ -74,8 +77,8 @@ export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = ({
         fontFamily: 'Roboto, -apple-system, sans-serif',
       },
       grid: {
-        vertLines: { color: 'rgba(30, 41, 59, 0.5)' },
-        horzLines: { color: 'rgba(30, 41, 59, 0.5)' },
+        vertLines: { color: '#162032' },
+        horzLines: { color: '#162032' },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -180,11 +183,15 @@ export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = ({
     syncLogicalRange(chartVol, [chartMain, chartInd]);
     syncLogicalRange(chartInd, [chartMain, chartVol]);
 
-    // 自动响应窗口大小变动 (ResizeObserver)
+    // 自动响应窗口大小变动 (ResizeObserver，增加像素阈值防抖，防止亚像素震荡)
+    let lastWidth = 0;
     const handleResize = () => {
-      if (containerMainRef.current) chartMain.applyOptions({ width: containerMainRef.current.clientWidth });
-      if (containerVolRef.current) chartVol.applyOptions({ width: containerVolRef.current.clientWidth });
-      if (containerIndRef.current) chartInd.applyOptions({ width: containerIndRef.current.clientWidth });
+      const w = containerMainRef.current?.clientWidth || 0;
+      if (w <= 0 || Math.abs(w - lastWidth) < 2) return;
+      lastWidth = w;
+      if (containerMainRef.current) chartMain.applyOptions({ width: w });
+      if (containerVolRef.current) chartVol.applyOptions({ width: w });
+      if (containerIndRef.current) chartInd.applyOptions({ width: w });
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
@@ -305,11 +312,18 @@ export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = ({
       }
     }
 
-    // 自动强同步自适应 3 窗格视口数据范围
-    if (chartMainRef.current) chartMainRef.current.timeScale().fitContent();
-    if (chartVolRef.current) chartVolRef.current.timeScale().fitContent();
-    if (chartIndRef.current) chartIndRef.current.timeScale().fitContent();
-  }, [ohlcBars, volumeBars, maData, macdData, rsiData, markers, selectedIndicator]);
+    // 仅在数据集产生结构性变更（如切换标的、变更 Bar 数量）时自动适应视口，避免刷新时重置用户平移与缩放
+    const firstTime = ohlcBars[0]?.time ?? '';
+    const lastTime = ohlcBars[ohlcBars.length - 1]?.time ?? '';
+    const currentDataKey = `${firstTime}_${lastTime}_${ohlcBars.length}_${barLimit}`;
+
+    if (lastDataKeyRef.current !== currentDataKey) {
+      lastDataKeyRef.current = currentDataKey;
+      if (chartMainRef.current) chartMainRef.current.timeScale().fitContent();
+      if (chartVolRef.current) chartVolRef.current.timeScale().fitContent();
+      if (chartIndRef.current) chartIndRef.current.timeScale().fitContent();
+    }
+  }, [ohlcBars, volumeBars, maData, macdData, rsiData, markers, selectedIndicator, barLimit]);
 
   // 最新 Bar 数据 (默认展现)
   const lastBar = ohlcBars.length > 0 ? ohlcBars[ohlcBars.length - 1] : null;
@@ -319,7 +333,7 @@ export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = ({
   const activeColor = isUp ? upColor : downColor;
 
   return (
-    <div className="flex flex-col space-y-2 w-full bg-slate-950 p-3 rounded-2xl border border-slate-800/80 shadow-2xl">
+    <div className="flex flex-col space-y-2 w-full bg-slate-950 p-3 rounded-2xl border border-slate-800">
       {/* 图表顶栏控制条: Bar 数量选择 & 副图指标切换 */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 rounded-xl border border-slate-800 text-xs">
         {/* 左侧: 均线与买卖点标记说明 */}
@@ -379,7 +393,7 @@ export const TradingViewKLineChart: React.FC<TradingViewKLineChartProps> = ({
       <div className="relative rounded-xl overflow-hidden border border-slate-800/60">
         {/* Crosshair Hover 光敏探针 Legend */}
         {activeBar && (
-          <div className="absolute top-2 left-3 z-10 text-[11px] font-mono bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800/80 backdrop-blur-sm pointer-events-none flex items-center space-x-3 text-slate-300">
+          <div className="absolute top-2 left-3 z-10 text-[11px] font-mono bg-slate-950/95 px-2.5 py-1 rounded-lg border border-slate-800/80 pointer-events-none flex items-center space-x-3 text-slate-300">
             <span className="flex items-center text-slate-400">
               <Target className="w-3 h-3 text-cyan-400 mr-1" />
               {activeBar.time}

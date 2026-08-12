@@ -439,6 +439,20 @@ class TestTdxSymbolFilter:
             # 应该包含 SH 和 SZ 代码，优雅跳过 BJ
             assert symbols == ["sh.600000", "sz.000001"]
 
+    def test_b_share_symbols_filtered_out_for_ashare(self, provider):
+        """验证 ashare 表严格过滤剔除 B 股代码 (sh.900xxx / sz.200xxx)，纯粹代表 A 股个股。"""
+        with patch("cqdata.provider.tdx_provider.fetch_stock_list_online") as mock_tdx_fetch:
+            mock_tdx_fetch.side_effect = lambda market: {
+                "sh": ["sh600000", "sh900901"],
+                "sz": ["sz000001", "sz200012"],
+                "bj": [],
+            }[market]
+
+            symbols = provider._get_all_symbols_online("ashare")
+            assert "sh.900901" not in symbols
+            assert "sz.200012" not in symbols
+            assert symbols == ["sh.600000", "sz.000001"]
+
     def test_patch_tdxpy_market2_support(self):
         """验证 tdxpy 的 market=2 (BJ) 补丁机制正常运行，不破坏 SH/SZ，支持 BJ 代码类型转换。"""
         from cqdata.provider.tdx_utils import _patch_tdxpy_once
