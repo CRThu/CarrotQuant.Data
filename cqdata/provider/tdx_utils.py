@@ -6,6 +6,7 @@
 """
 
 import os
+from pathlib import Path
 from typing import Any, List, Optional, Tuple, Dict
 
 import polars as pl
