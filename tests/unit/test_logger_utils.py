@@ -97,6 +97,10 @@ def test_setup_logger_attaches_broadcaster():
 
     setup_logger(log_level="INFO", log_file_prefix="test")
     logger.info("Test log line via setup_logger")
+    try:
+        logger.complete()
+    except Exception:
+        pass
 
     hist = log_broadcaster.get_history()
     assert len(hist) > 0, "LogBroadcaster should receive log entries from loguru"
