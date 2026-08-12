@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DATA_SOURCE_OPTIONS, type ColorMode } from '../types/api';
 import { useMarketData } from '../hooks/useMarketData';
 import { DataTable } from '../components/DataTable';

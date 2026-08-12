@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Union, Dict, Any
 import polars as pl
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -574,7 +574,7 @@ async def api_get_sync_status():
 
 
 @app.get("/api/v1/logs/stream")
-async def api_logs_stream():
+async def api_logs_stream(request: Request):
     """
     【SSE】Server-Sent Events 全局 Loguru 日志与任务进度实时推送流。
     握手时自动补发最新 100 条历史 Log 上下文，随后增量流式推送系统与数据引擎日志。
@@ -587,11 +587,11 @@ async def api_logs_stream():
             for entry in history:
                 yield f"data: {json.dumps(entry, ensure_ascii=False)}\n\n"
             
-            # 2. 循环推送实时增量 Loguru 日志
-            while True:
+            # 2. 循环推送实时增量 Loguru 日志 (定期检查客户端断连状态，防止 TestClient / CI 卡死)
+            while not await request.is_disconnected():
                 try:
-                    # 15 秒无新日志触发 ping 心跳，维持 HTTP SSE 长连接
-                    entry = await asyncio.wait_for(q.get(), timeout=15.0)
+                    # 1 秒超时以高频响应客户端断连检测
+                    entry = await asyncio.wait_for(q.get(), timeout=1.0)
                     yield f"data: {json.dumps(entry, ensure_ascii=False)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": ping\n\n"

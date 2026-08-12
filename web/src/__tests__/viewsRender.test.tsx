@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import React from 'react';
 
 // 导入所有前台视图组件，进行全覆盖语法与未定义变量 ReferenceError 扫描
 import { StockDetailView } from '../views/StockDetailView';

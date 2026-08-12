@@ -85,7 +85,7 @@ export const useMarketData = (
     if (lastFetchedRef.current !== fetchKey) {
       setOhlcBars([]);
       setVolumeBars([]);
-      setMaData({ ma5: [], ma10: [], ma20: [] });
+      setMaData({ ma5: [], ma10: [], ma20: [], ma60: [] });
       setMatrixRaw(null);
     }
 

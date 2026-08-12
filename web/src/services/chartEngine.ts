@@ -23,9 +23,6 @@ export class KLineCanvasEngine {
   private ma20Series: ISeriesApi<'Line'> | null = null;
   private volumeSeries: ISeriesApi<'Histogram'> | null = null;
 
-  private mainContainer: HTMLDivElement | null = null;
-  private volContainer: HTMLDivElement | null = null;
-
   private colorMode: ColorMode = 'redUpGreenDown';
   private onCrosshairMoveCb?: (bar: OHLCBar | null) => void;
   private lastDataKey: string = '';
@@ -38,8 +35,6 @@ export class KLineCanvasEngine {
     volContainer: HTMLDivElement,
     options: ChartEngineMountOptions = {}
   ): void {
-    this.mainContainer = mainContainer;
-    this.volContainer = volContainer;
     this.colorMode = options.colorMode || 'redUpGreenDown';
     this.onCrosshairMoveCb = options.onCrosshairMove;
 

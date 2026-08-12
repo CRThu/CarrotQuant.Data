@@ -63,6 +63,7 @@ describe('KLineCanvasEngine Unit Tests', () => {
       ma5: [{ time: '2024-01-01', value: 10.5 }],
       ma10: [],
       ma20: [],
+      ma60: [],
     };
     const mockMarkers = [
       { time: '2024-01-01', position: 'aboveBar' as const, color: '#ef4444', shape: 'arrowDown' as const, text: 'Sell' },
