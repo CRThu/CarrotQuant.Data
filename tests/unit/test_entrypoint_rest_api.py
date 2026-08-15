@@ -12,6 +12,7 @@ from unittest.mock import patch, MagicMock
 import polars as pl
 
 from cqdata.entrypoints.rest_api import app
+from cqdata import __version__
 
 client = TestClient(app)
 
@@ -20,7 +21,7 @@ def test_health_check():
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["version"] == "1.1.0"
+    assert response.json()["version"] == __version__
 
 
 def test_list_all_tables():
