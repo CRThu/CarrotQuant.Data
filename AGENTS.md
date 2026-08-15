@@ -1,22 +1,22 @@
-# AGENTS.md - CarrotQuant.Data 代码指南
+# AGENTS.md - CarrotQuant Data (`carrotquant-data`) 代码指南
 
-本文档为 AI Agent 提供对 CarrotQuant.Data 项目的完整理解，包含架构、模块职责、数据流、物理存储布局与开发约束。
+本文档为 AI Agent 提供对 CarrotQuant Data (`carrotquant-data`) 项目的完整理解，包含架构、模块职责、数据流、物理存储布局与开发约束。
 
 ---
 
 ## 1. 项目概述
 
-CarrotQuant.Data 是一个轻量级、模块化的本地金融数据同步与管理工具。它从免费数据源（Baostock、东方财富、通达信）获取 A 股/指数数据，清洗后持久化到本地 CSV/Parquet 文件，供量化研究和回测使用。
+`CarrotQuant Data` (`carrotquant-data`) 是本地金融数据同步与持久化管理工具，支持从公开数据源（Baostock、东方财富、通达信）获取 A 股与指数数据，经清洗后持久化为本地 CSV/Parquet 文件。
 
 **核心能力**：
 - 支持 Baostock（日线/5分线/复权因子）、东方财富（概念/行业板块/龙虎榜/机构交易）、通达信（日线/5分/1分线）
 - 支持 CSV 和 Parquet 两种存储格式
 - 基于时间戳水位线的增量同步与断点续接
-- 四种入口：Python SDK (OOP `cqdata.ashare.kline.get()` / 统一 `cqdata.read()`)、Typer CLI 控制台 (`cqdata`)、FastAPI REST API、**极速 React Web 终端 (`web/` 统一 Header 工作区 + TradingView 3-Pane 单屏无滚动图表 + 拼音/代码/名称通用搜索组件 `SearchInput` + 独立 `数据矩阵` 视图 + 数据中心与 Loguru SSE 日志流)**
+- 四种接入方式：Python SDK (`cqdata.read()` / 链式访问器)、Typer CLI (`cqdata`)、FastAPI REST API 与 React Web 终端 (`web/`)
 
 **技术栈**：
-- **后端**：Python >= 3.12, Polars (数据处理), Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, PyYAML
-- **前端**：Bun, React 19, Vite 6, TypeScript 7, Tailwind CSS v4, TradingView Lightweight Charts
+- **后端**：Python >= 3.12, Polars, Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, PyYAML
+- **前端**：Bun, React 19, Vite, TypeScript, Tailwind CSS, TradingView Lightweight Charts
 
 ---
 

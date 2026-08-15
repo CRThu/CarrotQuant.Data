@@ -1,21 +1,22 @@
-# CarrotQuant.Data
+# CarrotQuant Data (`carrotquant-data`)
 
-![Python Version](https://img.shields.io/badge/python-%3E%3D3.12-blue)
-![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+[![PyPI version](https://img.shields.io/pypi/v/carrotquant-data.svg)](https://pypi.org/project/carrotquant-data/)
+[![Python Version](https://img.shields.io/badge/python-%3E%3D3.12-blue)](https://pypi.org/project/carrotquant-data/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-CarrotQuant.Data 是一个为量化交易体系设计的轻量级、模块化的本地数据同步与管理工具。它致力于从各类免费数据源（如 Baostock、东方财富等）获取金融数据，并将数据清洗、转换为统一格式（支持 CSV, Parquet 等），持久化到本地存储中以供各类量化研究和回测使用。
+**CarrotQuant Data** (`carrotquant-data`) 是专为量化交易与回测设计的本地金融数据同步与管理工具，支持多源拉取、增量同步与高效列式存储。
 
-## 🌟 核心特性 (Features)
+## 🛠️ 特性 (Features)
 
-- **多数据源支持**：内置 [Baostock](http://baostock.com/)、东方财富、[通达信 (tdxpy)](https://github.com/rainx/tdxPy) 等金融数据源引擎，易于弹性拓展更多的数据源提供商。
-- **灵活的存储格式**：原生支持 `csv` 和基于列式存储的高效 `parquet` 格式，以满足不同体量的数据读写需求。
-- **增量与全量同步**：基于时间戳水位线的同步机制，支持从断点智能续接（增量拉取），以及强制全量覆盖更新刷新数据。
-- **现代化多通道接入支持**：
-  - **React Web 终端**：现代暗黑极速金融终端 (`web/`)，基于 Bun + Vite 6 + React 19 + TradingView Lightweight Charts (3-Pane 单屏无滚动图表) + 拼音/代码/名称通用搜索组件 `SearchInput` + **独立 `数据矩阵` 视图 + 数据中心与 Loguru SSE 日志流视窗与悬浮 Widget**。
-  - **Python SDK**：简单直观的 `import cqdata` API，支持高性能跨年份数据切片读取 (`cqdata.read`)、`columns` 按需字段选择、格式识别与元数据探查。
-  - **命令行工具 (CLI)**：统一的 `cqdata` 命令行工具，提供数据同步 (`cqdata sync`)、数据表探索 (`cqdata tables`)、元数据查询 (`cqdata info`) 与 HTTP 服务启动 (`cqdata server`)。
-  - **REST API 服务**：基于 FastAPI 的 REST API，为远程微服务与 Web 终端提供 HTTP 数据切片、SSE 实时日志流与同步触发。
-- **优秀的底层性能**：使用 [Polars](https://pola.rs/) 库进行高性能的数据加工和清洗。
+- **多数据源支持**：内置 [Baostock](http://baostock.com/)、东方财富、[通达信 (tdxpy)](https://github.com/rainx/tdxPy) 等金融数据源驱动，支持灵活扩展。
+- **灵活的存储格式**：原生支持 `csv` 与列式存储 `parquet` 格式。
+- **增量与全量同步**：基于时间戳水位线机制，支持断点续接（增量拉取）与全量覆盖更新。
+- **多接入方式**：
+  - **React Web 终端**：基于 Bun + Vite + React 19 构建，集成 TradingView Lightweight Charts (3-Pane 图表)、多维搜索与数据管理面板。
+  - **Python SDK**：直观的 `import cqdata` API，支持高性能跨年份数据切片读取 (`cqdata.read`)、`columns` 按需投影与元数据探查。
+  - **命令行工具 (CLI)**：统一的 `cqdata` 命令行工具，提供数据同步 (`cqdata sync`)、数据表探索 (`cqdata tables`) 与服务启动 (`cqdata server`)。
+  - **REST API 服务**：基于 FastAPI 的 HTTP 服务，支持数据切片、任务调度与 SSE 实时日志流。
+- **列式数据处理**：使用 [Polars](https://pola.rs/) 进行高效的数据清洗与结构转换。
 
 ## 📁 目录结构 (Project Structure)
 
@@ -118,16 +119,25 @@ graph TB
 
 ## 🛠️ 安装指南 (Installation)
 
-环境要求：**Python >= 3.12**。本项目推荐使用现代化的 Python 包管理器 [uv](https://github.com/astral-sh/uv) 进行极速安装与管理。
+环境要求：**Python >= 3.12**（支持 Python 3.12 / 3.13 / 3.14+）。
 
-1. **克隆项目并安装**
-    ```bash
-    git clone https://github.com/CRThu/CarrotQuant.Data.git
-    cd CarrotQuant.Data
+### 1. 通过 PyPI 安装 (推荐)
+```bash
+# 推荐使用 pip 直接安装
+pip install carrotquant-data
 
-    # 可选：可编辑模式挂载命令行 cqdata
-    uv pip install -e .
-    ```
+# 或使用 uv 安装
+uv add carrotquant-data
+```
+
+### 2. 源码克隆与本地开发安装
+```bash
+git clone https://github.com/CRThu/carrotquant-data.git
+cd carrotquant-data
+
+# 可编辑模式挂载命令行 cqdata
+uv pip install -e .
+```
 
 ## ⚙️ 配置说明 (Configuration)
 
@@ -266,15 +276,21 @@ cqdata server --port 8888 --open
 | `/` | GET | 内置托管的 React Web 金融终端主界面 |
 | `/api/v1/health` | GET | 系统健康检查与服务运行状态探针 |
 | `/api/v1/tables` | GET | 列出本地所有数据表总览 (平铺列表，含 `category` 属性) |
+| `/api/v1/tables/detailed` | GET | 获取所有数据表及其各存储格式 (Parquet / CSV) 独立物理元数据 |
 | `/api/v1/tables/{table_id}/formats` | GET | 获取指定表已存储的物理格式列表 (`['parquet', 'csv']`) |
 | `/api/v1/tables/{table_id}/symbols` | GET | 获取指定表已下载的股票/证券代码列表 |
 | `/api/v1/tables/{table_id}/time_range` | GET | 获取指定表的时间跨度 tuple `(start_datetime, end_datetime)` |
 | `/api/v1/tables/{table_id}/schema` | GET | 获取指定表的字段列名与类型字典 |
 | `/api/v1/tables/{table_id}/row_count` | GET | 获取指定表的记录总条数/行数 |
-| `/api/v1/query` | GET | 统一切片查询接口（支持 `symbols`, `start_date`, `end_date`, `columns`, `page`, `page_size`），按 `table_id` 自动智能路由，输出 `columns` 表头与 `data` 二维 List 矩阵 |
+| `/api/v1/tables/{table_id}/boards` | GET | 聚合板块概念/行业列表及各板块成分股计数，支持关键词搜索 |
+| `/api/v1/query` | GET | 统一切片查询接口（支持 `symbols`, `board_code`, `start_date`, `end_date`, `columns`, `page`, `page_size`），按 `table_id` 自动智能路由 |
 | `/api/v1/sync` | POST | 异步触发后台数据同步任务 |
-| `/api/v1/tasks` | GET | 查询活跃同步任务状态 |
-| `/api/v1/filesystem/list` | GET | 通用本地文件与目录探查接口 (为 Web 文件探查器 Modal 提供支持) |
+| `/api/v1/tasks` | GET | 查询当前正在运行的同步任务列表 |
+| `/api/v1/sync/status` | GET | 获取所有同步任务的详细进度状态（含百分比、当前代码与错误信息） |
+| `/api/v1/logs/stream` | GET | SSE (Server-Sent Events) 实时系统与数据同步日志流 |
+| `/api/v1/tdx/check` | GET | 检查通达信本地 `vipdoc` 目录有效性与代码统计 |
+| `/api/v1/tdx/download` | POST | 后台从通达信官方服务器下载全量 `hsjday.zip` 日线包并自动解压 |
+| `/api/v1/filesystem/list` | GET | 本地文件与目录探查接口 (供 Web 文件选择器使用) |
 
 ### 方式五：前端 UI 开发与热重载调试 (`web/`)
 
