@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-from cqdata.config.settings import settings
+from cq.data.config.settings import settings
 
 class MetadataManager:
     """元数据 IO 管理类，负责 metadata.json 的读取和原子化保存 (包含 version: 1 版本控制)"""

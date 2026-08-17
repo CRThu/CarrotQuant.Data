@@ -22,8 +22,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 from loguru import logger
-from cqdata.config import settings
-from cqdata.utils.logger_utils import log_broadcaster, setup_logger
+from cq.data.config import settings
+from cq.data.utils.logger_utils import log_broadcaster, setup_logger
 
 
 class SPAStaticFiles(StaticFiles):
@@ -52,7 +52,7 @@ class SPAStaticFiles(StaticFiles):
 
 
 
-from cqdata.entrypoints.python_api import (
+from cq.data.entrypoints.python_api import (
     read,
     list_tables,
     list_formats,
@@ -63,7 +63,7 @@ from cqdata.entrypoints.python_api import (
     sync
 )
 
-from cqdata import __version__
+from cq.data import __version__
 
 # 初始化全系统 Loguru 日志，挂载 LogBroadcaster.sink 供 SSE 日志流使用
 setup_logger()
@@ -166,8 +166,8 @@ def run_sync_task(
 
 
 import json
-from cqdata.service.metadata_manager import MetadataManager
-from cqdata.service.sync_tracker import sync_tracker
+from cq.data.service.metadata_manager import MetadataManager
+from cq.data.service.sync_tracker import sync_tracker
 
 # 所有支持的标准 Table ID 预定义字典与元数据映射 (全量 16 个内置数据表)
 KNOWN_TABLE_DEFINITIONS = [
@@ -614,7 +614,7 @@ def api_tdx_check(vipdoc_dir: str = Query(r"C:\new_tdx\vipdoc", description="通
     """检查通达信 vipdoc 路径物理状态与包含的代码数量"""
     try:
         path = Path(vipdoc_dir)
-        from cqdata.provider.tdx_utils import discover_tdx_symbols_from_local
+        from cq.data.provider.tdx_utils import discover_tdx_symbols_from_local
         symbols = discover_tdx_symbols_from_local(path) if path.exists() else []
         return {
             "path": str(path),

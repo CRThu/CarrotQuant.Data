@@ -9,13 +9,13 @@
 import pytest
 import polars as pl
 from unittest.mock import MagicMock
-from cqdata.provider.baostock_provider import BaostockProvider
+from cq.data.provider.baostock_provider import BaostockProvider
 
 
 @pytest.fixture(autouse=True)
 def _reset_provider_manager():
     """每个测试前后清理 ProviderManager singleton，防止泄漏。"""
-    from cqdata.provider.provider_manager import ProviderManager
+    from cq.data.provider.provider_manager import ProviderManager
     ProviderManager._instance = None
     ProviderManager._providers = {}
     yield
@@ -112,7 +112,7 @@ class TestErrorCodeRetryAndRelogin:
 
     def test_safe_bs_call_retries_on_error_code_and_relogins(self, provider, mock_baostock):
         """当 API 返回 error_code != '0' (如网络接收错误) 时，应自动调用 _relogin 重试并成功。"""
-        from cqdata.provider.baostock_provider import BaostockCallError
+        from cq.data.provider.baostock_provider import BaostockCallError
 
         # 模拟第一个 rs 返回网络接收错误，第二个 rs 返回正常 error_code='0'
         mock_fail_rs = MagicMock()
@@ -134,7 +134,7 @@ class TestErrorCodeRetryAndRelogin:
 
     def test_safe_bs_call_raises_after_max_retries(self, provider, mock_baostock):
         """当持续返回 error_code != '0' 达到最大重试次数时，应抛出 BaostockCallError。"""
-        from cqdata.provider.baostock_provider import BaostockCallError
+        from cq.data.provider.baostock_provider import BaostockCallError
 
         mock_fail_rs = MagicMock()
         mock_fail_rs.error_code = "-1"
@@ -163,7 +163,7 @@ class TestErrorCodeRetryAndRelogin:
 
     def test_relogin_failure_raises_baostock_call_error_and_retries(self, provider, mock_baostock):
         """验证 _relogin 失败时抛出 BaostockCallError（而不是 RuntimeError），能被 tenacity 正确捕获并重试。"""
-        from cqdata.provider.baostock_provider import BaostockCallError
+        from cq.data.provider.baostock_provider import BaostockCallError
 
         # 模拟每次调用 API 都返回网络接收错误
         mock_fail_rs = MagicMock()

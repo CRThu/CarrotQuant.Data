@@ -8,7 +8,7 @@ tests/integration/test_integration_fs_list.py
 import pytest
 from pathlib import Path
 from fastapi.testclient import TestClient
-from cqdata.entrypoints.rest_api import app
+from cq.data.entrypoints.rest_api import app
 
 client = TestClient(app)
 

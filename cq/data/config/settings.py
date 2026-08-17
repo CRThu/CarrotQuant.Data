@@ -5,7 +5,7 @@ cqdata/config/settings.py
 纯 Python 实现轻量 Settings，支持显式配置加载与程序化动态修改：
 1. 环境变量 CQDATA_CONFIG_PATH / CQDATA_DATA_DIR (显式指定)
 2. 显式 configure(config_path) 加载 YAML 配置文件
-3. 显式修改 cqdata.settings 属性
+3. 显式修改 cq.data.settings 属性
 """
 
 import os
@@ -79,7 +79,7 @@ class Settings:
         从指定 YAML 配置文件加载全局参数。
 
         示例:
-            cqdata.configure("./config.yaml")
+            cq.data.configure("./config.yaml")
         """
         self.load_from_file(config_path)
         self._refresh_logger()
@@ -88,7 +88,7 @@ class Settings:
     def _refresh_logger(self) -> None:
         """配置变更后安全刷新 loggerHandler"""
         try:
-            from cqdata.utils.logger_utils import setup_logger
+            from cq.data.utils.logger_utils import setup_logger
             setup_logger(log_level=self.log_level, log_dir=self.log_dir)
         except Exception:
             pass
@@ -96,7 +96,7 @@ class Settings:
     def _update_accessor_defaults(self) -> None:
         """更新全局 accessor defaults 链"""
         try:
-            from cqdata.entrypoints.accessors import default
+            from cq.data.entrypoints.accessors import default
             default.update_from_dict(self.defaults)
         except (ImportError, AttributeError):
             pass

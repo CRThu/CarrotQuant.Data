@@ -2,10 +2,10 @@ import pytest
 import polars as pl
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from cqdata.service.sync_manager import SyncManager
-from cqdata.service.metadata_manager import MetadataManager
-from cqdata.storage.csv_storage import CSVStorage
-from cqdata.storage.parquet_storage import ParquetStorage
+from cq.data.service.sync_manager import SyncManager
+from cq.data.service.metadata_manager import MetadataManager
+from cq.data.storage.csv_storage import CSVStorage
+from cq.data.storage.parquet_storage import ParquetStorage
 
 
 class FakeTSProvider:
@@ -93,7 +93,7 @@ class TestUpdateMetadataTS:
         """TS 类型元数据应包含 symbol_count 和 time_steps"""
         table_id = "test.update.ts.stats"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider(symbols=["sh.600000", "sz.000001"])
 
@@ -111,7 +111,7 @@ class TestUpdateMetadataTS:
         """TS 类型元数据应包含完整的元信息字段"""
         table_id = "test.update.ts.structure"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider()
 
@@ -147,7 +147,7 @@ class TestUpdateMetadataEV:
         """EV 类型元数据不应包含 symbol_count 和 time_steps"""
         table_id = "test.update.ev.structure"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeEVProvider()
 
@@ -168,7 +168,7 @@ class TestUpdateMetadataEV:
         """EV 类型元数据基础字段验证"""
         table_id = "test.update.ev.basic"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeEVProvider()
 
@@ -187,7 +187,7 @@ class TestUpdateMetadataSilent:
         """场景 A：初次同步无数据 → 不创建 metadata.json"""
         table_id = "test.update.silent.initial"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeEmptyProvider()
 
@@ -205,7 +205,7 @@ class TestUpdateMetadataSilent:
         """场景 B：增量同步无数据但有现有元数据 → 保持不变"""
         table_id = "test.update.silent.incremental"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
 
             # 手动注入数据和元数据
@@ -248,7 +248,7 @@ class TestUpdateMetadataSilent:
         """无新数据写入且已有元数据 → 跳过元数据更新"""
         table_id = "test.update.silent.no_new"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
 
             # 手动注入数据和元数据
@@ -289,7 +289,7 @@ class TestUpdateMetadataForceRefresh:
         """force_refresh=True 时应强制更新元数据"""
         table_id = "test.update.force"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider()
 
@@ -314,7 +314,7 @@ class TestUpdateMetadataSchema:
         """schema 应从最后一次成功的 DataFrame 中提取"""
         table_id = "test.update.schema"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider()
 
@@ -335,7 +335,7 @@ class TestUpdateMetadataSchema:
         """多次更新后 schema 应保持一致"""
         table_id = "test.update.schema.preserve"
 
-        with patch("cqdata.config.settings.settings.data_dir", str(temp_data_dir)):
+        with patch("cq.data.config.settings.settings.data_dir", str(temp_data_dir)):
             sync_mgr = SyncManager()
             provider = FakeTSProvider()
 

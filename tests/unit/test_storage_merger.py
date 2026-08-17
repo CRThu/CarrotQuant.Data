@@ -1,6 +1,6 @@
 import pytest
 import polars as pl
-from cqdata.storage.data_merger import DataMerger
+from cq.data.storage.data_merger import DataMerger
 
 def test_merge_basic():
     """

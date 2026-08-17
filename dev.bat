@@ -7,8 +7,8 @@ echo   Frontend: http://localhost:5173  (Vite HMR)
 echo ===================================================
 echo.
 
-echo [0/2] Building React Web Frontend (cqdata/static)...
-REM Build frontend static files into cqdata/static
+echo [0/2] Building React Web Frontend (cq/data/static)...
+REM Build frontend static files into cq/data/static
 pushd "%~dp0web"
 call bun run build
 popd

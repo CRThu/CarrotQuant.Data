@@ -1,14 +1,14 @@
 import pytest
 import polars as pl
 from unittest.mock import MagicMock, patch
-from cqdata.service.sync_manager import SyncManager
+from cq.data.service.sync_manager import SyncManager
 
 @pytest.fixture
 def sync_manager():
-    with patch("cqdata.service.sync_manager.MetadataManager"), \
-         patch("cqdata.service.sync_manager.TaskPlanner"), \
-         patch("cqdata.service.sync_manager.ProviderManager"), \
-         patch("cqdata.service.sync_manager.StorageFactory"):
+    with patch("cq.data.service.sync_manager.MetadataManager"), \
+         patch("cq.data.service.sync_manager.TaskPlanner"), \
+         patch("cq.data.service.sync_manager.ProviderManager"), \
+         patch("cq.data.service.sync_manager.StorageFactory"):
         sm = SyncManager()
         yield sm
 
@@ -49,12 +49,12 @@ def test_sync_manager_batch_write(sync_manager):
     storage.category = "timeseries"
     
     # 直接在 sync_manager 的 mock StorageFactory 上设置返回值
-    from cqdata.service import sync_manager as sm_mod
+    from cq.data.service import sync_manager as sm_mod
     sync_manager.storage_root = "test_root"
     
     # 注意：sync_manager.py 中 StorageFactory 已被 fixture patch 为 MagicMock
     # 我们只需要配置这个已有的 mock
-    with patch("cqdata.service.sync_manager.StorageFactory.get_storage", return_value=storage):
+    with patch("cq.data.service.sync_manager.StorageFactory.get_storage", return_value=storage):
         # 设置 batch_size=3
         # 10 支股票，batch_size=3，应调用 storage.write_series 4 次 (3+3+3+1)
         sync_manager.sync(table_id, format, start_date, end_date, batch_size=3)
@@ -100,7 +100,7 @@ def test_sync_manager_interrupted_batch_does_not_update_metadata(sync_manager):
     storage = MagicMock()
     storage.category = "timeseries"
     
-    with patch("cqdata.service.sync_manager.StorageFactory.get_storage", return_value=storage), \
+    with patch("cq.data.service.sync_manager.StorageFactory.get_storage", return_value=storage), \
          patch.object(sync_manager, "_update_metadata") as mock_update_meta:
         # 设置 batch_size=3, 总共 6 支股票 (2 个批次)
         # 批次 1 (SZ000000~SZ000002) 成功，批次 2 (SZ000003...) 失败

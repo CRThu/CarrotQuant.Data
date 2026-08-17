@@ -1,8 +1,8 @@
 import pytest
 import polars as pl
 from pathlib import Path
-from cqdata.storage.parquet_storage import ParquetStorage
-from cqdata.service.metadata_manager import MetadataManager
+from cq.data.storage.parquet_storage import ParquetStorage
+from cq.data.service.metadata_manager import MetadataManager
 
 
 def _stamp_metadata(storage, table_id, df, category="timeseries"):

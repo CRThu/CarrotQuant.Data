@@ -7,13 +7,13 @@ tests/unit/test_storage_concurrency.py
 
 import concurrent.futures
 import polars as pl
-from cqdata.storage.csv_storage import CSVStorage
-from cqdata.storage.parquet_storage import ParquetStorage
+from cq.data.storage.csv_storage import CSVStorage
+from cq.data.storage.parquet_storage import ParquetStorage
 
 
 def test_csv_storage_multithreaded_concurrency(tmp_path):
     """验证多线程并发向同一 CSVStorage 表写入时，原子落盘不报错且无废文件残留"""
-    from cqdata.service.metadata_manager import MetadataManager
+    from cq.data.service.metadata_manager import MetadataManager
     storage = CSVStorage(str(tmp_path / "csv"))
     table_id = "ashare.kline.1d.raw.baostock"
 
@@ -47,7 +47,7 @@ def test_csv_storage_multithreaded_concurrency(tmp_path):
 
 def test_parquet_storage_multithreaded_concurrency(tmp_path):
     """验证多线程并发向同一 ParquetStorage 表写入时，原子落盘不报错且无废文件残留"""
-    from cqdata.service.metadata_manager import MetadataManager
+    from cq.data.service.metadata_manager import MetadataManager
     storage = ParquetStorage(str(tmp_path / "parquet"))
     table_id = "ashare.kline.1d.adj.baostock"
 

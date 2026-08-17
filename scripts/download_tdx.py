@@ -33,7 +33,7 @@ def download_and_extract(output_dir: Path, task_id: str = "tdx.download.hsjday")
     """下载 hsjday.zip 并解压到 vipdoc 目录，同时向 sync_tracker 注册并更新进度。"""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    from cqdata.service.sync_tracker import sync_tracker
+    from cq.data.service.sync_tracker import sync_tracker
     sync_tracker.start_task(task_id, message="正在准备从官方服务器下载通达信全量日线包 hsjday.zip...")
 
     last_log_time = 0.0

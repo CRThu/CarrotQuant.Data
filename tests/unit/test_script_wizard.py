@@ -59,7 +59,7 @@ def test_start_wizard_execute():
         wizard.start_wizard()
         assert mock_popen.called
         cmd = mock_popen.call_args[0][0]
-        assert "cqdata.entrypoints.cli" in cmd
+        assert "cq.data.entrypoints.cli" in cmd
         assert "sync" in cmd
         assert "--tables" in cmd
         assert "--formats" in cmd

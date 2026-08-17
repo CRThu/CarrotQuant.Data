@@ -11,10 +11,10 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
-from cqdata.entrypoints.rest_api import app, ACTIVE_SYNC_TASKS
-from cqdata.service.sync_tracker import sync_tracker
-from cqdata.provider.provider_manager import ProviderManager
-from cqdata.provider.tdx_provider import TDXProvider
+from cq.data.entrypoints.rest_api import app, ACTIVE_SYNC_TASKS
+from cq.data.service.sync_tracker import sync_tracker
+from cq.data.provider.provider_manager import ProviderManager
+from cq.data.provider.tdx_provider import TDXProvider
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +58,7 @@ class TestTDXIntegration:
         assert data["valid"] is True
 
     def test_sync_endpoint_accepts_provider_kwargs(self, client):
-        with patch("cqdata.entrypoints.rest_api.run_sync_task") as mock_task:
+        with patch("cq.data.entrypoints.rest_api.run_sync_task") as mock_task:
             res = client.post("/api/v1/sync", json={
                 "table_ids": ["ashare.kline.1d.raw.tdx"],
                 "provider_kwargs": {

@@ -1,18 +1,18 @@
-# CarrotQuant.Data (cqdata) Python SDK 全量指南
+# CarrotQuant.Data (cq.data) Python SDK 全量指南
 
-本文档提供 `cqdata` Python SDK 的全量 API 清单、方法签名、详细参数说明、返回值规范与常用代码示例。
+本文档提供 `cq.data` Python SDK 的全量 API 清单、方法签名、详细参数说明、返回值规范与常用代码示例。
 
 ---
 
 ## 1. SDK 设计原则与快速入门
 
-`cqdata` SDK 为量化研究员与 Python 开发者提供极简、类型安全、高性能的数据接入能力。
+`cq.data` SDK 为量化研究员与 Python 开发者提供极简、类型安全、高性能的数据接入能力。
 
 ### 核心特性
-1. **OOP 便捷访问 (`cqdata.ashare.kline.get()`)**：提供具象化表格类与极致 IDE 自动补全，默认支持 `freq="1d"`, `adj="raw"`。
-2. **三层链式默认继承 (`cqdata.default`)**：支持表级 > 市场级 > 全局级默认配置继承。
-3. **统一切片读取 (`cqdata.read`)**：一个经典底层函数切片读取 K 线时序与板块事件数据，自动智能路由处理分支。
-4. **统一探查 (`cqdata.list_tables` 等)**：开箱即用的本地已持久化数据表、格式、代码列表、时间范围与 Schema 查询。
+1. **OOP 便捷访问 (`cq.data.ashare.kline.get()`)**：提供具象化表格类与极致 IDE 自动补全，默认支持 `freq="1d"`, `adj="raw"`。
+2. **三层链式默认继承 (`cq.data.default`)**：支持表级 > 市场级 > 全局级默认配置继承。
+3. **统一切片读取 (`cq.data.read`)**：一个经典底层函数切片读取 K 线时序与板块事件数据，自动智能路由处理分支。
+4. **统一探查 (`cq.data.list_tables` 等)**：开箱即用的本地已持久化数据表、格式、代码列表、时间范围与 Schema 查询。
 5. **原生 Polars 高级性能**：基础返回类型均为 `polars.DataFrame`，原生支持内存投影、快速过滤与链式表达式处理。
 
 ---
@@ -20,29 +20,29 @@
 ## 2. API 概览与总表
 
 ```python
-import cqdata
+import cq.data
 ```
 
 | API 分类 | 访问路径 / 函数 | 简要说明 |
 | :--- | :--- | :--- |
-| **OOP 便捷读取** | `cqdata.ashare.kline.get()` | 快捷读取 A 股个股 K 线 (默认 `freq="1d"`, `adj="raw"`) |
-| | `cqdata.aindex.kline.get()` | 快捷读取 A 股指数 K 线 (默认 `freq="1d"`, 固定 `raw`) |
-| | `cqdata.ashare.adj_factor.get()` | 快捷读取 A 股复权因子 |
-| | `cqdata.ashare.concept.get()` | 快捷读取概念板块成分股 |
-| | `cqdata.ashare.industry.get()` | 快捷读取行业板块成分股 |
-| | `cqdata.ashare.dragon_tiger.get()` | 快捷读取龙虎榜统计数据 |
-| | `cqdata.ashare.inst_trade.get()` | 快捷读取机构买卖每日统计数据 |
-| **链式默认配置** | `cqdata.default` / `cqdata.ashare.default` | 三层链式默认值对象 (表级 > 市场级 > 全局) |
-| **数据切片与探查** | `cqdata.read()` | 统一切片读取金融数据（自动按 `table_id` 智能路由） |
-| | `cqdata.list_tables()` | 列出本地所有已存在的数据表及其 `category` 分类 |
-| | `cqdata.list_formats()` | 查询某数据表在本地已有的存储格式 (`parquet`, `csv`) |
-| | `cqdata.list_symbols()` | 查询某数据表在本地已存储的代码列表 |
-| | `cqdata.get_time_range()` | 获取某数据表的全局时间跨度 `(start_dt, end_dt)` |
-| | `cqdata.get_schema()` | 获取某数据表的 Schema 列名与类型字典 |
-| | `cqdata.get_row_count()` | 获取某数据表在物理存储中的记录总行数 |
-| **同步与全局配置** | `cqdata.sync()` | 触发全自动增量/全量同步引擎 |
-| | `cqdata.configure()` | 显式从 YAML 配置文件装载全局配置 |
-| | `cqdata.settings` | 全局 Settings 实例 (可直接访问与修改属性) |
+| **OOP 便捷读取** | `cq.data.ashare.kline.get()` | 快捷读取 A 股个股 K 线 (默认 `freq="1d"`, `adj="raw"`) |
+| | `cq.data.aindex.kline.get()` | 快捷读取 A 股指数 K 线 (默认 `freq="1d"`, 固定 `raw`) |
+| | `cq.data.ashare.adj_factor.get()` | 快捷读取 A 股复权因子 |
+| | `cq.data.ashare.concept.get()` | 快捷读取概念板块成分股 |
+| | `cq.data.ashare.industry.get()` | 快捷读取行业板块成分股 |
+| | `cq.data.ashare.dragon_tiger.get()` | 快捷读取龙虎榜统计数据 |
+| | `cq.data.ashare.inst_trade.get()` | 快捷读取机构买卖每日统计数据 |
+| **链式默认配置** | `cq.data.default` / `cq.data.ashare.default` | 三层链式默认值对象 (表级 > 市场级 > 全局) |
+| **数据切片与探查** | `cq.data.read()` | 统一切片读取金融数据（自动按 `table_id` 智能路由） |
+| | `cq.data.list_tables()` | 列出本地所有已存在的数据表及其 `category` 分类 |
+| | `cq.data.list_formats()` | 查询某数据表在本地已有的存储格式 (`parquet`, `csv`) |
+| | `cq.data.list_symbols()` | 查询某数据表在本地已存储的代码列表 |
+| | `cq.data.get_time_range()` | 获取某数据表的全局时间跨度 `(start_dt, end_dt)` |
+| | `cq.data.get_schema()` | 获取某数据表的 Schema 列名与类型字典 |
+| | `cq.data.get_row_count()` | 获取某数据表在物理存储中的记录总行数 |
+| **同步与全局配置** | `cq.data.sync()` | 触发全自动增量/全量同步引擎 |
+| | `cq.data.configure()` | 显式从 YAML 配置文件装载全局配置 |
+| | `cq.data.settings` | 全局 Settings 实例 (可直接访问与修改属性) |
 
 ---
 
@@ -50,12 +50,12 @@ import cqdata
 
 ### 3.1 OOP 便捷访问层 API
 
-#### 3.1.1 `cqdata.ashare.kline.get()`
+#### 3.1.1 `cq.data.ashare.kline.get()`
 
 读取 A 股个股 K 线数据。
 
 ```python
-df = cqdata.ashare.kline.get(
+df = cq.data.ashare.kline.get(
     freq="1d",
     adj="raw",
     symbols=None,
@@ -83,12 +83,12 @@ df = cqdata.ashare.kline.get(
 
 ---
 
-#### 3.1.2 `cqdata.aindex.kline.get()`
+#### 3.1.2 `cq.data.aindex.kline.get()`
 
 读取 A 股指数 K 线数据 (指数无复权，固定 `raw`)。
 
 ```python
-df = cqdata.aindex.kline.get(
+df = cq.data.aindex.kline.get(
     freq="1d",
     symbols=None,
     start_date=None,
@@ -108,12 +108,12 @@ df = cqdata.aindex.kline.get(
 
 ---
 
-#### 3.1.3 `cqdata.ashare.adj_factor.get()`
+#### 3.1.3 `cq.data.ashare.adj_factor.get()`
 
 读取 A 股个股后复权因子数据。
 
 ```python
-df = cqdata.ashare.adj_factor.get(
+df = cq.data.ashare.adj_factor.get(
     symbols=None,
     start_date=None,
     end_date=None,
@@ -128,15 +128,15 @@ df = cqdata.ashare.adj_factor.get(
 
 ---
 
-#### 3.1.4 `cqdata.ashare.concept.get()` / `industry.get()` / `dragon_tiger.get()` / `inst_trade.get()`
+#### 3.1.4 `cq.data.ashare.concept.get()` / `industry.get()` / `dragon_tiger.get()` / `inst_trade.get()`
 
 读取 A 股概念板块成分股、行业板块成分股、龙虎榜统计与机构交易数据。
 
 ```python
-df_concept = cqdata.ashare.concept.get(symbols=None, start_date=None, end_date=None, columns=None)
-df_industry = cqdata.ashare.industry.get(symbols=None, start_date=None, end_date=None, columns=None)
-df_lhb = cqdata.ashare.dragon_tiger.get(symbols=None, start_date=None, end_date=None, columns=None)
-df_inst = cqdata.ashare.inst_trade.get(symbols=None, start_date=None, end_date=None, columns=None)
+df_concept = cq.data.ashare.concept.get(symbols=None, start_date=None, end_date=None, columns=None)
+df_industry = cq.data.ashare.industry.get(symbols=None, start_date=None, end_date=None, columns=None)
+df_lhb = cq.data.ashare.dragon_tiger.get(symbols=None, start_date=None, end_date=None, columns=None)
+df_inst = cq.data.ashare.inst_trade.get(symbols=None, start_date=None, end_date=None, columns=None)
 ```
 
 - **参数说明 (Args)**: 同上。
@@ -144,14 +144,14 @@ df_inst = cqdata.ashare.inst_trade.get(symbols=None, start_date=None, end_date=N
 
 ---
 
-#### 3.1.5 `cqdata.default` / `cqdata.ashare.default` / `cqdata.ashare.kline.default`
+#### 3.1.5 `cq.data.default` / `cq.data.ashare.default` / `cq.data.ashare.kline.default`
 
 三层链式默认值配置对象。
 
 ```python
-cqdata.default.source = "tdx"                      # 1. 全局默认
-cqdata.ashare.default.source = "baostock"           # 2. 市场级默认
-cqdata.ashare.kline.default.source = "tdx"          # 3. 表级默认
+cq.data.default.source = "tdx"                      # 1. 全局默认
+cq.data.ashare.default.source = "baostock"           # 2. 市场级默认
+cq.data.ashare.kline.default.source = "tdx"          # 3. 表级默认
 ```
 
 - **属性说明**:
@@ -162,12 +162,12 @@ cqdata.ashare.kline.default.source = "tdx"          # 3. 表级默认
 
 ### 3.2 统一切片读取与元数据探查 API
 
-#### 3.2.1 `cqdata.read()`
+#### 3.2.1 `cq.data.read()`
 
 经典底层统一切片读取入口，自动按 `table_id` 智能路由到时序表或事件表流水线。
 
 ```python
-df = cqdata.read(
+df = cq.data.read(
     table_id="ashare.kline.1d.raw.baostock",
     symbols=["sh.600000"],
     start_date="2024-01-01",
@@ -189,12 +189,12 @@ df = cqdata.read(
 
 ---
 
-#### 3.2.2 `cqdata.list_tables()`
+#### 3.2.2 `cq.data.list_tables()`
 
 列出本地物理存储中已存在的全量数据表及其分类信息。
 
 ```python
-tables = cqdata.list_tables(format="auto")
+tables = cq.data.list_tables(format="auto")
 ```
 
 - **参数说明 (Args)**:
@@ -204,12 +204,12 @@ tables = cqdata.list_tables(format="auto")
 
 ---
 
-#### 3.2.3 `cqdata.list_formats()`
+#### 3.2.3 `cq.data.list_formats()`
 
 查询某表在本地已有的物理存储格式列表。
 
 ```python
-formats = cqdata.list_formats(table_id="ashare.kline.1d.raw.baostock")
+formats = cq.data.list_formats(table_id="ashare.kline.1d.raw.baostock")
 ```
 
 - **参数说明 (Args)**:
@@ -219,12 +219,12 @@ formats = cqdata.list_formats(table_id="ashare.kline.1d.raw.baostock")
 
 ---
 
-#### 3.2.4 `cqdata.list_symbols()`
+#### 3.2.4 `cq.data.list_symbols()`
 
 查询某表在本地已存储的证券代码列表。
 
 ```python
-symbols = cqdata.list_symbols(table_id="ashare.kline.1d.raw.baostock", format="auto")
+symbols = cq.data.list_symbols(table_id="ashare.kline.1d.raw.baostock", format="auto")
 ```
 
 - **参数说明 (Args)**:
@@ -235,12 +235,12 @@ symbols = cqdata.list_symbols(table_id="ashare.kline.1d.raw.baostock", format="a
 
 ---
 
-#### 3.2.5 `cqdata.get_time_range()`
+#### 3.2.5 `cq.data.get_time_range()`
 
 获取某表的全局起止 ISO 时间跨度元组。
 
 ```python
-start_dt, end_dt = cqdata.get_time_range("ashare.kline.1d.raw.baostock")
+start_dt, end_dt = cq.data.get_time_range("ashare.kline.1d.raw.baostock")
 ```
 
 - **参数说明 (Args)**:
@@ -251,12 +251,12 @@ start_dt, end_dt = cqdata.get_time_range("ashare.kline.1d.raw.baostock")
 
 ---
 
-#### 3.2.6 `cqdata.get_schema()`
+#### 3.2.6 `cq.data.get_schema()`
 
 获取某表在元数据中记载的列名与数据类型映射字典。
 
 ```python
-schema = cqdata.get_schema("ashare.kline.1d.raw.baostock")
+schema = cq.data.get_schema("ashare.kline.1d.raw.baostock")
 ```
 
 - **参数说明 (Args)**:
@@ -267,12 +267,12 @@ schema = cqdata.get_schema("ashare.kline.1d.raw.baostock")
 
 ---
 
-#### 3.2.7 `cqdata.get_row_count()`
+#### 3.2.7 `cq.data.get_row_count()`
 
 获取某表在物理存储中的记录总行数。
 
 ```python
-total_rows = cqdata.get_row_count("ashare.kline.1d.raw.baostock")
+total_rows = cq.data.get_row_count("ashare.kline.1d.raw.baostock")
 ```
 
 - **参数说明 (Args)**:
@@ -285,12 +285,12 @@ total_rows = cqdata.get_row_count("ashare.kline.1d.raw.baostock")
 
 ### 3.3 数据同步与全局配置 API
 
-#### 3.3.1 `cqdata.sync()`
+#### 3.3.1 `cq.data.sync()`
 
 触发全自动化增量/全量同步流水线。
 
 ```python
-cqdata.sync(
+cq.data.sync(
     table_ids="ashare.kline.1d.raw.baostock",
     formats="parquet",
     start_date="2024-01-01",
@@ -316,12 +316,12 @@ cqdata.sync(
 
 ---
 
-#### 3.3.2 `cqdata.configure()`
+#### 3.3.2 `cq.data.configure()`
 
 显式从指定 YAML 配置文件装载全局 Settings 参数。
 
 ```python
-cqdata.configure("./config.yaml")
+cq.data.configure("./config.yaml")
 ```
 
 - **配置文件格式参考 ([config.yaml.sample](file:///d:/Quant/CarrotQuant.Data/config/config.yaml.sample))**:
@@ -342,18 +342,18 @@ cqdata.configure("./config.yaml")
 
 ---
 
-#### 3.3.3 `cqdata.settings`
+#### 3.3.3 `cq.data.settings`
 
 全局 Settings 单例实例对象，提供程序化属性访问与修改。
 
 ```python
 # 1. 动态查看属性
-print(cqdata.settings.data_dir)
-print(cqdata.settings.log_level)
+print(cq.data.settings.data_dir)
+print(cq.data.settings.log_level)
 
 # 2. 动态修改属性
-cqdata.settings.data_dir = "/path/to/my_data"
-cqdata.settings.log_level = "DEBUG"
+cq.data.settings.data_dir = "/path/to/my_data"
+cq.data.settings.log_level = "DEBUG"
 ```
 
 - **常用属性 (Attributes)**:
@@ -369,10 +369,10 @@ cqdata.settings.log_level = "DEBUG"
 ### 4.1 策略开发快捷读取数据 (使用 OOP 层)
 
 ```python
-import cqdata
+import cq.data
 
 # 读取 A 股日线数据
-df_kline = cqdata.ashare.kline.get(
+df_kline = cq.data.ashare.kline.get(
     symbols=["sh.600000", "sz.000001"],
     start_date="2024-01-01",
     end_date="2024-06-30",
@@ -381,7 +381,7 @@ df_kline = cqdata.ashare.kline.get(
 print(df_kline)
 
 # 读取概念板块成分股
-df_concept = cqdata.ashare.concept.get()
+df_concept = cq.data.ashare.concept.get()
 print(df_concept)
 ```
 
@@ -390,9 +390,9 @@ print(df_concept)
 由于 SDK 返回的标准类型均为 Polars DataFrame，如需在传统 Pandas 策略中使用，可直接调用 `.to_pandas()`：
 
 ```python
-import cqdata
+import cq.data
 
-df_pandas = cqdata.ashare.kline.get(symbols="sh.600000").to_pandas()
+df_pandas = cq.data.ashare.kline.get(symbols="sh.600000").to_pandas()
 print(type(df_pandas))  # <class 'pandas.core.frame.DataFrame'>
 ```
 
@@ -403,5 +403,5 @@ print(type(df_pandas))  # <class 'pandas.core.frame.DataFrame'>
 SDK 中的读取、探查与配置操作均遵循标准的 Python 异常体系：
 
 - **`ValueError`**: 输入了非法的参数组合或拼装出了底层驱动不支持的表 ID（例如试图用通达信驱动读取后复权数据 `ashare.kline.1d.adj.tdx`）。
-- **`FileNotFoundError`**: 指定的数据表在本地物理存储中不存在，或调用的 `cqdata.configure("not_exist.yaml")` 路径无效。
+- **`FileNotFoundError`**: 指定的数据表在本地物理存储中不存在，或调用的 `cq.data.configure("not_exist.yaml")` 路径无效。
 - **数据源退市股票特性**: 通达信 `tdx` 驱动的 `online` (TCP 在线) 模式因云端 API 限制仅覆盖在交易股票；若需拉取或研究已退市股票历史数据，建议使用 Baostock 驱动（`source="baostock"`）或通达信 `local` 离线模式（`mode="local"`）。

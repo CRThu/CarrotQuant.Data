@@ -1,7 +1,7 @@
 import pytest
 import polars as pl
 from loguru import logger
-from cqdata.provider.provider_manager import ProviderManager
+from cq.data.provider.provider_manager import ProviderManager
 
 @pytest.mark.network
 def test_baostock_provider_fetch():

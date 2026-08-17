@@ -9,11 +9,11 @@ from typing import List, Tuple, Dict, Union, Optional, Any
 from pathlib import Path
 import polars as pl
 
-from cqdata.service import data_reader as dr
-from cqdata.service import metadata_reader as mr
-from cqdata.service import sync_manager as sm
-from cqdata.config import settings
-from cqdata.service.metadata_manager import MetadataManager
+from cq.data.service import data_reader as dr
+from cq.data.service import metadata_reader as mr
+from cq.data.service import sync_manager as sm
+from cq.data.config import settings
+from cq.data.service.metadata_manager import MetadataManager
 
 
 def read(
@@ -38,7 +38,7 @@ def read(
     Returns:
         pl.DataFrame
     """
-    from cqdata.provider.provider_manager import ProviderManager
+    from cq.data.provider.provider_manager import ProviderManager
     provider = ProviderManager().get_provider(table_id)
     category = provider.get_table_category(table_id)
 
@@ -149,11 +149,11 @@ def sync(
 def configure(config_path: Union[str, Path]):
     """
     全局加载 YAML 配置文件。
-    可以在 import cqdata 后在代码入口处显式调用。
+    可以在 import cq.data 后在代码入口处显式调用。
 
     示例:
-        import cqdata
-        cqdata.configure("./config.yaml")
+        import cq.data
+        cq.data.configure("./config.yaml")
     """
-    from cqdata.config import settings
+    from cq.data.config import settings
     return settings.configure(config_path=config_path)

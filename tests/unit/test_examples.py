@@ -35,15 +35,15 @@ def test_example_scripts_import_and_execution(example_name, temp_data_dir):
         "volume": [100000.0]
     })
 
-    with patch("cqdata.sync"), \
-         patch("cqdata.read", return_value=mock_df), \
-         patch("cqdata.entrypoints.accessors.base.read", return_value=mock_df), \
-         patch("cqdata.list_tables", return_value=[{"table_id": "ashare.kline.1d.raw.baostock", "category": "timeseries"}]), \
-         patch("cqdata.list_formats", return_value=["parquet"]), \
-         patch("cqdata.list_symbols", return_value=["sh.600000"]), \
-         patch("cqdata.get_time_range", return_value=("2024-01-01", "2024-06-30")), \
-         patch("cqdata.get_schema", return_value={"close": "Float64"}), \
-         patch("cqdata.get_row_count", return_value=100):
+    with patch("cq.data.sync"), \
+         patch("cq.data.read", return_value=mock_df), \
+         patch("cq.data.entrypoints.accessors.base.read", return_value=mock_df), \
+         patch("cq.data.list_tables", return_value=[{"table_id": "ashare.kline.1d.raw.baostock", "category": "timeseries"}]), \
+         patch("cq.data.list_formats", return_value=["parquet"]), \
+         patch("cq.data.list_symbols", return_value=["sh.600000"]), \
+         patch("cq.data.get_time_range", return_value=("2024-01-01", "2024-06-30")), \
+         patch("cq.data.get_schema", return_value={"close": "Float64"}), \
+         patch("cq.data.get_row_count", return_value=100):
 
         spec = importlib.util.spec_from_file_location(example_name.replace(".py", ""), example_path)
         module = importlib.util.module_from_spec(spec)

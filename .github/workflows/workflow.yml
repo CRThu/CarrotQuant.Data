@@ -18,7 +18,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 1. 构建 Web 前端静态资源 (使用 Bun 极速构建，输出到 cqdata/static)
+      # 1. 构建 Web 前端静态资源 (使用 Bun 极速构建，输出到 cq/data/static)
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:

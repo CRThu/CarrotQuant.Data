@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import List, Union, Optional
 import polars as pl
 
-from cqdata.config import settings
-from cqdata.service.metadata_manager import MetadataManager
-from cqdata.provider.provider_manager import ProviderManager
-from cqdata.storage.storage_factory import StorageFactory
-from cqdata.utils.time_utils import parse_date_to_ts, align_to_day_end
+from cq.data.config import settings
+from cq.data.service.metadata_manager import MetadataManager
+from cq.data.provider.provider_manager import ProviderManager
+from cq.data.storage.storage_factory import StorageFactory
+from cq.data.utils.time_utils import parse_date_to_ts, align_to_day_end
 
 
 class DataReader:

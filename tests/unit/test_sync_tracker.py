@@ -6,7 +6,7 @@ SyncProgressTracker 单元测试。
 """
 
 import pytest
-from cqdata.service.sync_tracker import SyncProgressTracker, sync_tracker
+from cq.data.service.sync_tracker import SyncProgressTracker, sync_tracker
 
 
 def test_sync_tracker_singleton():

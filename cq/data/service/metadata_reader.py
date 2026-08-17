@@ -8,11 +8,11 @@ cqdata/service/metadata_reader.py
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Union
 
-from cqdata.config import settings
-from cqdata.service.metadata_manager import MetadataManager
-from cqdata.provider.provider_manager import ProviderManager
-from cqdata.storage.storage_factory import StorageFactory
-from cqdata.utils.time_utils import ts_to_iso
+from cq.data.config import settings
+from cq.data.service.metadata_manager import MetadataManager
+from cq.data.provider.provider_manager import ProviderManager
+from cq.data.storage.storage_factory import StorageFactory
+from cq.data.utils.time_utils import ts_to_iso
 
 
 class MetadataReader:

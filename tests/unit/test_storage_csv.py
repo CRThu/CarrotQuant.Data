@@ -1,8 +1,8 @@
 import pytest
 from pathlib import Path
 import polars as pl
-from cqdata.storage.csv_storage import CSVStorage
-from cqdata.service.metadata_manager import MetadataManager
+from cq.data.storage.csv_storage import CSVStorage
+from cq.data.service.metadata_manager import MetadataManager
 
 
 def _stamp_metadata(storage, table_id, df, category="timeseries"):

@@ -8,10 +8,10 @@ tests/unit/test_data_reader.py
 import pytest
 import polars as pl
 
-from cqdata.service.data_reader import DataReader, read_series, read_events
-from cqdata.storage.storage_factory import StorageFactory
-from cqdata.service.metadata_manager import MetadataManager
-from cqdata.utils.time_utils import parse_date_to_ts, ts_to_iso
+from cq.data.service.data_reader import DataReader, read_series, read_events
+from cq.data.storage.storage_factory import StorageFactory
+from cq.data.service.metadata_manager import MetadataManager
+from cq.data.utils.time_utils import parse_date_to_ts, ts_to_iso
 
 
 @pytest.fixture

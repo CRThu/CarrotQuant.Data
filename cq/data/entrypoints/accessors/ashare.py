@@ -7,7 +7,7 @@ A 股个股数据 OOP 访问类与命名空间实现。
 from typing import List, Optional, Union
 import polars as pl
 
-from cqdata.entrypoints.accessors.base import _BaseTable, DefaultConfig
+from cq.data.entrypoints.accessors.base import _BaseTable, DefaultConfig
 
 
 class AShareKline(_BaseTable):

@@ -7,9 +7,9 @@ cqdata Typer CLI 终端命令行全量子命令与选项集成测试
 import pytest
 from typer.testing import CliRunner
 from unittest.mock import patch
-from cqdata.entrypoints.cli import app
-from cqdata.storage.storage_factory import StorageFactory
-from cqdata.service.metadata_manager import MetadataManager
+from cq.data.entrypoints.cli import app
+from cq.data.storage.storage_factory import StorageFactory
+from cq.data.service.metadata_manager import MetadataManager
 import polars as pl
 
 runner = CliRunner(env={"COLUMNS": "200", "TERM": "dumb"})
@@ -73,7 +73,7 @@ def test_cli_info_command(mock_cli_storage, temp_data_dir):
 
 def test_cli_sync_command(mock_cli_storage, temp_data_dir):
     """测试 cqdata sync 命令调用参数挂载"""
-    with patch("cqdata.entrypoints.cli.api_sync") as mock_api_sync:
+    with patch("cq.data.entrypoints.cli.api_sync") as mock_api_sync:
         result = runner.invoke(app, [
             "sync",
             "-t", "ashare.kline.1d.raw.baostock",

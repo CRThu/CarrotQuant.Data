@@ -1,7 +1,7 @@
 """
 tests/unit/test_logger_utils.py
 
-cqdata/utils/logger_utils.py 日志与 LogBroadcaster 广播单例单元测试。
+cq/data/utils/logger_utils.py 日志与 LogBroadcaster 广播单例单元测试。
 包含边界条件测试：全量无上限加载、冷启动 0 日志、多线程高并发写日志与特殊字符序列化防御。
 """
 
@@ -9,7 +9,7 @@ import pytest
 import asyncio
 import sys
 import threading
-from cqdata.utils.logger_utils import LogBroadcaster, setup_logger, SuppressOutput
+from cq.data.utils.logger_utils import LogBroadcaster, setup_logger, SuppressOutput
 from loguru import logger
 
 
@@ -92,7 +92,7 @@ def test_log_broadcaster_special_characters_and_emojis():
 
 def test_setup_logger_attaches_broadcaster():
     """验证 setup_logger() 正确挂载 LogBroadcaster.sink 并收到 loguru 日志"""
-    from cqdata.utils.logger_utils import log_broadcaster
+    from cq.data.utils.logger_utils import log_broadcaster
     log_broadcaster.history.clear()
 
     setup_logger(log_level="INFO", log_file_prefix="test")

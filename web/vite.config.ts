@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../cqdata/static',
+    outDir: '../cq/data/static',
     emptyOutDir: true,
   },
   server: {

@@ -7,8 +7,8 @@ OOP 访问层基础配置与公共基类。
 from typing import List, Optional, Union, Dict, Any
 import polars as pl
 
-from cqdata.entrypoints.python_api import read
-from cqdata.provider.provider_manager import ProviderManager
+from cq.data.entrypoints.python_api import read
+from cq.data.provider.provider_manager import ProviderManager
 
 
 class DefaultConfig:

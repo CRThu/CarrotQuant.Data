@@ -1,7 +1,7 @@
 import os
 import pytest
 from pathlib import Path
-from cqdata.config.settings import Settings
+from cq.data.config.settings import Settings
 
 
 def test_settings_default_fallback(monkeypatch):
@@ -34,21 +34,21 @@ def test_settings_custom_config_yaml_env(tmp_path, monkeypatch):
 
 
 def test_cqdata_configure_from_file_and_property_assignment(tmp_path):
-    """测试通过 cqdata.configure 显式配置文件加载与 cqdata.settings 直接属性修改"""
-    import cqdata
+    """测试通过 cq.data.configure 显式配置文件加载与 cq.data.settings 直接属性修改"""
+    import cq.data
     config_file = tmp_path / "test_cfg.yaml"
     config_file.write_text("data_dir: '/path/from/yaml'\n", encoding="utf-8")
 
-    cqdata.configure(config_file)
-    assert cqdata.settings.data_dir == "/path/from/yaml"
+    cq.data.configure(config_file)
+    assert cq.data.settings.data_dir == "/path/from/yaml"
 
     # 直接修改属性
-    cqdata.settings.data_dir = "data"
-    assert cqdata.settings.data_dir == "data"
+    cq.data.settings.data_dir = "data"
+    assert cq.data.settings.data_dir == "data"
 
 
 def test_configure_non_existent_file_raises():
-    """测试 cqdata.configure 传入不存在的 YAML 文件路径时抛出 FileNotFoundError"""
-    import cqdata
+    """测试 cq.data.configure 传入不存在的 YAML 文件路径时抛出 FileNotFoundError"""
+    import cq.data
     with pytest.raises(FileNotFoundError, match="Config file not found"):
-        cqdata.configure("non_existent_path_12345.yaml")
+        cq.data.configure("non_existent_path_12345.yaml")

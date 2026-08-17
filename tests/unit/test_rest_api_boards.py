@@ -1,11 +1,11 @@
 import pytest
 import polars as pl
 from fastapi.testclient import TestClient
-from cqdata.entrypoints.rest_api import app
-from cqdata.entrypoints.python_api import list_boards
-from cqdata.service.metadata_manager import MetadataManager
-from cqdata.config.settings import settings
-from cqdata.storage.parquet_storage import ParquetStorage
+from cq.data.entrypoints.rest_api import app
+from cq.data.entrypoints.python_api import list_boards
+from cq.data.service.metadata_manager import MetadataManager
+from cq.data.config.settings import settings
+from cq.data.storage.parquet_storage import ParquetStorage
 
 client = TestClient(app)
 

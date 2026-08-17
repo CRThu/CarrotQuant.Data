@@ -36,10 +36,10 @@ from typing import Any
 import polars as pl
 from loguru import logger
 
-from cqdata.provider.base import BaseProvider
-from cqdata.provider.data_cleaner import DataCleaner
-from cqdata.provider.em_utils import em_push2, em_datacenter
-from cqdata.utils.time_utils import ts_to_str
+from cq.data.provider.base import BaseProvider
+from cq.data.provider.data_cleaner import DataCleaner
+from cq.data.provider.em_utils import em_push2, em_datacenter
+from cq.data.utils.time_utils import ts_to_str
 
 
 class EastMoneyProvider(BaseProvider):

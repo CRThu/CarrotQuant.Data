@@ -13,7 +13,7 @@
 - **增量与全量同步**：基于时间戳水位线机制，支持断点续接（增量拉取）与全量覆盖更新。
 - **多接入方式**：
   - **React Web 终端**：基于 Bun + Vite + React 19 构建，集成 TradingView Lightweight Charts (3-Pane 图表)、多维搜索与数据管理面板。
-  - **Python SDK**：直观的 `import cqdata` API，支持高性能跨年份数据切片读取 (`cqdata.read`)、`columns` 按需投影与元数据探查。
+  - **Python SDK**：直观的 `import cq.data` API，支持高性能跨年份数据切片读取 (`cq.data.read`)、`columns` 按需投影与元数据探查。
   - **命令行工具 (CLI)**：统一的 `cqdata` 命令行工具，提供数据同步 (`cqdata sync`)、数据表探索 (`cqdata tables`) 与服务启动 (`cqdata server`)。
   - **REST API 服务**：基于 FastAPI 的 HTTP 服务，支持数据切片、任务调度与 SSE 实时日志流。
 - **列式数据处理**：使用 [Polars](https://pola.rs/) 进行高效的数据清洗与结构转换。
@@ -22,13 +22,14 @@
 
 ```text
 CarrotQuant.Data/
-├── cqdata/           # 核心代码包 (支持 import cqdata)
-│   ├── entrypoints/  # 接入层 (python_api, cli, rest_api)
-│   ├── config/       # 配置管理模块
-│   ├── provider/     # 数据源驱动 (BaostockProvider, EastMoneyProvider, TDXProvider)
-│   ├── service/      # 核心业务逻辑 (DataReader, MetadataReader, SyncManager 等)
-│   ├── storage/      # 本地持久化存储 (CSVStorage, ParquetStorage)
-│   └── utils/        # 通用工具箱
+├── cq/
+│   └── data/         # 核心代码包 (import cq.data)
+│       ├── entrypoints/  # 接入层 (python_api, cli, rest_api)
+│       ├── config/       # 配置管理模块
+│       ├── provider/     # 数据源驱动 (BaostockProvider, EastMoneyProvider, TDXProvider)
+│       ├── service/      # 核心业务逻辑 (DataReader, MetadataReader, SyncManager 等)
+│       ├── storage/      # 本地持久化存储 (CSVStorage, ParquetStorage)
+│       └── utils/        # 通用工具箱
 ├── web/              # React Web 金融终端 (Bun + Vite 6 + React 19 + TradingView 3-Pane)
 │   ├── src/          # 视图 View、组件 Component、Hooks 与转换服务
 │   └── package.json
@@ -46,14 +47,14 @@ CarrotQuant.Data/
 
 ```mermaid
 graph TB
-    subgraph Entrypoints["接入层 (cqdata/entrypoints)"]
+    subgraph Entrypoints["接入层 (cq/data/entrypoints)"]
         PYTHON_API["python_api.py<br/>(Python SDK)"]
         CLI["cli.py<br/>(Typer CLI)"]
         REST["rest_api.py<br/>(FastAPI REST)"]
         WIZARD["wizard.py<br/>(交互向导)"]
     end
 
-    subgraph Service["业务逻辑层 (cqdata/service)"]
+    subgraph Service["业务逻辑层 (cq/data/service)"]
         SM["SyncManager<br/>同步总调度"]
         DR["DataReader<br/>切片与按列投影"]
         MR["MetadataReader<br/>探查与过滤 API"]
@@ -61,14 +62,14 @@ graph TB
         MM["MetadataManager<br/>元数据 IO"]
     end
 
-    subgraph Provider["采集层 (cqdata/provider)"]
+    subgraph Provider["采集层 (cq/data/provider)"]
         PM["ProviderManager"]
         BP["BaostockProvider"]
         EP["EastMoneyProvider"]
         TDX_PROV["TDXProvider"]
     end
 
-    subgraph Storage["存储层 (cqdata/storage)"]
+    subgraph Storage["存储层 (cq/data/storage)"]
         SF["StorageFactory"]
         CSV["CSVStorage"]
         PQ["ParquetStorage"]
@@ -143,7 +144,7 @@ uv pip install -e .
 
 CarrotQuant.Data 秉承 **“显式胜于隐式 (Explicit is better than implicit)”** 的配置契约，支持以下显式加载与覆盖方式（优先级从高到低）：
 
-1. **代码程序化修改**：直接设置单例属性 `cqdata.settings.data_dir = "/path/to/data"` 或调用 `cqdata.configure("/path/to/config.yaml")`（最高优先级）。
+1. **代码程序化修改**：直接设置单例属性 `cq.data.settings.data_dir = "/path/to/data"` 或调用 `cq.data.configure("/path/to/config.yaml")`（最高优先级）。
 2. **环境变量 `CQDATA_DATA_DIR`**：如 `export CQDATA_DATA_DIR="/my/data/path"`（适合 Docker / CLI / 自动化部署）。
 3. **环境变量 `CQDATA_CONFIG_PATH`**：指定自定义 YAML 配置文件路径，如 `export CQDATA_CONFIG_PATH="/path/to/config.yaml"`。
 4. **内置默认配置**：默认存储路径 `data_dir = "data"`，默认日志 `log_dir = "logs"`, `log_level = "INFO"`。
@@ -166,30 +167,30 @@ defaults:
 
 ## 🚀 快速开始 (Quick Start)
 
-### 方式一：使用 Python SDK (`import cqdata`) - 推荐
+### 方式一：使用 Python SDK (`import cq.data`) - 推荐
 
 在量化研究与 Python 策略脚本中直接读取本地清洗好的数据：
 
 ```python
-import cqdata
+import cq.data
 
 # 0. (可选) 从 YAML 配置文件加载全局配置
-cqdata.configure("./config.yaml")
+cq.data.configure("./config.yaml")
 
 # 或者直接修改属性
-cqdata.settings.data_dir = "./custom_data"
+cq.data.settings.data_dir = "./custom_data"
 
 # 1. OOP 便捷读取 (界面极简，干净清爽)
-df_kline = cqdata.ashare.kline.get(symbols="sh.600000", start_date="2024-01-01")
+df_kline = cq.data.ashare.kline.get(symbols="sh.600000", start_date="2024-01-01")
 
 # 2. 查阅代码清单、时间跨度、Schema 映射与物理总行数
-symbols = cqdata.list_symbols("ashare.kline.1d.raw.baostock")
-start_dt, end_dt = cqdata.get_time_range("ashare.kline.1d.raw.baostock")
-schema = cqdata.get_schema("ashare.kline.1d.raw.baostock")         # {'timestamp': 'Int64', ...}
-total_rows = cqdata.get_row_count("ashare.kline.1d.raw.baostock") # 13570685
+symbols = cq.data.list_symbols("ashare.kline.1d.raw.baostock")
+start_dt, end_dt = cq.data.get_time_range("ashare.kline.1d.raw.baostock")
+schema = cq.data.get_schema("ashare.kline.1d.raw.baostock")         # {'timestamp': 'Int64', ...}
+total_rows = cq.data.get_row_count("ashare.kline.1d.raw.baostock") # 13570685
 
 # 3. 统一切片读取 K 线时序数据 (支持 columns 按需挑选列，极节省内存)
-df = cqdata.read(
+df = cq.data.read(
     table_id="ashare.kline.1d.raw.baostock",
     symbols=["sh.600000", "sz.000001"],
     start_date="2024-01-01",
@@ -199,13 +200,13 @@ df = cqdata.read(
 print(df)
 
 # 4. 统一切片读取板块/龙虎榜事件数据
-events_df = cqdata.read(
+events_df = cq.data.read(
     table_id="ashare.concept.eastmoney",
     symbols=["sh.600000"]
 )
 
 # 5. 代码中触发全自动数据同步
-cqdata.sync(table_ids=["ashare.kline.1d.raw.baostock"], formats=["parquet"])
+cq.data.sync(table_ids=["ashare.kline.1d.raw.baostock"], formats=["parquet"])
 ```
 
 ### 方式二：使用统一 CLI 命令行工具 (`cqdata`)

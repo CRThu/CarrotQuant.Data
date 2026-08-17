@@ -10,9 +10,9 @@ from fastapi.testclient import TestClient
 from pathlib import Path
 import polars as pl
 
-from cqdata.entrypoints.rest_api import app
-from cqdata.storage.storage_factory import StorageFactory
-from cqdata.service.metadata_manager import MetadataManager
+from cq.data.entrypoints.rest_api import app
+from cq.data.storage.storage_factory import StorageFactory
+from cq.data.service.metadata_manager import MetadataManager
 
 client = TestClient(app)
 
@@ -21,7 +21,7 @@ def test_rest_api_full_flow_with_physical_storage(temp_data_dir, monkeypatch):
     """
     测试 REST API 全流程集成 (包含物理文件读写与元数据探查)
     """
-    monkeypatch.setattr("cqdata.config.settings.data_dir", str(temp_data_dir))
+    monkeypatch.setattr("cq.data.config.settings.data_dir", str(temp_data_dir))
     table_id = "ashare.kline.1d.raw.baostock"
     fmt = "parquet"
 

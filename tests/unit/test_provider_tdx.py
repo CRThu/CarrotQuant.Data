@@ -14,14 +14,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 import polars as pl
 
-from cqdata.provider.tdx_provider import TDXProvider
-from cqdata.provider.tdx_utils import (
+from cq.data.provider.tdx_provider import TDXProvider
+from cq.data.provider.tdx_utils import (
     tdx_code_to_standard,
     standard_to_tdx_code,
     read_tdx_file_from_local,
     discover_tdx_symbols_from_local,
 )
-from cqdata.provider.provider_manager import ProviderManager
+from cq.data.provider.provider_manager import ProviderManager
 
 # 通达信默认安装路径
 _VIPDOC_DIR = Path(r"C:\new_tdx\vipdoc")
@@ -284,19 +284,19 @@ class TestSafeTcpCall:
     """测试 _safe_tcp_call 的网络故障拦截与异常重试逻辑。"""
 
     def test_safe_tcp_call_success(self):
-        from cqdata.provider.tdx_utils import _safe_tcp_call
+        from cq.data.provider.tdx_utils import _safe_tcp_call
         mock_fn = MagicMock(return_value=[{"date": "2024-01-01"}])
         res = _safe_tcp_call(mock_fn)
         assert res == [{"date": "2024-01-01"}]
 
     def test_safe_tcp_call_empty_list_allowed(self):
-        from cqdata.provider.tdx_utils import _safe_tcp_call
+        from cq.data.provider.tdx_utils import _safe_tcp_call
         mock_fn = MagicMock(return_value=[])
         res = _safe_tcp_call(mock_fn)
         assert res == []
 
     def test_safe_tcp_call_none_reconnects_and_raises(self):
-        import cqdata.provider.tdx_utils as tdx_utils
+        import cq.data.provider.tdx_utils as tdx_utils
         mock_api = MagicMock()
         mock_api.client = None  # 模拟 Socket 断线状态
         tdx_utils._cached_api = mock_api
@@ -307,20 +307,20 @@ class TestSafeTcpCall:
             mock_api.client = None
             return mock_api
 
-        with patch("cqdata.provider.tdx_utils._reconnect_tdx_api", side_effect=_mock_reconnect_side_effect) as mock_reconnect, \
-             patch("cqdata.provider.tdx_utils._connect_tdx_api", side_effect=_mock_reconnect_side_effect):
+        with patch("cq.data.provider.tdx_utils._reconnect_tdx_api", side_effect=_mock_reconnect_side_effect) as mock_reconnect, \
+             patch("cq.data.provider.tdx_utils._connect_tdx_api", side_effect=_mock_reconnect_side_effect):
             with pytest.raises(Exception):
                 tdx_utils._safe_tcp_call(mock_fn)
             assert mock_reconnect.called
 
     def test_safe_tcp_call_reraises_runtime_error_on_disconnect(self):
-        from cqdata.provider.tdx_utils import _safe_tcp_call
+        from cq.data.provider.tdx_utils import _safe_tcp_call
         mock_fn = MagicMock(side_effect=RuntimeError("TDX 服务器全部不可用，请检查网络"))
         with pytest.raises(RuntimeError, match="检查网络"):
             _safe_tcp_call(mock_fn)
 
     def test_safe_tcp_call_cached_api_none_reconnects_properly(self):
-        import cqdata.provider.tdx_utils as tdx_utils
+        import cq.data.provider.tdx_utils as tdx_utils
         tdx_utils._cached_api = None
         mock_api = MagicMock()
         mock_api.get_security_bars.return_value = [{"date": "2024-01-01"}]
@@ -329,7 +329,7 @@ class TestSafeTcpCall:
             tdx_utils._cached_api = mock_api
             return mock_api
 
-        with patch("cqdata.provider.tdx_utils._connect_tdx_api", side_effect=_mock_connect) as mock_connect:
+        with patch("cq.data.provider.tdx_utils._connect_tdx_api", side_effect=_mock_connect) as mock_connect:
             fn = lambda: tdx_utils._cached_api.get_security_bars(0, 0, "600000", 0, 10)
             res = tdx_utils._safe_tcp_call(fn)
             assert mock_connect.called
@@ -370,7 +370,7 @@ class TestTdxSymbolFilter:
     """测试 ashare 和 aindex 的证券代码隔离与边界防御。"""
 
     def test_ashare_contains_only_stocks_and_no_indices(self, provider):
-        with patch("cqdata.provider.tdx_provider.fetch_stock_list_online") as mock_fetch:
+        with patch("cq.data.provider.tdx_provider.fetch_stock_list_online") as mock_fetch:
             mock_fetch.side_effect = lambda market: {
                 "sh": ["sh600000", "sh688001", "sh000001", "sh000300"],
                 "sz": ["sz000001", "sz300750", "sz395001", "sz399001"],
@@ -387,7 +387,7 @@ class TestTdxSymbolFilter:
             assert "bj.899050" not in symbols
 
     def test_aindex_contains_only_indices_including_bj899050(self, provider):
-        with patch("cqdata.provider.tdx_provider.fetch_stock_list_online") as mock_fetch:
+        with patch("cq.data.provider.tdx_provider.fetch_stock_list_online") as mock_fetch:
             mock_fetch.side_effect = lambda market: {
                 "sh": ["sh600000", "sh000001", "sh000300"],
                 "sz": ["sz000001", "sz395001", "sz399001"],
@@ -411,8 +411,8 @@ class TestTdxSymbolFilter:
 
     def test_bj_symbols_baostock_fallback_success(self, provider):
         """当 TDX 不提供 BJ 列表时，自动退避至 BaostockProvider 基础库拉取。"""
-        with patch("cqdata.provider.tdx_provider.fetch_stock_list_online") as mock_tdx_fetch, \
-             patch("cqdata.provider.baostock_provider.BaostockProvider.get_all_symbols") as mock_bs_symbols:
+        with patch("cq.data.provider.tdx_provider.fetch_stock_list_online") as mock_tdx_fetch, \
+             patch("cq.data.provider.baostock_provider.BaostockProvider.get_all_symbols") as mock_bs_symbols:
             mock_tdx_fetch.side_effect = lambda market: {
                 "sh": ["sh600000"],
                 "sz": ["sz000001"],
@@ -427,8 +427,8 @@ class TestTdxSymbolFilter:
 
     def test_bj_symbols_fallback_warning_on_exception(self, provider):
         """当拉取 BJ 列表抛出异常时，抓取逻辑捕获异常、日志 Warning 告警，并放弃 BJ 保证 SH/SZ 顺畅。"""
-        with patch("cqdata.provider.tdx_provider.fetch_stock_list_online") as mock_tdx_fetch, \
-             patch("cqdata.provider.baostock_provider.BaostockProvider.get_all_symbols", side_effect=RuntimeError("Baostock down")):
+        with patch("cq.data.provider.tdx_provider.fetch_stock_list_online") as mock_tdx_fetch, \
+             patch("cq.data.provider.baostock_provider.BaostockProvider.get_all_symbols", side_effect=RuntimeError("Baostock down")):
             mock_tdx_fetch.side_effect = lambda market: {
                 "sh": ["sh600000"],
                 "sz": ["sz000001"],
@@ -441,7 +441,7 @@ class TestTdxSymbolFilter:
 
     def test_b_share_symbols_filtered_out_for_ashare(self, provider):
         """验证 ashare 表严格过滤剔除 B 股代码 (sh.900xxx / sz.200xxx)，纯粹代表 A 股个股。"""
-        with patch("cqdata.provider.tdx_provider.fetch_stock_list_online") as mock_tdx_fetch:
+        with patch("cq.data.provider.tdx_provider.fetch_stock_list_online") as mock_tdx_fetch:
             mock_tdx_fetch.side_effect = lambda market: {
                 "sh": ["sh600000", "sh900901"],
                 "sz": ["sz000001", "sz200012"],
@@ -455,7 +455,7 @@ class TestTdxSymbolFilter:
 
     def test_patch_tdxpy_market2_support(self):
         """验证 tdxpy 的 market=2 (BJ) 补丁机制正常运行，不破坏 SH/SZ，支持 BJ 代码类型转换。"""
-        from cqdata.provider.tdx_utils import _patch_tdxpy_once
+        from cq.data.provider.tdx_utils import _patch_tdxpy_once
         import tdxpy.helper as h
         import tdxpy.constants as c
 
@@ -478,36 +478,36 @@ class TestTdxDataSanitization:
     """测试通达信接口错位二进制脏记录与溢出防护的 Fail-Fast 阻断机制。"""
 
     def test_corrupted_datetime_raises_fail_fast(self):
-        from cqdata.provider.tdx_utils import fetch_bars_online
+        from cq.data.provider.tdx_utils import fetch_bars_online
         corrupted_data = [
             {"open": 10.0, "high": 10.5, "low": 9.8, "close": 10.2, "vol": 1000, "amount": 10000, "datetime": "2024-01-02 15:00", "year": 2024},
             {"open": -228.95, "high": 82523.5, "low": -228.95, "close": -228.9, "vol": 6.26e85, "amount": 5.87e-39, "datetime": "125102-38-16 15:00", "year": 125102},
         ]
         mock_api = MagicMock()
         mock_api.get_security_bars.return_value = corrupted_data
-        with patch("cqdata.provider.tdx_utils._cached_api", mock_api), \
-             patch("cqdata.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
+        with patch("cq.data.provider.tdx_utils._cached_api", mock_api), \
+             patch("cq.data.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
             with pytest.raises(ValueError, match="收到损坏的数据记录"):
                 fetch_bars_online("sh.600000", freq="1d", table_id="ashare.kline.1d.raw.tdx")
 
     def test_float_overflow_amount_raises_fail_fast(self):
-        from cqdata.provider.tdx_utils import fetch_bars_online
+        from cq.data.provider.tdx_utils import fetch_bars_online
         overflow_data = [
             {"open": 10.0, "high": 10.5, "low": 9.8, "close": 10.2, "vol": 1000, "amount": 2.6678137566601576e+41, "datetime": "2024-01-02 15:00", "year": 2024},
         ]
         mock_api = MagicMock()
         mock_api.get_security_bars.return_value = overflow_data
-        with patch("cqdata.provider.tdx_utils._cached_api", mock_api), \
-             patch("cqdata.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
+        with patch("cq.data.provider.tdx_utils._cached_api", mock_api), \
+             patch("cq.data.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
             with pytest.raises(ValueError, match="收到超范围异常数值"):
                 fetch_bars_online("sh.600000", freq="1d", table_id="ashare.kline.1d.raw.tdx")
 
     def test_empty_batch_returns_empty_kline(self):
-        from cqdata.provider.tdx_utils import fetch_bars_online
+        from cq.data.provider.tdx_utils import fetch_bars_online
         mock_api = MagicMock()
         mock_api.get_security_bars.return_value = []
-        with patch("cqdata.provider.tdx_utils._cached_api", mock_api), \
-             patch("cqdata.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
+        with patch("cq.data.provider.tdx_utils._cached_api", mock_api), \
+             patch("cq.data.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
             df = fetch_bars_online("sh.600000", freq="1d", table_id="ashare.kline.1d.raw.tdx")
             assert df.is_empty()
             assert df.schema["volume"] == pl.Float64
@@ -521,14 +521,14 @@ class TestTdxFetchIndexBars:
     """测试深交所指数 (sz.395001) 与北交所指数 (bj.899050) 的路由与解析。"""
 
     def test_fetch_sz_index_395001_routes_to_index_api(self):
-        from cqdata.provider.tdx_utils import fetch_bars_online
+        from cq.data.provider.tdx_utils import fetch_bars_online
         mock_data = [
             {"open": 522.0, "high": 522.0, "low": 522.0, "close": 522.0, "vol": 5000, "amount": 30000, "datetime": "2005-02-01 15:00", "year": 2005},
         ]
         mock_api = MagicMock()
         mock_api.get_index_bars.return_value = mock_data
-        with patch("cqdata.provider.tdx_utils._cached_api", mock_api), \
-             patch("cqdata.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
+        with patch("cq.data.provider.tdx_utils._cached_api", mock_api), \
+             patch("cq.data.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
             df = fetch_bars_online("sz.395001", freq="1d", table_id="aindex.kline.1d.raw.tdx")
             assert mock_api.get_index_bars.called
             assert not mock_api.get_security_bars.called
@@ -536,28 +536,28 @@ class TestTdxFetchIndexBars:
             assert df["symbol"][0] == "sz.395001"
 
     def test_fetch_bj_index_899050_routes_to_index_api(self):
-        from cqdata.provider.tdx_utils import fetch_bars_online
+        from cq.data.provider.tdx_utils import fetch_bars_online
         mock_data = [
             {"open": 1000.0, "high": 1050.0, "low": 990.0, "close": 1020.0, "vol": 8000, "amount": 50000, "datetime": "2024-01-02 15:00", "year": 2024},
         ]
         mock_api = MagicMock()
         mock_api.get_index_bars.return_value = mock_data
-        with patch("cqdata.provider.tdx_utils._cached_api", mock_api), \
-             patch("cqdata.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
+        with patch("cq.data.provider.tdx_utils._cached_api", mock_api), \
+             patch("cq.data.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
             df = fetch_bars_online("bj.899050", freq="1d", table_id="aindex.kline.1d.raw.tdx")
             assert mock_api.get_index_bars.called
             assert len(df) == 1
             assert df["symbol"][0] == "bj.899050"
 
     def test_fetch_sz_stock_000001_routes_to_sz_market_0(self):
-        from cqdata.provider.tdx_utils import fetch_bars_online
+        from cq.data.provider.tdx_utils import fetch_bars_online
         mock_data = [
             {"open": 12.0, "high": 12.5, "low": 11.8, "close": 12.2, "vol": 50000, "amount": 600000, "datetime": "2024-01-02 15:00", "year": 2024},
         ]
         mock_api = MagicMock()
         mock_api.get_security_bars.return_value = mock_data
-        with patch("cqdata.provider.tdx_utils._cached_api", mock_api), \
-             patch("cqdata.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
+        with patch("cq.data.provider.tdx_utils._cached_api", mock_api), \
+             patch("cq.data.provider.tdx_utils._connect_tdx_api", return_value=mock_api):
             df = fetch_bars_online("sz.000001", freq="1d", table_id="ashare.kline.1d.raw.tdx")
             # 必须调用 get_security_bars 且传入 market=0 (深交所)
             mock_api.get_security_bars.assert_called_with(4, 0, "000001", 0, 800)

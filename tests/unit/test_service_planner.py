@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from cqdata.service.task_planner import TaskPlanner
-from cqdata.service.metadata_manager import MetadataManager
-from cqdata.utils.time_utils import parse_date_to_ts, align_to_day_end, align_to_day_start
+from cq.data.service.task_planner import TaskPlanner
+from cq.data.service.metadata_manager import MetadataManager
+from cq.data.utils.time_utils import parse_date_to_ts, align_to_day_end, align_to_day_start
 
 def test_plan_no_local_data_no_start_date():
     """

@@ -5,8 +5,8 @@ CarrotQuant.Data (cqdata)
 
 对外暴露的统一 Python SDK API:
 - read: 统一切片读取 K 线/分笔/板块/龙虎榜等金融数据 (自动按分类智能路由)
-- ashare / aindex: OOP 极简便捷数据访问命名空间 (如 cqdata.ashare.kline.get())
-- default: 链式默认值配置 (cqdata.default.source = "tdx")
+- ashare / aindex: OOP 极简便捷数据访问命名空间 (如 cq.data.ashare.kline.get())
+- default: 链式默认值配置 (cq.data.default.source = "tdx")
 - configure: 全局配置函数 (支持配置文件与参数混合设置)
 - settings: 全局 Settings 实例
 - list_tables: 列出本地已有的全量数据表清单 (含 category 属性)
@@ -18,7 +18,7 @@ CarrotQuant.Data (cqdata)
 - sync: 触发数据全自动同步
 """
 
-from cqdata.entrypoints import (
+from cq.data.entrypoints import (
     read,
     list_tables,
     list_formats,
@@ -33,9 +33,9 @@ from cqdata.entrypoints import (
     ashare,
     aindex
 )
-from cqdata.config import settings
+from cq.data.config import settings
 
-__version__ = "1.2.3"
+__version__ = "1.3.0"
 
 __all__ = [
     "read",

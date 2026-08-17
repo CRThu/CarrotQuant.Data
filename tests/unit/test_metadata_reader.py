@@ -6,7 +6,7 @@ tests/unit/test_metadata_reader.py
 
 import pytest
 import polars as pl
-from cqdata.service.metadata_reader import (
+from cq.data.service.metadata_reader import (
     MetadataReader,
     list_series_tables,
     list_event_tables,
@@ -16,9 +16,9 @@ from cqdata.service.metadata_reader import (
     get_schema,
     get_row_count
 )
-from cqdata.storage.storage_factory import StorageFactory
-from cqdata.service.metadata_manager import MetadataManager
-from cqdata.utils.time_utils import parse_date_to_ts, ts_to_iso
+from cq.data.storage.storage_factory import StorageFactory
+from cq.data.service.metadata_manager import MetadataManager
+from cq.data.utils.time_utils import parse_date_to_ts, ts_to_iso
 
 
 @pytest.fixture

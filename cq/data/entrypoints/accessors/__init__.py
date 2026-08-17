@@ -5,8 +5,8 @@ OOP 便捷访问层包导出。
 向外导出 default, ashare, aindex 单例与主要访问类。
 """
 
-from cqdata.entrypoints.accessors.base import DefaultConfig, default
-from cqdata.entrypoints.accessors.ashare import (
+from cq.data.entrypoints.accessors.base import DefaultConfig, default
+from cq.data.entrypoints.accessors.ashare import (
     AShare,
     AShareKline,
     AShareAdjFactor,
@@ -15,7 +15,7 @@ from cqdata.entrypoints.accessors.ashare import (
     AShareDragonTiger,
     AShareInstTrade
 )
-from cqdata.entrypoints.accessors.aindex import AIndex, AIndexKline
+from cq.data.entrypoints.accessors.aindex import AIndex, AIndexKline
 
 # 实例化命名空间单例
 ashare = AShare(parent_default=default)

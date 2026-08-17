@@ -5,14 +5,14 @@ CarrotQuant.Data Python SDK 事件数据读取示例
 演示切片读取【事件/静态 (Event)】数据 (如概念板块、龙虎榜、机构交易)。
 """
 
-import cqdata
+import cq.data
 
 
 def main():
     ev_table = "ashare.concept.eastmoney"
     print(f"=== 读取事件/板块数据 (table: {ev_table}) ===")
 
-    df_events = cqdata.read(
+    df_events = cq.data.read(
         table_id=ev_table,
         columns=["board_code", "board_name", "symbol", "stock_name"]
     )

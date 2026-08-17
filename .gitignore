@@ -5,10 +5,10 @@ __pycache__/
 
 
 # Project specific
-data/
+/data/
 test_*data*/
-logs/
-tdx_data/
+/logs/
+/tdx_data/
 
 config/config.yaml
 

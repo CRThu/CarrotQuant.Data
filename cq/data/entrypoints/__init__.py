@@ -4,7 +4,7 @@ cqdata/entrypoints/__init__.py
 网关层统一导出
 """
 
-from cqdata.entrypoints.python_api import (
+from cq.data.entrypoints.python_api import (
     read,
     list_tables,
     list_formats,
@@ -16,7 +16,7 @@ from cqdata.entrypoints.python_api import (
     sync,
     configure
 )
-from cqdata.entrypoints.accessors import (
+from cq.data.entrypoints.accessors import (
     default,
     ashare,
     aindex

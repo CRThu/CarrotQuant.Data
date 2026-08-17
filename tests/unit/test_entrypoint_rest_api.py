@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 import polars as pl
 
-from cqdata.entrypoints.rest_api import app
-from cqdata import __version__
+from cq.data.entrypoints.rest_api import app
+from cq.data import __version__
 
 client = TestClient(app)
 
@@ -29,7 +29,7 @@ def test_list_all_tables():
         {"table_id": "ashare.kline.1d.adj.baostock", "category": "timeseries"},
         {"table_id": "ashare.adj_factor.baostock", "category": "event"}
     ]
-    with patch("cqdata.entrypoints.rest_api.list_tables", return_value=mock_tables):
+    with patch("cq.data.entrypoints.rest_api.list_tables", return_value=mock_tables):
         response = client.get("/api/v1/tables")
         assert response.status_code == 200
         data = response.json()
@@ -38,7 +38,7 @@ def test_list_all_tables():
 
 
 def test_list_formats():
-    with patch("cqdata.entrypoints.rest_api.list_formats", return_value=["csv", "parquet"]):
+    with patch("cq.data.entrypoints.rest_api.list_formats", return_value=["csv", "parquet"]):
         response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/formats")
         assert response.status_code == 200
         assert response.json() == {
@@ -48,7 +48,7 @@ def test_list_formats():
 
 
 def test_list_symbols():
-    with patch("cqdata.entrypoints.rest_api.list_symbols", return_value=["sh.600000", "sz.000001"]):
+    with patch("cq.data.entrypoints.rest_api.list_symbols", return_value=["sh.600000", "sz.000001"]):
         response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/symbols")
         assert response.status_code == 200
         assert response.json() == {
@@ -59,21 +59,21 @@ def test_list_symbols():
 
 
 def test_get_time_range():
-    with patch("cqdata.entrypoints.rest_api.get_time_range", return_value=("2024-01-01T15:00:00.000+08:00", "2024-05-20T15:00:00.000+08:00")):
+    with patch("cq.data.entrypoints.rest_api.get_time_range", return_value=("2024-01-01T15:00:00.000+08:00", "2024-05-20T15:00:00.000+08:00")):
         response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/time_range")
         assert response.status_code == 200
         assert response.json()["start_datetime"] == "2024-01-01T15:00:00.000+08:00"
 
 
 def test_get_schema():
-    with patch("cqdata.entrypoints.rest_api.get_schema", return_value={"symbol": "String", "close": "Float64"}):
+    with patch("cq.data.entrypoints.rest_api.get_schema", return_value={"symbol": "String", "close": "Float64"}):
         response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/schema")
         assert response.status_code == 200
         assert response.json()["schema"] == {"symbol": "String", "close": "Float64"}
 
 
 def test_get_row_count():
-    with patch("cqdata.entrypoints.rest_api.get_row_count", return_value=12345):
+    with patch("cq.data.entrypoints.rest_api.get_row_count", return_value=12345):
         response = client.get("/api/v1/tables/ashare.kline.1d.adj.baostock/row_count")
         assert response.status_code == 200
         assert response.json() == {"table_id": "ashare.kline.1d.adj.baostock", "row_count": 12345}
@@ -88,7 +88,7 @@ def test_get_query_basic_and_pagination():
         "close": [10.0 + i for i in range(5)]
     })
 
-    with patch("cqdata.entrypoints.rest_api.read", return_value=mock_df) as mock_read:
+    with patch("cq.data.entrypoints.rest_api.read", return_value=mock_df) as mock_read:
         # 第一页，每页2条
         url = "/api/v1/query?table_id=ashare.kline.1d.adj.baostock&symbols=sh.600000,sz.000001&columns=timestamp,close&page=1&page_size=2"
         response = client.get(url)
@@ -140,19 +140,19 @@ def test_get_query_basic_and_pagination():
 def test_get_query_error_handling():
     """测试 GET /query 异常处理与 HTTP 状态码转化"""
     # 验证请求参数异常返回 400 Bad Request
-    with patch("cqdata.entrypoints.rest_api.read", side_effect=ValueError("Test Invalid Parameter")):
+    with patch("cq.data.entrypoints.rest_api.read", side_effect=ValueError("Test Invalid Parameter")):
         response_err = client.get("/api/v1/query?table_id=invalid_table")
         assert response_err.status_code == 400
         assert "Test Invalid Parameter" in response_err.json()["detail"]
 
     # 验证资源不存在异常返回 404 Not Found
-    with patch("cqdata.entrypoints.rest_api.read", side_effect=FileNotFoundError("Table metadata missing")):
+    with patch("cq.data.entrypoints.rest_api.read", side_effect=FileNotFoundError("Table metadata missing")):
         response_err404 = client.get("/api/v1/query?table_id=missing_table")
         assert response_err404.status_code == 404
         assert "Table metadata missing" in response_err404.json()["detail"]
 
     # 验证系统内部异常返回 500 Internal Server Error
-    with patch("cqdata.entrypoints.rest_api.read", side_effect=RuntimeError("Internal Server Exception")):
+    with patch("cq.data.entrypoints.rest_api.read", side_effect=RuntimeError("Internal Server Exception")):
         response_err500 = client.get("/api/v1/query?table_id=error_table")
         assert response_err500.status_code == 500
         assert "Internal Server Exception" in response_err500.json()["detail"]
@@ -173,7 +173,7 @@ def test_query_method_not_allowed_for_post():
 
 def test_post_sync_and_active_tasks():
     """验证 POST 数据同步与后台任务状态接口"""
-    with patch("cqdata.entrypoints.rest_api.sync") as mock_sync:
+    with patch("cq.data.entrypoints.rest_api.sync") as mock_sync:
         payload = {
             "table_ids": ["ashare.kline.1d.adj.baostock"],
             "formats": ["parquet"],
@@ -263,7 +263,7 @@ def test_list_tables_detailed_known_tables():
 
 def test_log_broadcaster_and_stream():
     """验证 LogBroadcaster 日志广播单例与 GET /api/v1/logs/stream SSE 端点"""
-    from cqdata.utils.logger_utils import log_broadcaster
+    from cq.data.utils.logger_utils import log_broadcaster
     from fastapi.responses import StreamingResponse
 
     dummy_log = {
@@ -283,7 +283,7 @@ def test_log_broadcaster_and_stream():
     async def dummy_gen():
         yield f"data: {json.dumps(dummy_log, ensure_ascii=False)}\n\n"
 
-    with patch("cqdata.entrypoints.rest_api.StreamingResponse", return_value=StreamingResponse(dummy_gen(), media_type="text/event-stream")):
+    with patch("cq.data.entrypoints.rest_api.StreamingResponse", return_value=StreamingResponse(dummy_gen(), media_type="text/event-stream")):
         response = client.get("/api/v1/logs/stream")
         assert response.status_code == 200
         assert "text/event-stream" in response.headers.get("content-type", "")

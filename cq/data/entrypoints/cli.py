@@ -11,7 +11,7 @@ import uvicorn
 from typing import List, Optional
 from pathlib import Path
 
-from cqdata.entrypoints.python_api import (
+from cq.data.entrypoints.python_api import (
     sync as api_sync,
     list_tables,
     list_symbols,
@@ -55,7 +55,7 @@ def sync_cmd(
         provider_kwargs["vipdoc_dir"] = tdx_vipdoc
 
     if output:
-        from cqdata.config import settings
+        from cq.data.config import settings
         settings.data_dir = output
 
     api_sync(
@@ -86,7 +86,7 @@ def server_cmd(
     import threading
     import webbrowser
 
-    from cqdata.config import settings
+    from cq.data.config import settings
     if config:
         settings.configure(config)
     if data_dir:
@@ -99,7 +99,7 @@ def server_cmd(
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 
     typer.echo(f"[+] Starting cqdata REST API server on http://{host}:{port} (data_dir: {settings.data_dir})")
-    uvicorn.run("cqdata.entrypoints.rest_api:app", host=host, port=port, reload=reload)
+    uvicorn.run("cq.data.entrypoints.rest_api:app", host=host, port=port, reload=reload)
 
 
 

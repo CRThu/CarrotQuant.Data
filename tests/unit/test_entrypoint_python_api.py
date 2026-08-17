@@ -9,8 +9,8 @@ import pytest
 import polars as pl
 from unittest.mock import patch, MagicMock
 
-import cqdata
-from cqdata.entrypoints import python_api
+import cq.data
+from cq.data.entrypoints import python_api
 
 
 def test_read_unified_polars():
@@ -20,7 +20,7 @@ def test_read_unified_polars():
         "symbol": ["sh.600000"],
         "close": [10.5]
     })
-    with patch("cqdata.service.data_reader.read_series", return_value=mock_pl_df):
+    with patch("cq.data.service.data_reader.read_series", return_value=mock_pl_df):
         res_pl = python_api.read("ashare.kline.1d.raw.baostock", symbols="sh.600000")
         assert isinstance(res_pl, pl.DataFrame)
         assert res_pl.height == 1
@@ -29,7 +29,7 @@ def test_read_unified_polars():
         "symbol": ["sh.600000"],
         "board_name": ["银行"]
     })
-    with patch("cqdata.service.data_reader.read_events", return_value=mock_event_df):
+    with patch("cq.data.service.data_reader.read_events", return_value=mock_event_df):
         res_event = python_api.read("ashare.concept.eastmoney")
         assert isinstance(res_event, pl.DataFrame)
         assert res_event.height == 1
@@ -43,32 +43,32 @@ def test_read_unknown_table_raises_error():
 
 def test_list_and_get_metadata_functions():
     """测试 list_* 与 get_* 元数据读取助手函数正确委托给 metadata_reader"""
-    with patch("cqdata.service.metadata_reader.list_series_tables", return_value=["table1"]), \
-         patch("cqdata.service.metadata_reader.list_event_tables", return_value=["table2"]):
+    with patch("cq.data.service.metadata_reader.list_series_tables", return_value=["table1"]), \
+         patch("cq.data.service.metadata_reader.list_event_tables", return_value=["table2"]):
         tables = python_api.list_tables()
         assert len(tables) == 2
         assert tables[0] == {"table_id": "table1", "category": "timeseries"}
         assert tables[1] == {"table_id": "table2", "category": "event"}
 
-    with patch("cqdata.service.metadata_reader.list_formats", return_value=["parquet"]):
+    with patch("cq.data.service.metadata_reader.list_formats", return_value=["parquet"]):
         assert python_api.list_formats("table1") == ["parquet"]
 
-    with patch("cqdata.service.metadata_reader.list_symbols", return_value=["sh.600000"]):
+    with patch("cq.data.service.metadata_reader.list_symbols", return_value=["sh.600000"]):
         assert python_api.list_symbols("table1") == ["sh.600000"]
 
-    with patch("cqdata.service.metadata_reader.get_time_range", return_value=("2024-01-01", "2024-01-31")):
+    with patch("cq.data.service.metadata_reader.get_time_range", return_value=("2024-01-01", "2024-01-31")):
         assert python_api.get_time_range("table1") == ("2024-01-01", "2024-01-31")
 
-    with patch("cqdata.service.metadata_reader.get_schema", return_value={"close": "Float64"}):
+    with patch("cq.data.service.metadata_reader.get_schema", return_value={"close": "Float64"}):
         assert python_api.get_schema("table1") == {"close": "Float64"}
 
-    with patch("cqdata.service.metadata_reader.get_row_count", return_value=500):
+    with patch("cq.data.service.metadata_reader.get_row_count", return_value=500):
         assert python_api.get_row_count("table1") == 500
 
 
 def test_sync_function_delegation():
     """测试 sync 快捷函数正确转发至 SyncManager"""
-    with patch("cqdata.service.sync_manager.sync") as mock_sync:
+    with patch("cq.data.service.sync_manager.sync") as mock_sync:
         python_api.sync("ashare.kline.1d.raw.baostock", formats="parquet", start_date="2024-01-01")
         assert mock_sync.called
         kwargs = mock_sync.call_args.kwargs
@@ -79,8 +79,8 @@ def test_sync_function_delegation():
 
 def test_configure():
     """测试 configure 全局参数配置"""
-    assert cqdata.settings is not None
+    assert cq.data.settings is not None
 
-    with patch("cqdata.config.settings.Settings.configure") as mock_conf:
+    with patch("cq.data.config.settings.Settings.configure") as mock_conf:
         python_api.configure("/tmp/test_config.yaml")
         assert mock_conf.called

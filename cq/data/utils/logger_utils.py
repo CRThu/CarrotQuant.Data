@@ -89,7 +89,7 @@ def setup_logger(
         log_file_prefix: 日志文件前缀
         log_dir: 日志目录，若为 None 从 settings 读取
     """
-    from cqdata.config.settings import settings
+    from cq.data.config.settings import settings
 
     if log_level is None:
         log_level = getattr(settings, "log_level", "INFO")

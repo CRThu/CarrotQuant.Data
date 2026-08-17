@@ -12,8 +12,8 @@ import pytest
 from unittest.mock import MagicMock, patch
 import polars as pl
 
-from cqdata.provider.eastmoney_provider import EastMoneyProvider
-from cqdata.provider.provider_manager import ProviderManager
+from cq.data.provider.eastmoney_provider import EastMoneyProvider
+from cq.data.provider.provider_manager import ProviderManager
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +283,7 @@ class TestBoardConsFetch:
 
     def test_fetch_board_cons_df_returns_polars(self, provider, sample_board_cons):
         """_fetch_board_cons_df 应返回 Polars DataFrame。"""
-        with patch("cqdata.provider.eastmoney_provider.em_push2") as mock_push2:
+        with patch("cq.data.provider.eastmoney_provider.em_push2") as mock_push2:
             mock_push2.return_value.json.return_value = sample_board_cons
             with patch.object(provider, "_fetch_board_list", return_value={"BK0001": "板块A"}):
                 df = provider._fetch_board_cons_df("concept", "BK0001")
@@ -291,7 +291,7 @@ class TestBoardConsFetch:
 
     def test_fetch_board_cons_df_has_board_code_column(self, provider, sample_board_cons):
         """成分股 DataFrame 应包含 board_code 和 board_name 列。"""
-        with patch("cqdata.provider.eastmoney_provider.em_push2") as mock_push2:
+        with patch("cq.data.provider.eastmoney_provider.em_push2") as mock_push2:
             mock_push2.return_value.json.return_value = sample_board_cons
             with patch.object(provider, "_fetch_board_list", return_value={"BK0001": "板块A"}):
                 df = provider._fetch_board_cons_df("concept", "BK0001")
@@ -302,7 +302,7 @@ class TestBoardConsFetch:
 
     def test_fetch_board_cons_df_has_standard_columns(self, provider, sample_board_cons):
         """成分股 DataFrame 应包含 board_code, board_name, symbol, stock_name，无时间列。"""
-        with patch("cqdata.provider.eastmoney_provider.em_push2") as mock_push2:
+        with patch("cq.data.provider.eastmoney_provider.em_push2") as mock_push2:
             mock_push2.return_value.json.return_value = sample_board_cons
             with patch.object(provider, "_fetch_board_list", return_value={"BK0001": "板块A"}):
                 df = provider._fetch_board_cons_df("concept", "BK0001")
@@ -461,7 +461,7 @@ class TestEmptyDataDefense:
     def test_empty_board_cons(self, provider):
         """空成分股应返回空 DataFrame 且 schema 正确（无时间列）。"""
         empty_response = {"data": {"total": 0, "diff": []}}
-        with patch("cqdata.provider.eastmoney_provider.em_push2") as mock_push2:
+        with patch("cq.data.provider.eastmoney_provider.em_push2") as mock_push2:
             mock_push2.return_value.json.return_value = empty_response
             with patch.object(provider, "_fetch_board_list", return_value={"BK0001": "板块A"}):
                 df = provider._fetch_board_cons_df("concept", "BK0001")

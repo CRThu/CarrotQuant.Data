@@ -7,7 +7,7 @@ FastAPI REST API 扩展端点单元测试。
 
 import pytest
 from fastapi.testclient import TestClient
-from cqdata.entrypoints.rest_api import app
+from cq.data.entrypoints.rest_api import app
 
 
 @pytest.fixture
@@ -42,8 +42,8 @@ def test_api_sync_status(client):
 
 def test_api_tables_detailed_with_metadata(client, tmp_path, monkeypatch):
     """验证 GET /api/v1/tables/detailed 在磁盘有物理元数据时的解析与返回结构"""
-    from cqdata.service.metadata_manager import MetadataManager
-    from cqdata.config.settings import settings
+    from cq.data.service.metadata_manager import MetadataManager
+    from cq.data.config.settings import settings
 
     monkeypatch.setattr(settings, "data_dir", str(tmp_path))
     meta_mgr = MetadataManager(str(tmp_path))

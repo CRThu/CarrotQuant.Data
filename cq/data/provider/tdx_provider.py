@@ -24,9 +24,9 @@ from typing import Any, Optional
 import polars as pl
 from loguru import logger
 
-from cqdata.provider.base import BaseProvider
-from cqdata.provider.data_cleaner import DataCleaner
-from cqdata.provider.tdx_utils import (
+from cq.data.provider.base import BaseProvider
+from cq.data.provider.data_cleaner import DataCleaner
+from cq.data.provider.tdx_utils import (
     discover_tdx_symbols_from_local,
     read_tdx_file_from_local,
     tdx_code_to_standard,
@@ -35,7 +35,7 @@ from cqdata.provider.tdx_utils import (
     fetch_stock_list_online,
     _empty_kline_df,
 )
-from cqdata.utils.time_utils import ts_to_str
+from cq.data.utils.time_utils import ts_to_str
 
 
 class TDXProvider(BaseProvider):
@@ -115,7 +115,7 @@ class TDXProvider(BaseProvider):
             pass
 
         try:
-            from cqdata.provider.baostock_provider import BaostockProvider
+            from cq.data.provider.baostock_provider import BaostockProvider
             bp = BaostockProvider()
             bs_symbols = bp.get_all_symbols(f"{prefix}.kline.1d.raw.baostock")
             return [s for s in bs_symbols if s.startswith("bj.")]

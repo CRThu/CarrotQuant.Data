@@ -12,7 +12,7 @@
 - 支持 Baostock（日线/5分线/复权因子）、东方财富（概念/行业板块/龙虎榜/机构交易）、通达信（日线/5分/1分线）
 - 支持 CSV 和 Parquet 两种存储格式
 - 基于时间戳水位线的增量同步与断点续接
-- 四种接入方式：Python SDK (`cqdata.read()` / 链式访问器)、Typer CLI (`cqdata`)、FastAPI REST API 与 React Web 终端 (`web/`)
+- 四种接入方式：Python SDK (`cq.data.read()` / 链式访问器)、Typer CLI (`cqdata`)、FastAPI REST API 与 React Web 终端 (`web/`)
 
 **技术栈**：
 - **后端**：Python >= 3.12, Polars, Baostock, curl_cffi, tdxpy, FastAPI, Typer, Loguru, PyYAML
@@ -24,18 +24,19 @@
 
 ```
 CarrotQuant.Data/
-├── cqdata/
-│   ├── __init__.py               # 统一导出符号 (ashare, aindex, read, list_tables 等)，0 业务逻辑
-│   ├── entrypoints/              # 接入层 (accessors/ OOP子包, python_api, cli, rest_api)
-│   │   ├── accessors/            # OOP 便捷访问层 (base.py, ashare.py, aindex.py)
-│   │   ├── python_api.py         # Python SDK 底层切片与探查 API
-│   │   ├── cli.py                # Typer CLI 控制台主入口 (cqdata sync/server/info/tables)
-│   │   └── rest_api.py           # FastAPI REST HTTP 服务 (含 Loguru SSE 日志流 & /tables/detailed)
-│   ├── config/                   # 配置管理 (支持 CQDATA_DATA_DIR 环境变量与 YAML)
-│   ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
-│   ├── service/                  # 业务逻辑层 (SyncManager, SyncProgressTracker, DataReader, TaskPlanner, MetadataManager)
-│   ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
-│   └── utils/                    # 工具箱 (logger_utils, time_utils)
+├── cq/
+│   └── data/
+│       ├── __init__.py               # 统一导出符号 (ashare, aindex, read, list_tables 等)，0 业务逻辑
+│       ├── entrypoints/              # 接入层 (accessors/ OOP子包, python_api, cli, rest_api)
+│       │   ├── accessors/            # OOP 便捷访问层 (base.py, ashare.py, aindex.py)
+│       │   ├── python_api.py         # Python SDK 底层切片与探查 API
+│       │   ├── cli.py                # Typer CLI 控制台主入口 (cqdata sync/server/info/tables)
+│       │   └── rest_api.py           # FastAPI REST HTTP 服务 (含 Loguru SSE 日志流 & /tables/detailed)
+│       ├── config/                   # 配置管理 (支持 CQDATA_DATA_DIR 环境变量与 YAML)
+│       ├── provider/                 # 数据源驱动层 (Baostock, EastMoney, TDX, DataCleaner, ProviderManager)
+│       ├── service/                  # 业务逻辑层 (SyncManager, SyncProgressTracker, DataReader, TaskPlanner, MetadataManager)
+│       ├── storage/                  # 持久化存储层 (CSVStorage, ParquetStorage, StorageFactory, DataMerger)
+│       └── utils/                    # 工具箱 (logger_utils, time_utils)
 ├── web/                          # React Web 金融终端 frontend (Bun + Vite 6 + Tailwind v4 + TradingView 3-Pane)
 │   ├── src/
 │   │   ├── components/           # HeaderBar, SearchInput, TradingViewKLineChart, TableManagementGrid, LogTerminal, FloatingSyncWidget 等
@@ -56,7 +57,7 @@ CarrotQuant.Data/
 
 ```mermaid
 graph TB
-    subgraph Entrypoints["Entrypoints 接入层 (cqdata/entrypoints)"]
+    subgraph Entrypoints["Entrypoints 接入层 (cq/data/entrypoints)"]
         WEB["web/ (React Web 终端)"]
         PYTHON_API["python_api.py (Python SDK)"]
         CLI["cli.py (Typer CLI)"]
@@ -64,7 +65,7 @@ graph TB
         WIZARD["wizard.py (交互向导)"]
     end
 
-    subgraph Service["Service 业务逻辑层 (cqdata/service)"]
+    subgraph Service["Service 业务逻辑层 (cq/data/service)"]
         SM["SyncManager 同步总调度"]
         DR["DataReader 切片与投影"]
         MR["MetadataReader 探查"]
@@ -145,11 +146,11 @@ SyncManager.sync()
 ## 4. 核心模块与类职责
 
 ### 4.1 接入层与配置 (Gateway & Config)
-- **`config/settings.py`**: 全局 `Settings` 配置管理，支持通过 `cqdata.configure()` 加载 YAML 配置，或优先使用环境变量 `CQDATA_DATA_DIR` 和 `CQDATA_CONFIG_PATH`。完整 YAML 配置示例见 [config.yaml.sample](file:///d:/Quant/CarrotQuant.Data/config/config.yaml.sample)。
+- **`config/settings.py`**: 全局 `Settings` 配置管理，支持通过 `cq.data.configure()` 加载 YAML 配置，或优先使用环境变量 `CQDATA_DATA_DIR` 和 `CQDATA_CONFIG_PATH`。完整 YAML 配置示例见 [config.yaml.sample](file:///d:/Quant/CarrotQuant.Data/config/config.yaml.sample)。
 - **`accessors/` 包**: 提供 OOP 便捷访问层子包（`ashare.kline`, `aindex.kline` 等）与 `DefaultConfig` 三层链式继承解析器，支持极其直观的 `.get()` 参数补全与智能默认值支持。
 - **`python_api.py`**: 提供 SDK 高阶 API (`read`, `list_tables`, `sync`, `configure`, `get_schema`, `get_time_range` 等)，以磁盘物理 `metadata.json` 为单事实来源直接高效路由。
 - **`cli.py`**: 基于 Typer 的 CLI 工具 (`cqdata sync`, `cqdata tables`, `cqdata info`, `cqdata server`, `cqdata wizard`)，支持通过 `cqdata server --open` 自动唤醒系统浏览器访问内置 Web 终端。
-- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，所有 Polars IO/磁盘读取端点均采用普通 `def` 函数声明派发至底层的 Worker 线程池并发处理，杜绝主事件循环卡顿，并内置托管 `cqdata/static/` 前端 SPA 静态资源。
+- **`rest_api.py`**: 基于 FastAPI 的 RESTful HTTP 服务，挂载 CORS 跨域中间件，提供 `GET /api/v1/tables` 探查与 `GET /api/v1/query` 统一切片查询，所有 Polars IO/磁盘读取端点均采用普通 `def` 函数声明派发至底层的 Worker 线程池并发处理，杜绝主事件循环卡顿，并内置托管 `cq/data/static/` 前端 SPA 静态资源。
 
 
 
@@ -314,7 +315,7 @@ type_map = {
 - **包管理与安装禁令**: **严禁使用 `pip install`** 方式安装依赖包。项目包管理一律统一使用 `uv` 工具链（如 `uv sync` / `uv add`）。
 - **复权约束**: 仅支持 `raw` (不复权) 或 `adj` (后复权)，禁止前复权。
 - **Import 规范**: 代码文件中所有的 `import` 语句（包含标准库、第三方库与本地模块）**默认统一集中放在文件最开始顶部位置**，严禁在函数、类或文件中间随意分散放置 `import`。
-- **干净入口**: `cqdata/__init__.py` 仅用于符号导出，实现 **0 业务逻辑**。
+- **干净入口**: `cq/data/__init__.py` 仅用于符号导出，实现 **0 业务逻辑**。
 - **时区规范**: 统一使用 `zoneinfo`，禁止手动加减小时偏移。
 - **日志与输出**:
   - 系统日志使用 Loguru，输出挂载至 `stderr` 及 `logs/{prefix}_{YYYYMMDD_HHMMSS}.log`。
@@ -328,7 +329,7 @@ type_map = {
   - **默认生成完整多行 Commit 消息**：包含首行简短 Summary（如 `feat(web): ...`）以及详细的多点 List 说明（`- ...`），供用户审核确认。
   - 未经用户明确确认，禁止自动执行 `git add/commit/push` 操作。
 - **版本发布与 bump 规范**:
-  - 项目在 `pyproject.toml` 中配置了 `[tool.bumpversion]` 自动化关联，将 `pyproject.toml` 和 `cqdata/__init__.py` 的版本号保持强同步。
+  - 项目在 `pyproject.toml` 中配置了 `[tool.bumpversion]` 自动化关联，将 `pyproject.toml` 和 `cq/data/__init__.py` 的版本号保持强同步。
   - 严禁手动多处修改版本号。更新版本统一通过 `bump-my-version` 工具链自动升级并打 Tag：
     - 升级修补版本号 (`1.1.0` ➔ `1.1.1`): `uv run bump-my-version bump patch`
     - 升级次版本号 (`1.1.0` ➔ `1.2.0`): `uv run bump-my-version bump minor`
@@ -372,7 +373,7 @@ cd web && bun run test:e2e                                 # 运行前端与 UI 
 ## 11. 新增数据源指南
 
 新增数据源驱动时遵循以下步骤：
-1. 在 `cqdata/provider/` 下新建 `{source}_provider.py`，继承 `BaseProvider`。
+1. 在 `cq/data/provider/` 下新建 `{source}_provider.py`，继承 `BaseProvider`。
 2. 实现 `fetch`, `get_all_symbols`, `get_supported_tables`, `get_table_category`, `get_sort_keys` 方法。
 3. 在类属性 `_SUPPORTED_TABLE_MAP` 中注册可用的 `table_id`。
 4. 在 `ProviderManager.get_provider()` 中加入该驱动的路由逻辑。
