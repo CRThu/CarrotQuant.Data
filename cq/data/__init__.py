@@ -35,7 +35,7 @@ from cq.data.entrypoints import (
 )
 from cq.data.config import settings
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 __all__ = [
     "read",
