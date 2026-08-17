@@ -7,6 +7,7 @@ authors = [
     { name = "Carrot", email = "11172391+CRThu@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
+license = "Apache-2.0"
 dependencies = [
     "baostock>=0.9.1",
     "curl_cffi>=0.7.4",
